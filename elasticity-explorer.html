@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elasticity Explorer — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink:        #0f172a;
+  --ink-light:  #334155;
+  --ink-muted:  #64748b;
+  --ink-faint:  #94a3b8;
+  --bg:         #fafaf9;
+  --bg-warm:    #f5f0e8;
+  --bg-card:    #ffffff;
+  --rule:       #e2e8f0;
+  --accent:     #0f3d9e;
+  --accent-mid: #1e56c0;
+  --accent-lt:  #dbeafe;
+  --gold:       #b87408;
+  --gold-lt:    #fef3c7;
+  --green:      #166534;
+  --green-lt:   #dcfce7;
+  --red:        #991b1b;
+  --red-lt:     #fee2e2;
+  --serif:      'Lora', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+  --radius:     8px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+
+/* ── Header ─────────────────────────────────────────────── */
+#sb-header {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200;
+  background: var(--ink); color: #fff;
+  display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+
+/* ── Typography ─────────────────────────────────────────── */
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+/* ── Panels ─────────────────────────────────────────────── */
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 300px; }
+.sb-chart-title { font-size: 0.8125rem; font-weight: 600; color: var(--ink-muted); margin-bottom: 0.25rem; }
+
+/* ── Buttons ────────────────────────────────────────────── */
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+
+/* ── Estimator ──────────────────────────────────────────── */
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-evidence { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.875rem 0; }
+.sb-evidence .sb-ev-card { flex: 1; min-width: 140px; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; text-align: center; }
+.sb-ev-label { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: 0.25rem; }
+.sb-ev-num { font-family: var(--serif); font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: center; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+
+/* ── Stats / insets / footer ────────────────────────────── */
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Elasticity Explorer</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 5: Elasticity</div>
+<h1 class="sb-title">Elasticity Explorer</h1>
+<p class="sb-subtitle">Bend a demand curve with your own hands, climb the revenue hill until you find its peak, then prove you can compute an elasticity from raw market data &mdash; the same three moves Chapter 5 asks of you, made physical.</p>
+<hr class="sb-divider">
+
+<p>Elasticity is one number &mdash; the percentage change in quantity divided by the percentage change in price &mdash; but it decides real money: whether a price hike earns more or less, who bears a tax, why a bumper harvest can ruin farmers. This arena drills the three skills the chapter builds. Station 1 lets you <strong>reshape</strong> a demand curve and watch the number respond. Station 2 turns the <strong>total-revenue test</strong> into a hill you climb. Station 3 is the <strong>Estimator</strong>: raw before-and-after data, your midpoint arithmetic, your call. Your Estimator record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: SHAPE THE CURVE ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>Shape the curve</h2>
+<p>Verenia's transit authority sells a bus ride for <strong>$5</strong>, and at that fare <strong>50,000 rides</strong> are taken each day. What nobody knows from those two numbers alone is the <em>shape</em> of demand around them &mdash; and the shape is everything. Drag the responsiveness slider: the curve pivots around today's market point, from cliff-steep (riders have no alternative) to nearly flat (riders scatter at the first fare hike). The test shock below the chart raises the fare by $1 and computes the midpoint elasticity of the curve you built.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The demand curve is yours to bend</div>
+  <h4>Same market point, any shape &mdash; how responsive are the riders?</h4>
+  <p class="sb-panel-intro">The presets set the slider to the shape each story implies. Steep means inelastic; flat means elastic. Watch |E| cross 1.0 as the curve flattens.</p>
+  <div class="sb-controls">
+    <div>
+      <label for="ee-s">Rider responsiveness (rides lost per $1 of fare, in thousands) &mdash; <span id="ee-s-val"></span></label>
+      <input type="range" id="ee-s" min="2" max="20" step="2" value="10">
+    </div>
+  </div>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Preset stories</span>
+    <button class="btn-sb btn-sb-ghost" onclick="setSlope(2)">Only way to work &mdash; no substitutes</button>
+    <button class="btn-sb btn-sb-ghost" onclick="setSlope(6)">Habit for most, options for a few</button>
+    <button class="btn-sb btn-sb-ghost" onclick="setSlope(14)">Bikes and carpools compete hard</button>
+    <button class="btn-sb btn-sb-ghost" onclick="setSlope(20)">Rideshare app undercuts every hike</button>
+  </div>
+  <div class="sb-chart-box"><canvas id="ee-canvas" height="300"></canvas></div>
+  <div class="sb-readout" id="ee-readout"></div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; What actually sets the shape</div>
+  <p>The slider stands in for the chapter's determinants: demand is more elastic when close <strong>substitutes</strong> exist, when the good is a <strong>luxury</strong> rather than a necessity, when it eats a <strong>large share of the budget</strong>, and over <strong>longer time horizons</strong> (people adapt). Every preset above is one of those forces wearing a transit costume. A steep curve is never a fact about the good alone &mdash; it is a fact about the alternatives buyers have.</p>
+</div>
+
+<!-- ═══ STATION 2: THE REVENUE HILL ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>Climb the revenue hill</h2>
+<p>Back to Mara's coffee cart and the exact market from the chapter opener: demand <code>Q = 100 &minus; 10P</code>. Total revenue is the rectangle under your price &mdash; price times cups &mdash; and as you slide the price, the right-hand chart traces revenue itself as a hill. The chapter's claim: the peak sits exactly where elasticity passes through 1. Find it, then test the claim by reading |E| at the top.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The total-revenue test, made physical</div>
+  <h4>Where does Mara's revenue peak?</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="tr-price">Coffee price ($ per cup) &mdash; <span id="tr-price-val"></span></label>
+      <input type="range" id="tr-price" min="0.5" max="9.5" step="0.5" value="2">
+    </div>
+  </div>
+  <div class="sb-chart-title">The market: your price, the quantity it buys, and the revenue rectangle</div>
+  <div class="sb-chart-box"><canvas id="tr-canvas" height="280"></canvas></div>
+  <div class="sb-chart-title">The revenue hill: total revenue at every price, with your position on it</div>
+  <div class="sb-chart-box"><canvas id="tr-hill" height="260"></canvas></div>
+  <div class="sb-readout" id="tr-readout"></div>
+</div>
+
+<p>Notice what the hill proves about a <em>linear</em> demand curve: elasticity is not one number for the whole curve. The same straight line is elastic up in its high-price half (left of the hill's peak going up), unit elastic at the midpoint, and inelastic down low. "This good is elastic" is always shorthand for "elastic <em>around the current price</em>."</p>
+
+<!-- ═══ STATION 3: THE ESTIMATOR ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>The Estimator</h2>
+<p>Now the skill in its working form. A price changed somewhere in Verenia, and the sales data came back. Compute the midpoint elasticity yourself &mdash; percentage changes taken against the <em>averages</em>, exactly as the chapter defines them &mdash; and classify the demand. The reveal walks the full arithmetic so you can find any slip.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Case data</div>
+  <h4>Run the midpoint formula, then make the call</h4>
+  <div class="sb-case" id="est-story">Press <strong>New data</strong> to pull your first case.</div>
+  <div class="sb-evidence">
+    <div class="sb-ev-card">
+      <div class="sb-ev-label">Price</div>
+      <div class="sb-ev-num" id="est-p">&mdash;</div>
+    </div>
+    <div class="sb-ev-card">
+      <div class="sb-ev-label">Quantity sold</div>
+      <div class="sb-ev-num" id="est-q">&mdash;</div>
+    </div>
+  </div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="est-E" onclick="classify('E')">Elastic (|E| &gt; 1)</button>
+    <button class="sb-diag-btn" id="est-U" onclick="classify('U')">Unit elastic (|E| = 1)</button>
+    <button class="sb-diag-btn" id="est-I" onclick="classify('I')">Inelastic (|E| &lt; 1)</button>
+  </div>
+  <div class="sb-readout" id="est-readout">Your estimate, analyst?</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newEst()">New data</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetEstScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Your record</h2>
+<p>Your Estimator record is saved in this browser. If this arena was assigned, report the numbers below; if your accuracy is under 80%, run more cases with the midpoint formula written out beside you until the arithmetic is automatic.</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases attempted</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">classified correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; the most bankable number in the chapter</div>
+  <p>If microeconomics handed out one number to take into a business meeting, it would be this one. Every pricing decision &mdash; the streaming service weighing a fee hike, the airline filling seats, the city pricing its buses &mdash; is at bottom a bet on an elasticity. Get it right and the total-revenue test tells you which way to move the price before a single spreadsheet opens. It also explains the chapter's darkest little result: because food demand is inelastic, a bumper harvest that swells quantity <em>crushes</em> price by proportionally more, and farm revenue falls in the best growing year. Good news for eaters, ruin for growers &mdash; one number, both stories.</p>
+  <p>The working caveats: elasticity is local (Station 2 showed you the same line running from elastic to inelastic), and it grows with time as buyers find alternatives &mdash; the fare hike that sticks for six months can bleed riders over three years. Estimate it around the price you actually charge, and re-estimate as the horizon lengthens.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Keep going</h3>
+  <p>This arena pairs with Chapter 5 of <em>Introduction to Microeconomics</em>. Elasticity feeds directly into the next chapter's question &mdash; when the government taxes a market, the elasticities decide who actually pays.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Elasticity Explorer &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Elasticity Explorer — companion arena to Chapter 5.
+   Station 1: demand pivots around the market point (P=$5, Q=50k):
+              Q = 50 − s·(P − 5), slider s = rides lost per $1.
+   Station 2: the textbook opener market, Q = 100 − 10P;
+              TR = P·Q peaks at P=$5, TR=$250; |E| = P/(10−P).
+   Station 3: midpoint-formula estimator on clean data cases.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+/* ══════════ STATION 1 — shape the curve ══════════ */
+var PIVOT_P = 5;
+var PIVOT_Q = 50;
+var eeChart = null;
+var eeSlope = 10;
+
+function eeQ(p, s) { return PIVOT_Q - s * (p - PIVOT_P); }
+
+/* Midpoint elasticity of the built curve for the $1 test shock, P 5 → 6. */
+function eeMidpoint(s) {
+  var q1 = eeQ(5, s), q2 = eeQ(6, s);
+  var pctQ = (q2 - q1) / ((q1 + q2) / 2);
+  var pctP = (6 - 5) / ((5 + 6) / 2);
+  return Math.abs(pctQ / pctP);
+}
+
+function eeCurvePoints(s) {
+  var pts = [], p;
+  for (p = 0; p <= 10.0001; p += 0.25) {
+    var q = eeQ(p, s);
+    if (q >= 0 && q <= 160) { pts.push({ x: q, y: p }); }
+  }
+  return pts;
+}
+
+function initEE() {
+  var canvas = document.getElementById("ee-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  eeChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Demand (your shape)", data: eeCurvePoints(eeSlope), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "Today's market ($5, 50k rides)", data: [ { x: PIVOT_Q, y: PIVOT_P } ], borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 7 },
+        { label: "After the $1 test shock", data: [ { x: eeQ(6, eeSlope), y: 6 } ], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 6, pointStyle: "rectRot" }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 10 } } },
+      scales: {
+        x: { title: { display: true, text: "Bus rides per day (thousands)", font: { family: "Inter" } }, min: 0, max: 160, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Fare ($ per ride)", font: { family: "Inter" } }, min: 0, max: 10, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sl = document.getElementById("ee-s");
+  if (sl) { sl.addEventListener("input", function () { eeSlope = parseInt(sl.value, 10); updateEE(); }); }
+  updateEE();
+}
+
+function updateEE() {
+  var e = eeMidpoint(eeSlope);
+  var eR = Math.round(e * 100) / 100;
+  var q2 = eeQ(6, eeSlope);
+  if (eeChart) {
+    eeChart.data.datasets[0].data = eeCurvePoints(eeSlope);
+    eeChart.data.datasets[2].data = [ { x: q2, y: 6 } ];
+    eeChart.update("none");
+  }
+  var sval = document.getElementById("ee-s-val");
+  if (sval) { sval.textContent = eeSlope + "k rides per $1"; }
+  var out = document.getElementById("ee-readout");
+  if (out) {
+    var cls, verdict;
+    if (Math.abs(e - 1) < 0.05) { cls = "unit elastic"; verdict = "riders respond in almost exactly the same proportion as the fare — the boundary case."; }
+    else if (e > 1) { cls = "elastic"; verdict = "riders respond proportionally <strong>more</strong> than the fare — a hike from here would shrink the authority's revenue."; }
+    else { cls = "inelastic"; verdict = "riders respond proportionally <strong>less</strong> than the fare — a hike from here would raise the authority's revenue."; }
+    out.innerHTML = "Test shock: the fare rises $5 &rarr; $6 and rides fall 50k &rarr; <strong>" + q2 + "k</strong>. " +
+      "Midpoint elasticity: <strong>|E| = " + eR + "</strong> — this demand is <strong>" + cls + "</strong>; " + verdict;
+  }
+}
+
+function setSlope(s) {
+  eeSlope = s;
+  var sl = document.getElementById("ee-s");
+  if (sl) { sl.value = String(s); }
+  updateEE();
+}
+
+/* ══════════ STATION 2 — the revenue hill ══════════ */
+var trChart = null;
+var trHill = null;
+var trPrice = 2;
+
+function trQ(p) { return Math.max(0, 100 - 10 * p); }
+function trRev(p) { return p * trQ(p); }
+function trE(p) { return p / (10 - p); }
+
+function hillPoints() {
+  var pts = [], p;
+  for (p = 0; p <= 10.0001; p += 0.25) { pts.push({ x: p, y: trRev(p) }); }
+  return pts;
+}
+
+function initTR() {
+  var c1 = document.getElementById("tr-canvas");
+  var c2 = document.getElementById("tr-hill");
+  if (!c1 || !c2 || typeof Chart === "undefined") { return; }
+  trChart = new Chart(c1.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Demand", data: [ { x: 100, y: 0 }, { x: 0, y: 10 } ], showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "Revenue rectangle", data: [], showLine: true, borderColor: "#94a3b8", backgroundColor: "#94a3b8", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: 0 },
+        { label: "Your price", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 7 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 10 } } },
+      scales: {
+        x: { title: { display: true, text: "Cups of coffee", font: { family: "Inter" } }, min: 0, max: 100, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Price ($ per cup)", font: { family: "Inter" } }, min: 0, max: 10, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  trHill = new Chart(c2.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Total revenue at each price", data: hillPoints(), showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "You are here", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 7 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 10 } } },
+      scales: {
+        x: { title: { display: true, text: "Price ($ per cup)", font: { family: "Inter" } }, min: 0, max: 10, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Total revenue ($)", font: { family: "Inter" } }, min: 0, max: 260, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sl = document.getElementById("tr-price");
+  if (sl) { sl.addEventListener("input", function () { trPrice = parseFloat(sl.value); updateTR(); }); }
+  updateTR();
+}
+
+function updateTR() {
+  var q = trQ(trPrice);
+  var rev = trRev(trPrice);
+  var e = trE(trPrice);
+  var eR = Math.round(e * 100) / 100;
+  if (trChart) {
+    trChart.data.datasets[1].data = [ { x: 0, y: trPrice }, { x: q, y: trPrice }, { x: q, y: 0 } ];
+    trChart.data.datasets[2].data = [ { x: q, y: trPrice } ];
+    trChart.update("none");
+  }
+  if (trHill) {
+    trHill.data.datasets[1].data = [ { x: trPrice, y: rev } ];
+    trHill.update("none");
+  }
+  var pval = document.getElementById("tr-price-val");
+  if (pval) { pval.textContent = "$" + trPrice.toFixed(2) + " per cup"; }
+  var out = document.getElementById("tr-readout");
+  if (out) {
+    var msg;
+    if (Math.abs(trPrice - 5) < 0.01) {
+      msg = "<strong>You found the peak.</strong> At $5.00, revenue tops out at <strong>$250</strong> and |E| = <strong>1.00</strong> exactly — the total-revenue test's promise, kept: the summit of the hill is the unit-elastic point.";
+    } else if (e > 1) {
+      msg = "|E| = <strong>" + eR + "</strong> &gt; 1: you are on the <strong>elastic slope</strong> of the hill. Cutting the price moves you <strong>up</strong> toward the peak — buyers respond more than proportionally, so more cups outweigh the lower price.";
+    } else {
+      msg = "|E| = <strong>" + eR + "</strong> &lt; 1: you are on the <strong>inelastic slope</strong> of the hill. Raising the price moves you <strong>up</strong> toward the peak — buyers barely cut back, so the higher price outweighs the lost cups.";
+    }
+    out.innerHTML = "At <strong>$" + trPrice.toFixed(2) + "</strong>, buyers take <strong>" + q + " cups</strong> and total revenue is <strong>$" + Math.round(rev) + "</strong>. " + msg;
+  }
+}
+
+/* ══════════ STATION 3 — the estimator ══════════ */
+/* Every case is built so the midpoint percentages are clean. */
+var EST_CASES = [
+  { good: "morning bus rides",       p1: 4, p2: 6, q1: 120, q2: 80,  key: "U" },
+  { good: "loaves of market bread",  p1: 4, p2: 6, q1: 110, q2: 90,  key: "I" },
+  { good: "gourmet chocolate bars",  p1: 4, p2: 6, q1: 140, q2: 60,  key: "E" },
+  { good: "cinema tickets",          p1: 8, p2: 12, q1: 70,  q2: 30,  key: "E" },
+  { good: "prescription refills",    p1: 8, p2: 12, q1: 55,  q2: 45,  key: "I" },
+  { good: "street-food skewers",     p1: 2, p2: 3, q1: 84,  q2: 36,  key: "E" },
+  { good: "umbrellas in the rains",  p1: 2, p2: 3, q1: 66,  q2: 54,  key: "I" },
+  { good: "museum passes",           p1: 9, p2: 11, q1: 110, q2: 90,  key: "U" },
+  { good: "scooter fuel (liters)",   p1: 9, p2: 11, q1: 105, q2: 95,  key: "I" },
+  { good: "riverboat tour seats",    p1: 9, p2: 11, q1: 120, q2: 80,  key: "E" },
+  { good: "artisan coffee beans",    p1: 4, p2: 6, q1: 130, q2: 70,  key: "E" },
+  { good: "table salt (packs)",      p1: 4, p2: 6, q1: 105, q2: 95,  key: "I" }
+];
+
+function midpointE(c) {
+  var pctQ = (c.q2 - c.q1) / ((c.q1 + c.q2) / 2);
+  var pctP = (c.p2 - c.p1) / ((c.p1 + c.p2) / 2);
+  return Math.abs(pctQ / pctP);
+}
+
+var EST = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentEst = null;
+var estAnswered = true;
+
+function loadEst() {
+  try {
+    var raw = localStorage.getItem("elasticityExplorer.estimator");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { EST.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { EST.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { EST.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { EST.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveEst() {
+  try {
+    localStorage.setItem("elasticityExplorer.estimator", JSON.stringify(EST));
+  } catch (e) { /* ignore */ }
+}
+
+function renderEstStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(EST.attempted); }
+  if (cor) { cor.textContent = String(EST.correct); }
+  if (acc) { acc.innerHTML = EST.attempted > 0 ? Math.round((EST.correct / EST.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(EST.best); }
+}
+
+var EST_IDS = ["E", "U", "I"];
+var EST_NAMES = { E: "elastic (|E| > 1)", U: "unit elastic (|E| = 1)", I: "inelastic (|E| < 1)" };
+
+function setEstButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < EST_IDS.length; i++) {
+    btn = document.getElementById("est-" + EST_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newEst() {
+  currentEst = EST_CASES[Math.floor(Math.random() * EST_CASES.length)];
+  estAnswered = false;
+  setEstButtons(false);
+  var story = document.getElementById("est-story");
+  if (story) {
+    story.innerHTML = "<strong>Field report:</strong> the price of " + currentEst.good +
+      " changed, and the sales office sent back the before-and-after numbers. Compute the midpoint elasticity and classify this demand.";
+  }
+  var pEl = document.getElementById("est-p");
+  var qEl = document.getElementById("est-q");
+  if (pEl) { pEl.textContent = "$" + currentEst.p1 + " \u2192 $" + currentEst.p2; }
+  if (qEl) { qEl.textContent = currentEst.q1 + " \u2192 " + currentEst.q2; }
+  var out = document.getElementById("est-readout");
+  if (out) { out.innerHTML = "Your estimate, analyst?"; }
+}
+
+function estExplain(c) {
+  var dQ = c.q2 - c.q1;
+  var avgQ = (c.q1 + c.q2) / 2;
+  var dP = c.p2 - c.p1;
+  var avgP = (c.p1 + c.p2) / 2;
+  var pctQ = Math.round(Math.abs(dQ / avgQ) * 1000) / 10;
+  var pctP = Math.round(Math.abs(dP / avgP) * 1000) / 10;
+  var e = Math.round(midpointE(c) * 100) / 100;
+  return "%\u0394Q = " + dQ + " / " + avgQ + " = " + (dQ < 0 ? "\u2212" : "") + pctQ + "%; " +
+    "%\u0394P = " + dP + " / " + avgP + " = " + pctP + "%; " +
+    "so <strong>|E| = " + pctQ + "% / " + pctP + "% = " + e + "</strong>.";
+}
+
+function classify(choice) {
+  if (!currentEst || estAnswered) { return; }
+  estAnswered = true;
+  setEstButtons(true);
+  var correct = choice === currentEst.key;
+  var btnChosen = document.getElementById("est-" + choice);
+  var btnRight = document.getElementById("est-" + currentEst.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  EST.attempted += 1;
+  if (correct) {
+    EST.correct += 1;
+    EST.streak += 1;
+    if (EST.streak > EST.best) { EST.best = EST.streak; }
+  } else {
+    EST.streak = 0;
+  }
+  saveEst();
+  renderEstStats();
+
+  var out = document.getElementById("est-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Correct</strong> — " + EST_NAMES[currentEst.key] + ". " + estExplain(currentEst) +
+        " Streak: <strong>" + EST.streak + "</strong>. Press <strong>New data</strong> for the next case.";
+    } else {
+      out.innerHTML = "<strong>Not this time.</strong> This demand is " + EST_NAMES[currentEst.key] + ". " + estExplain(currentEst) +
+        " Averages in the denominators — that is where most slips happen. Take the next case.";
+    }
+  }
+}
+
+function resetEstScore() {
+  EST.attempted = 0;
+  EST.correct = 0;
+  EST.streak = 0;
+  EST.best = 0;
+  saveEst();
+  renderEstStats();
+  var out = document.getElementById("est-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New data</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  loadEst();
+  renderEstStats();
+  initEE();
+  initTR();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

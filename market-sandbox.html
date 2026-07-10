@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Sandbox — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink:        #0f172a;
+  --ink-light:  #334155;
+  --ink-muted:  #64748b;
+  --ink-faint:  #94a3b8;
+  --bg:         #fafaf9;
+  --bg-warm:    #f5f0e8;
+  --bg-card:    #ffffff;
+  --rule:       #e2e8f0;
+  --accent:     #0f3d9e;
+  --accent-mid: #1e56c0;
+  --accent-lt:  #dbeafe;
+  --gold:       #b87408;
+  --gold-lt:    #fef3c7;
+  --green:      #166534;
+  --green-lt:   #dcfce7;
+  --red:        #991b1b;
+  --red-lt:     #fee2e2;
+  --serif:      'Lora', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+  --radius:     8px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+
+/* ── Header ─────────────────────────────────────────────── */
+#sb-header {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200;
+  background: var(--ink); color: #fff;
+  display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-free-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gold); background: var(--gold-lt); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+
+/* ── Typography ─────────────────────────────────────────── */
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+/* ── Panels ─────────────────────────────────────────────── */
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 320px; }
+
+/* ── Buttons ────────────────────────────────────────────── */
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+
+/* ── Gap bar (shortage/surplus) ─────────────────────────── */
+.sb-gapbar-wrap { margin: 0.75rem 0; }
+.sb-gapbar-title { font-size: 0.75rem; font-weight: 600; color: var(--ink-muted); margin-bottom: 0.375rem; }
+.sb-gapbar { display: flex; height: 40px; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--rule); }
+.sb-gapbar div { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 0.78rem; transition: width 0.25s; white-space: nowrap; overflow: hidden; }
+
+/* ── Detective ──────────────────────────────────────────── */
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-evidence { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.875rem 0; }
+.sb-evidence .sb-ev-card { flex: 1; min-width: 140px; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; text-align: center; }
+.sb-ev-label { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: 0.25rem; }
+.sb-ev-num { font-family: var(--serif); font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+.sb-ev-move { font-size: 0.8125rem; font-weight: 700; margin-top: 0.125rem; }
+.sb-ev-move.up { color: var(--green); }
+.sb-ev-move.down { color: var(--red); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+
+/* ── Stats / insets / footer ────────────────────────────── */
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+.sb-cta .sb-cta-price { font-family: var(--serif); font-size: 1.75rem; font-weight: 700; color: var(--accent); margin: 0.5rem 0 1rem; }
+.sb-cta .sb-cta-price span { font-size: 0.875rem; color: var(--ink-muted); font-weight: 400; }
+
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Market Sandbox</div>
+  <span class="sb-free-tag">Free Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 4: Supply &amp; Demand</div>
+<h1 class="sb-title">Market Sandbox</h1>
+<p class="sb-subtitle">The coffee market of Verenia's capital, alive on one page. Shift the curves, fire real-world shocks, post your own price and watch the market fight back &mdash; then prove you can read a market's fingerprints in the Shock Detective.</p>
+<hr class="sb-divider">
+
+<p>This arena runs the exact market from Chapter 4 of the textbook: demand <code>Qd = 100 &minus; 20P</code>, supply <code>Qs = 40P &minus; 20</code>, which settle at <strong>$2.00 and 60 cups</strong> when nothing disturbs them. Nothing here is animation for its own sake &mdash; every line you see is computed live from those two equations, and everything you learned in the chapter can be tested against it. Work through the three stations in order, and report your Shock Detective score back to your instructor at the end.</p>
+
+<!-- ═══ STATION 1: SHIFT THE CURVES ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>Shift the curves</h2>
+<p>Everything <em>other than</em> coffee's own price lives in these two sliders. Push demand around (incomes, tastes, the price of tea) and supply around (bean costs, the number of carts, brewing technology), or fire a ready-made shock. The gray dashed curves stay put as the original market so you can always see what moved &mdash; and the equilibrium dot chases every change.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The living market</div>
+  <h4>Move something. Watch the equilibrium chase it.</h4>
+  <p class="sb-panel-intro">The readout below the chart names the new equilibrium and &mdash; more importantly &mdash; the <em>fingerprint</em>: how price and quantity moved relative to the original market. That pattern is the skill this arena exists to build.</p>
+  <div class="sb-controls">
+    <div>
+      <label for="lab-a">Demand conditions (incomes, tastes, substitutes) &mdash; <span id="lab-a-val"></span></label>
+      <input type="range" id="lab-a" min="60" max="160" step="10" value="100">
+    </div>
+    <div>
+      <label for="lab-b">Supply conditions (input costs, vendors, technology) &mdash; <span id="lab-b-val"></span></label>
+      <input type="range" id="lab-b" min="-80" max="40" step="10" value="-20">
+    </div>
+  </div>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Demand shocks</span>
+    <button class="btn-sb btn-sb-ghost" onclick="fireShock('income')">Incomes rise</button>
+    <button class="btn-sb btn-sb-ghost" onclick="fireShock('tea')">Tea price doubles</button>
+    <button class="btn-sb btn-sb-ghost" onclick="fireShock('scare')">Health scare hits coffee</button>
+  </div>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Supply shocks</span>
+    <button class="btn-sb btn-sb-ghost" onclick="fireShock('frost')">Frost hits the bean harvest</button>
+    <button class="btn-sb btn-sb-ghost" onclick="fireShock('vendors')">New carts get licensed</button>
+    <button class="btn-sb btn-sb-ghost" onclick="fireShock('tech')">Faster brewing machines</button>
+  </div>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-primary" onclick="resetLab()">Reset to the original market</button>
+  </div>
+  <div class="sb-chart-box"><canvas id="lab-canvas" height="320"></canvas></div>
+  <div class="sb-readout" id="lab-readout"></div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; The distinction this page enforces &mdash; movement vs. shift</div>
+  <p>Notice what the sliders above <em>cannot</em> do: change coffee's own price. That is deliberate. A change in the good's own price never moves a curve &mdash; it slides the market <em>along</em> fixed curves. The curves themselves move only when something else changes: incomes, tastes, input costs, the number of sellers. Keep that straight and half of Chapter 4's exam questions solve themselves.</p>
+</div>
+
+<!-- ═══ STATION 2: POST A PRICE ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>Post a price &mdash; and let the market push back</h2>
+<p>Now play price-setter in the <em>original</em> market (demand and supply at their starting positions). Post any price you like and see how many cups buyers want versus how many vendors bring. Whenever those two numbers disagree, the market is not at rest &mdash; press <strong>Let the market react</strong> and watch the price get pushed, one step at a time, toward the only price where the gap closes.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The price-setter's console</div>
+  <h4>Find the price with no leftover buyers and no leftover coffee</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="px-price">Posted price &mdash; <span id="px-price-val"></span></label>
+      <input type="range" id="px-price" min="0.5" max="4.5" step="0.25" value="1">
+    </div>
+  </div>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-primary" onclick="marketStep()">Let the market react (one step)</button>
+  </div>
+  <div class="sb-chart-box"><canvas id="px-canvas" height="300"></canvas></div>
+  <div class="sb-gapbar-wrap">
+    <div class="sb-gapbar-title">Cups demanded vs. cups supplied at your price</div>
+    <div class="sb-gapbar">
+      <div id="px-bar-d" style="background:#0f3d9e;width:50%;">Demanded</div>
+      <div id="px-bar-s" style="background:#166534;width:50%;">Supplied</div>
+    </div>
+  </div>
+  <div class="sb-readout" id="px-readout"></div>
+</div>
+
+<!-- ═══ STATION 3: SHOCK DETECTIVE ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>Shock Detective</h2>
+<p>Here is the skill that separates people who have <em>read</em> Chapter 4 from people who can <em>use</em> it. Something hits Verenia's coffee market overnight. You never see the curves &mdash; only the news and the before-and-after numbers, exactly like reading real market data. Your job: name which curve moved, and which way. The tell is the fingerprint you met in Station 1 &mdash; price and quantity moving the <em>same</em> direction points at demand; <em>opposite</em> directions point at supply.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Case file</div>
+  <h4>Diagnose the shock from the evidence alone</h4>
+  <div class="sb-case" id="det-story">Press <strong>New case</strong> to open your first file.</div>
+  <div class="sb-evidence">
+    <div class="sb-ev-card">
+      <div class="sb-ev-label">Price of a cup</div>
+      <div class="sb-ev-num" id="det-price">&mdash;</div>
+      <div class="sb-ev-move" id="det-price-move"></div>
+    </div>
+    <div class="sb-ev-card">
+      <div class="sb-ev-label">Cups traded per morning</div>
+      <div class="sb-ev-num" id="det-qty">&mdash;</div>
+      <div class="sb-ev-move" id="det-qty-move"></div>
+    </div>
+  </div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="diag-DR" onclick="diagnose('DR')">Demand shifted RIGHT (buyers want more at every price)</button>
+    <button class="sb-diag-btn" id="diag-DL" onclick="diagnose('DL')">Demand shifted LEFT (buyers want less at every price)</button>
+    <button class="sb-diag-btn" id="diag-SR" onclick="diagnose('SR')">Supply shifted RIGHT (sellers bring more at every price)</button>
+    <button class="sb-diag-btn" id="diag-SL" onclick="diagnose('SL')">Supply shifted LEFT (sellers bring less at every price)</button>
+  </div>
+  <div class="sb-readout" id="det-readout">Your verdict, detective?</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newCase()">New case</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Your record</h2>
+<p>Your Shock Detective record is saved in this browser. If your instructor assigned this arena, report the numbers below &mdash; and if your accuracy is under 80%, run a few more cases with the fingerprint rule in front of you until the diagnosis feels automatic.</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases attempted</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">solved correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; this is how economists actually read the news</div>
+  <p>Nobody ever hands a working economist the curves. What arrives is what the Shock Detective hands you: a headline and two numbers that moved. Oil is up and consumption is down &mdash; supply story. House prices and sales volumes climbing together &mdash; demand story. The fingerprint rule you have been drilling is not a classroom trick; it is the first diagnostic any of us runs on real data, and it will quietly upgrade how you read every business story from now on.</p>
+  <p>One honest caveat before it becomes a reflex: the rule assumes <em>one</em> curve moved. When both shift at once &mdash; a pandemic that cuts supply and demand together &mdash; one of the two movements becomes ambiguous, and you need more evidence to untangle it. Chapter 4 flags this, and the later chapters give you the tools. But one-shock diagnosis is the foundation, and after twenty cases here you will own it.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>This arena is free &mdash; the course goes much further</h3>
+  <p>Chapters 1&ndash;2 of <em>Introduction to Microeconomics</em> are free with this Sandbox. The full course unlocks all 17 interactive chapters, every companion arena, and your graded assessments.</p>
+  <div class="sb-cta-price">$25 <span>/ course</span></div>
+  <a class="btn-sb btn-sb-primary" id="sb-subscribe" href="#" style="display:inline-block;text-decoration:none;">Unlock the full course</a>
+  <div style="margin-top:0.875rem;"><a class="btn-sb btn-sb-ghost" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Market Sandbox &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Market Sandbox — free companion arena to Chapter 4.
+   Model (identical to the textbook): Qd = a − 20P, Qs = 40P + b
+   Base market: a = 100, b = −20  →  P* = $2.00, Q* = 60 cups.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals. var + function declarations + concat.
+
+   >>> SUPABASE / STRIPE SEAM <<<
+   SUBSCRIBE_URL below mirrors the textbook's gating seam; wire
+   it to the Microeconomics Stripe payment link at launch.
+   ══════════════════════════════════════════════════════════ */
+
+var SUBSCRIBE_URL = "https://buy.stripe.com/8x2cMYbjfcsk2ON7se5ZC01"; /* MacroNations default payment link; swap if a dedicated Micro link is created */
+
+var BASE_A = 100;   /* demand intercept  */
+var BASE_B = -20;   /* supply intercept  */
+var D_SLOPE = 20;   /* Qd = a − 20P      */
+var S_SLOPE = 40;   /* Qs = 40P + b      */
+
+function eqm(a, b) {
+  var p = (a - b) / (D_SLOPE + S_SLOPE);
+  var q = a - D_SLOPE * p;
+  return { p: p, q: q };
+}
+
+function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+
+function fmtMoney(x) { return "$" + x.toFixed(2); }
+
+/* Fingerprint text given old and new equilibria. */
+function fingerprint(oldE, newE) {
+  var dp = newE.p - oldE.p;
+  var dq = newE.q - oldE.q;
+  if (Math.abs(dp) < 0.001 && Math.abs(dq) < 0.001) {
+    return "Nothing has moved yet — this is the original market.";
+  }
+  var pWord = dp > 0.001 ? "rose" : (dp < -0.001 ? "fell" : "held steady");
+  var qWord = dq > 0.001 ? "rose" : (dq < -0.001 ? "fell" : "held steady");
+  var verdict;
+  if (Math.abs(dp) < 0.001 || Math.abs(dq) < 0.001) {
+    verdict = "One variable held steady — both curves moved, offsetting each other on that axis.";
+  } else if ((dp > 0) === (dq > 0)) {
+    verdict = "Price and quantity moved the <strong>same</strong> direction — the fingerprint of a <strong>demand</strong> shift" + (dp > 0 ? " to the right." : " to the left.");
+  } else {
+    verdict = "Price and quantity moved in <strong>opposite</strong> directions — the fingerprint of a <strong>supply</strong> shift" + (dq > 0 ? " to the right." : " to the left.");
+  }
+  return "Price " + pWord + " and quantity " + qWord + ". " + verdict;
+}
+
+/* ══════════ STATION 1 — shift lab ══════════ */
+var labChart = null;
+var labA = BASE_A;
+var labB = BASE_B;
+
+function curvePoints(a, b) {
+  /* Return demand and supply as arrays of {x:Q, y:P} across P 0..5, clipped to Q ≥ 0. */
+  var demand = [], supply = [], p;
+  for (p = 0; p <= 5.0001; p += 0.25) {
+    var qd = a - D_SLOPE * p;
+    if (qd >= 0) { demand.push({ x: qd, y: p }); }
+    var qs = S_SLOPE * p + b;
+    if (qs >= 0) { supply.push({ x: qs, y: p }); }
+  }
+  return { demand: demand, supply: supply };
+}
+
+function initLab() {
+  var canvas = document.getElementById("lab-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  var base = curvePoints(BASE_A, BASE_B);
+  var cur = curvePoints(labA, labB);
+  var e = eqm(labA, labB);
+  labChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "_baseD", data: base.demand, showLine: true, borderColor: "#cbd5e1", borderDash: [6, 5], pointRadius: 0, borderWidth: 1.5, tension: 0 },
+        { label: "_baseS", data: base.supply, showLine: true, borderColor: "#cbd5e1", borderDash: [6, 5], pointRadius: 0, borderWidth: 1.5, tension: 0 },
+        { label: "Demand", data: cur.demand, showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "Supply", data: cur.supply, showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "Equilibrium", data: [ { x: e.q, y: e.p } ], borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 7 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      clip: false,
+      plugins: {
+        legend: {
+          labels: {
+            font: { family: "Inter" },
+            filter: function (item) { return item.text.indexOf("_") !== 0; }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: "Cups of coffee per morning", font: { family: "Inter" } }, min: 0, max: 170, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Price per cup ($)", font: { family: "Inter" } }, min: 0, max: 5, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+
+  var sa = document.getElementById("lab-a");
+  var sb = document.getElementById("lab-b");
+  if (sa) { sa.addEventListener("input", function () { labA = parseInt(sa.value, 10); updateLab(); }); }
+  if (sb) { sb.addEventListener("input", function () { labB = parseInt(sb.value, 10); updateLab(); }); }
+  updateLab();
+}
+
+function updateLab() {
+  var cur = curvePoints(labA, labB);
+  var e = eqm(labA, labB);
+  if (labChart) {
+    labChart.data.datasets[2].data = cur.demand;
+    labChart.data.datasets[3].data = cur.supply;
+    labChart.data.datasets[4].data = [ { x: e.q, y: e.p } ];
+    labChart.update("none");
+  }
+  var aval = document.getElementById("lab-a-val");
+  var bval = document.getElementById("lab-b-val");
+  if (aval) {
+    aval.textContent = labA === BASE_A ? "at the original level" : (labA > BASE_A ? "stronger than the original" : "weaker than the original");
+  }
+  if (bval) {
+    bval.textContent = labB === BASE_B ? "at the original level" : (labB > BASE_B ? "more favorable than the original" : "less favorable than the original");
+  }
+  var out = document.getElementById("lab-readout");
+  if (out) {
+    var e0 = eqm(BASE_A, BASE_B);
+    out.innerHTML = "This market clears at <strong>" + fmtMoney(e.p) + "</strong> and <strong>" +
+      Math.round(e.q) + " cups</strong> (original: " + fmtMoney(e0.p) + ", " + Math.round(e0.q) + " cups). " +
+      fingerprint(e0, e);
+  }
+}
+
+var SHOCKS = {
+  income:  { da: 30, db: 0 },
+  tea:     { da: 20, db: 0 },
+  scare:   { da: -30, db: 0 },
+  frost:   { da: 0, db: -30 },
+  vendors: { da: 0, db: 30 },
+  tech:    { da: 0, db: 20 }
+};
+
+function fireShock(name) {
+  var s = SHOCKS[name];
+  if (!s) { return; }
+  labA = clamp(labA + s.da, 60, 160);
+  labB = clamp(labB + s.db, -80, 40);
+  var sa = document.getElementById("lab-a");
+  var sb = document.getElementById("lab-b");
+  if (sa) { sa.value = String(labA); }
+  if (sb) { sb.value = String(labB); }
+  updateLab();
+}
+
+function resetLab() {
+  labA = BASE_A;
+  labB = BASE_B;
+  var sa = document.getElementById("lab-a");
+  var sb = document.getElementById("lab-b");
+  if (sa) { sa.value = String(BASE_A); }
+  if (sb) { sb.value = String(BASE_B); }
+  updateLab();
+}
+
+/* ══════════ STATION 2 — post a price ══════════ */
+var pxChart = null;
+var pxPrice = 1;
+
+function qtyAt(price) {
+  return {
+    d: Math.max(0, BASE_A - D_SLOPE * price),
+    s: Math.max(0, S_SLOPE * price + BASE_B)
+  };
+}
+
+function initPx() {
+  var canvas = document.getElementById("px-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  var base = curvePoints(BASE_A, BASE_B);
+  pxChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Demand", data: base.demand, showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "Supply", data: base.supply, showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "_priceline", data: [ { x: 0, y: 1 }, { x: 170, y: 1 } ], showLine: true, borderColor: "#b87408", borderDash: [8, 5], pointRadius: 0, borderWidth: 2, tension: 0 },
+        { label: "Cups demanded", data: [ { x: 80, y: 1 } ], borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 7 },
+        { label: "Cups supplied", data: [ { x: 20, y: 1 } ], borderColor: "#166534", backgroundColor: "#166534", pointRadius: 7, pointStyle: "rectRot" }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      clip: false,
+      plugins: {
+        legend: {
+          labels: {
+            font: { family: "Inter" },
+            filter: function (item) { return item.text.indexOf("_") !== 0; }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: "Cups of coffee per morning", font: { family: "Inter" } }, min: 0, max: 170, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Price per cup ($)", font: { family: "Inter" } }, min: 0, max: 5, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+
+  var sp = document.getElementById("px-price");
+  if (sp) { sp.addEventListener("input", function () { pxPrice = parseFloat(sp.value); updatePx(); }); }
+  updatePx();
+}
+
+function updatePx() {
+  var q = qtyAt(pxPrice);
+  if (pxChart) {
+    pxChart.data.datasets[2].data = [ { x: 0, y: pxPrice }, { x: 170, y: pxPrice } ];
+    pxChart.data.datasets[3].data = [ { x: q.d, y: pxPrice } ];
+    pxChart.data.datasets[4].data = [ { x: q.s, y: pxPrice } ];
+    pxChart.update("none");
+  }
+  var pval = document.getElementById("px-price-val");
+  if (pval) { pval.textContent = fmtMoney(pxPrice) + " per cup"; }
+
+  var total = q.d + q.s;
+  var dPct = total > 0 ? Math.round((q.d / total) * 100) : 50;
+  var barD = document.getElementById("px-bar-d");
+  var barS = document.getElementById("px-bar-s");
+  if (barD) { barD.style.width = dPct + "%"; barD.textContent = "Demanded: " + Math.round(q.d); }
+  if (barS) { barS.style.width = (100 - dPct) + "%"; barS.textContent = "Supplied: " + Math.round(q.s); }
+
+  var out = document.getElementById("px-readout");
+  if (out) {
+    var gap = q.d - q.s;
+    if (Math.abs(gap) < 0.5) {
+      out.innerHTML = "At <strong>" + fmtMoney(pxPrice) + "</strong>, buyers want <strong>" + Math.round(q.d) +
+        " cups</strong> and vendors bring <strong>" + Math.round(q.s) +
+        " cups</strong> — the gap is gone. You found the <strong>equilibrium</strong>: the market clears, and nothing pushes the price anywhere.";
+    } else if (gap > 0) {
+      out.innerHTML = "At <strong>" + fmtMoney(pxPrice) + "</strong>, buyers want <strong>" + Math.round(q.d) +
+        " cups</strong> but vendors bring only <strong>" + Math.round(q.s) + "</strong> — a <strong>shortage of " +
+        Math.round(gap) + " cups</strong>. Lines form, frustrated buyers bid more, and the price gets pushed <strong>up</strong>.";
+    } else {
+      out.innerHTML = "At <strong>" + fmtMoney(pxPrice) + "</strong>, vendors bring <strong>" + Math.round(q.s) +
+        " cups</strong> but buyers want only <strong>" + Math.round(q.d) + "</strong> — a <strong>surplus of " +
+        Math.round(-gap) + " cups</strong>. Coffee goes cold on the counter, and discounting drags the price <strong>down</strong>.";
+    }
+  }
+}
+
+function marketStep() {
+  var e = eqm(BASE_A, BASE_B);
+  if (Math.abs(pxPrice - e.p) < 0.01) { updatePx(); return; }
+  if (pxPrice < e.p) { pxPrice = Math.min(e.p, pxPrice + 0.25); }
+  else { pxPrice = Math.max(e.p, pxPrice - 0.25); }
+  var sp = document.getElementById("px-price");
+  if (sp) { sp.value = String(pxPrice); }
+  updatePx();
+}
+
+/* ══════════ STATION 3 — shock detective ══════════ */
+var CASES = [
+  { story: "A new office district opens two blocks from the market, tripling the morning foot traffic of people with salaries to spend.", da: 30, db: 0, key: "DR" },
+  { story: "The price of tea — the go-to substitute — doubles after an import dispute.", da: 20, db: 0, key: "DR" },
+  { story: "A viral trend makes Verenian street coffee the fashionable morning ritual among students.", da: 20, db: 0, key: "DR" },
+  { story: "A widely reported (and dubious) study links street coffee to sleepless weeks, spooking casual drinkers.", da: -30, db: 0, key: "DL" },
+  { story: "The tourist season ends, and the cruise crowds that packed the market every morning sail home.", da: -30, db: 0, key: "DL" },
+  { story: "A beloved tea festival opens across the square, pulling the morning crowd toward free samples.", da: -20, db: 0, key: "DL" },
+  { story: "The city licenses a wave of new coffee carts, and a dozen fresh vendors set up overnight.", da: 0, db: 30, key: "SR" },
+  { story: "A bumper bean harvest cuts every vendor's cost per cup by a third.", da: 0, db: 20, key: "SR" },
+  { story: "New quick-brew machines let each cart turn out cups twice as fast at the same cost.", da: 0, db: 20, key: "SR" },
+  { story: "A late frost devastates the bean-growing highlands, and wholesale bean prices spike.", da: 0, db: -30, key: "SL" },
+  { story: "The city triples the market's vendor permit fees, and several carts pack up for good.", da: 0, db: -30, key: "SL" },
+  { story: "A fuel-price spike makes every delivery to the market sharply more expensive for vendors.", da: 0, db: -20, key: "SL" }
+];
+
+var DETECTIVE = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentCase = null;
+var caseAnswered = true;
+
+function loadDetective() {
+  try {
+    var raw = localStorage.getItem("marketSandbox.detective");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { DETECTIVE.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { DETECTIVE.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { DETECTIVE.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { DETECTIVE.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveDetective() {
+  try {
+    localStorage.setItem("marketSandbox.detective", JSON.stringify(DETECTIVE));
+  } catch (e) { /* ignore */ }
+}
+
+function renderStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(DETECTIVE.attempted); }
+  if (cor) { cor.textContent = String(DETECTIVE.correct); }
+  if (acc) { acc.innerHTML = DETECTIVE.attempted > 0 ? Math.round((DETECTIVE.correct / DETECTIVE.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(DETECTIVE.best); }
+}
+
+var DIAG_IDS = ["DR", "DL", "SR", "SL"];
+
+function setDiagButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < DIAG_IDS.length; i++) {
+    btn = document.getElementById("diag-" + DIAG_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newCase() {
+  currentCase = CASES[Math.floor(Math.random() * CASES.length)];
+  caseAnswered = false;
+  setDiagButtons(false);
+
+  var story = document.getElementById("det-story");
+  if (story) { story.innerHTML = "<strong>Overnight news:</strong> " + currentCase.story; }
+
+  var e0 = eqm(BASE_A, BASE_B);
+  var e1 = eqm(BASE_A + currentCase.da, BASE_B + currentCase.db);
+
+  var priceEl = document.getElementById("det-price");
+  var qtyEl = document.getElementById("det-qty");
+  var pm = document.getElementById("det-price-move");
+  var qm = document.getElementById("det-qty-move");
+  if (priceEl) { priceEl.textContent = fmtMoney(e0.p) + " \u2192 " + fmtMoney(e1.p); }
+  if (qtyEl) { qtyEl.textContent = Math.round(e0.q) + " \u2192 " + Math.round(e1.q); }
+  if (pm) {
+    pm.textContent = e1.p > e0.p ? "\u25B2 rose" : "\u25BC fell";
+    pm.className = "sb-ev-move " + (e1.p > e0.p ? "up" : "down");
+  }
+  if (qm) {
+    qm.textContent = e1.q > e0.q ? "\u25B2 rose" : "\u25BC fell";
+    qm.className = "sb-ev-move " + (e1.q > e0.q ? "up" : "down");
+  }
+
+  var out = document.getElementById("det-readout");
+  if (out) { out.innerHTML = "Your verdict, detective?"; }
+}
+
+var DIAG_NAMES = {
+  DR: "demand shifted right",
+  DL: "demand shifted left",
+  SR: "supply shifted right",
+  SL: "supply shifted left"
+};
+
+function diagnose(choice) {
+  if (!currentCase || caseAnswered) { return; }
+  caseAnswered = true;
+  setDiagButtons(true);
+
+  var correct = choice === currentCase.key;
+  var btnChosen = document.getElementById("diag-" + choice);
+  var btnRight = document.getElementById("diag-" + currentCase.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  DETECTIVE.attempted += 1;
+  if (correct) {
+    DETECTIVE.correct += 1;
+    DETECTIVE.streak += 1;
+    if (DETECTIVE.streak > DETECTIVE.best) { DETECTIVE.best = DETECTIVE.streak; }
+  } else {
+    DETECTIVE.streak = 0;
+  }
+  saveDetective();
+  renderStats();
+
+  var e0 = eqm(BASE_A, BASE_B);
+  var e1 = eqm(BASE_A + currentCase.da, BASE_B + currentCase.db);
+  var isDemand = currentCase.da !== 0;
+  var sameDir = (e1.p > e0.p) === (e1.q > e0.q);
+  var explain = "Price and quantity moved " + (sameDir ? "the <strong>same</strong> direction, which points at <strong>demand</strong>" : "in <strong>opposite</strong> directions, which points at <strong>supply</strong>") +
+    "; " + (isDemand ? (currentCase.da > 0 ? "and both rose, so demand shifted right." : "and both fell, so demand shifted left.")
+                     : (currentCase.db > 0 ? "and quantity rose while price fell, so supply shifted right." : "and quantity fell while price rose, so supply shifted left."));
+
+  var out = document.getElementById("det-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Correct</strong> — " + DIAG_NAMES[currentCase.key] + ". " + explain +
+        " Streak: <strong>" + DETECTIVE.streak + "</strong>. Press <strong>New case</strong> for the next file.";
+    } else {
+      out.innerHTML = "<strong>Not this time.</strong> The answer was: " + DIAG_NAMES[currentCase.key] + ". " + explain +
+        " Run the fingerprint before you answer — then take the next case.";
+    }
+  }
+}
+
+function resetScore() {
+  DETECTIVE.attempted = 0;
+  DETECTIVE.correct = 0;
+  DETECTIVE.streak = 0;
+  DETECTIVE.best = 0;
+  saveDetective();
+  renderStats();
+  var out = document.getElementById("det-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  var sub = document.getElementById("sb-subscribe");
+  if (sub) { sub.setAttribute("href", SUBSCRIBE_URL); }
+  loadDetective();
+  renderStats();
+  initLab();
+  initPx();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

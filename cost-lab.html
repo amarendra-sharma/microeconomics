@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cost Curve Lab — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink:        #0f172a;
+  --ink-light:  #334155;
+  --ink-muted:  #64748b;
+  --ink-faint:  #94a3b8;
+  --bg:         #fafaf9;
+  --bg-warm:    #f5f0e8;
+  --bg-card:    #ffffff;
+  --rule:       #e2e8f0;
+  --accent:     #0f3d9e;
+  --accent-mid: #1e56c0;
+  --accent-lt:  #dbeafe;
+  --gold:       #b87408;
+  --gold-lt:    #fef3c7;
+  --green:      #166534;
+  --green-lt:   #dcfce7;
+  --red:        #991b1b;
+  --red-lt:     #fee2e2;
+  --serif:      'Lora', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+  --radius:     8px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+
+#sb-header {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200;
+  background: var(--ink); color: #fff;
+  display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 300px; }
+.sb-chart-title { font-size: 0.8125rem; font-weight: 600; color: var(--ink-muted); margin-bottom: 0.25rem; }
+
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 100px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+.sb-mini.mc .sb-mini-num { color: var(--red); }
+.sb-mini.avc .sb-mini-num { color: var(--gold); }
+.sb-mini.afc .sb-mini-num { color: var(--ink-muted); }
+
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Cost Curve Lab</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 9: Production &amp; Costs</div>
+<h1 class="sb-title">Cost Curve Lab</h1>
+<p class="sb-subtitle">Watch cost curves get <em>manufactured</em> &mdash; from workers' shrinking marginal product, through the full U-shaped anatomy, to an experiment the chapter can only describe: shock the rent and see which curves flinch. Then prove you can tell the four curves apart blindfolded.</p>
+<hr class="sb-divider">
+
+<p>Chapter 9 makes one claim above all: cost curves are not drawn, they are <em>produced</em> &mdash; every dollar figure downstream of a production fact. This lab runs Mara's cart on the chapter's exact numbers: the worker schedule where marginal product rises through the third hire and then diminishes, and the smooth cost family <code>TC = 48 + 3.6q &minus; 0.12q&sup2; + 0.006q&sup3;</code> whose AVC bottoms at <strong>$3 at 10 cups</strong> and ATC at <strong>$6 at 20 cups</strong>. Station 4's identification record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: THE MIRROR ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>The productivity&ndash;cost mirror</h2>
+<p>Every worker at Mara's cart costs the same <strong>$12 a day</strong> &mdash; but the <em>cups</em> they add differ, so the cost of a cup differs by who brewed it. The marginal cost of output produced by worker L is simply the wage divided by that worker's marginal product, <code>MC = w / MP</code>. Slide through the hires and watch the two charts move as mirror images: whenever the next worker adds <em>more</em>, the next cup costs <em>less</em>.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; One slider, two mirrored charts</div>
+  <h4>Marginal product up &nbsp;&hArr;&nbsp; marginal cost down</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="pm-L">Workers hired &mdash; <span id="pm-L-val"></span></label>
+      <input type="range" id="pm-L" min="1" max="6" step="1" value="1">
+    </div>
+  </div>
+  <div class="sb-chart-title">What each worker adds (marginal product, cups)</div>
+  <div class="sb-chart-box"><canvas id="pm-mp-canvas" height="230"></canvas></div>
+  <div class="sb-chart-title">What their cups cost (marginal cost = $12 wage &divide; marginal product)</div>
+  <div class="sb-chart-box"><canvas id="pm-mc-canvas" height="230"></canvas></div>
+  <div class="sb-readout" id="pm-readout"></div>
+</div>
+
+<p>There is the chapter's engine in a single picture: <strong>diminishing marginal product is why marginal cost rises</strong>. The U in every cost curve you are about to meet is not an assumption about money &mdash; it is the worker chart of Station 1, flipped upside down and priced.</p>
+
+<!-- ═══ STATION 2: ANATOMY ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>Anatomy of the cost family</h2>
+<p>Now the smooth version. Run the cursor along Mara's output and read all four curves at once &mdash; the cost accounts on the cards update live. Three landmarks to visit deliberately: <strong>10 cups</strong>, where AVC bottoms at $3 with MC crossing it exactly there; <strong>20 cups</strong>, where ATC bottoms at $6, again exactly where MC crosses; and anywhere in between, where MC has already turned upward while the averages are still falling.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The cost cursor</div>
+  <h4>Every number, at every output, from one formula</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="cc-q">Output (cups per day) &mdash; <span id="cc-q-val"></span></label>
+      <input type="range" id="cc-q" min="5" max="30" step="1" value="15">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="cc-canvas" height="320"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini mc"><div class="sb-mini-num" id="cc-mc">&mdash;</div><div class="sb-mini-label">MC (next cup)</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="cc-atc">&mdash;</div><div class="sb-mini-label">ATC (per cup, all-in)</div></div>
+    <div class="sb-mini avc"><div class="sb-mini-num" id="cc-avc">&mdash;</div><div class="sb-mini-label">AVC (per cup, variable)</div></div>
+    <div class="sb-mini afc"><div class="sb-mini-num" id="cc-afc">&mdash;</div><div class="sb-mini-label">AFC (per cup, fixed)</div></div>
+  </div>
+  <div class="sb-readout" id="cc-readout"></div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; Why MC crosses the averages at their minimums &mdash; the GPA rule</div>
+  <p>No geometry is needed, only the logic of averages. Your next exam grade (the marginal) pulls your GPA (the average) toward itself: below the average it drags it down, above it pushes it up. So an average can only stop falling at the exact moment the marginal climbs through it &mdash; which is why MC pierces AVC at $3 and ATC at $6, precisely at their bottoms, always and in every firm.</p>
+</div>
+
+<!-- ═══ STATION 3: THE RENT SHOCK ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>The rent shock &mdash; which curves flinch?</h2>
+<p>An experiment the textbook can only narrate, run live. Mara's landlord changes the cart's daily rent &mdash; the <em>fixed</em> cost, $48 in the base case. Predict before you slide: which of the four curves will move? The gray dashed ghosts are the base-rent curves, so every twitch is visible. What moves &mdash; and what conspicuously refuses to &mdash; is the chapter's deepest managerial lesson.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Shock the fixed cost</div>
+  <h4>Slide the rent. Watch who reacts.</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="fc-rent">Daily rent (fixed cost) &mdash; <span id="fc-rent-val"></span></label>
+      <input type="range" id="fc-rent" min="24" max="72" step="12" value="48">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="fc-canvas" height="320"></canvas></div>
+  <div class="sb-readout" id="fc-readout"></div>
+</div>
+
+<p>MC and AVC never moved &mdash; rent appears in neither, because it does not change with output. Only ATC (and its fixed slice, AFC) shifted, dragging the break-even point with it. The consequence, coming due in Chapter 10: since the firm's supply behavior is built from MC and the AVC shutdown floor, <strong>a rent change alters Mara's profit but not a single one of her short-run production decisions</strong>. Rent is the textbook's favorite sunk cost, and the curves just showed you why sunk means ignorable.</p>
+
+<!-- ═══ STATION 4: WHICH CURVE AM I? ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Which curve am I?</h2>
+<p>The graded round. Each card is a cost curve describing itself &mdash; by its shape, its numbers, or its job in the firm's decisions. Name it. Twelve clues, drawn from everything the first three stations made you watch.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The lineup</div>
+  <h4>Four suspects: AFC, AVC, ATC, MC</h4>
+  <div class="sb-case" id="cd-story">Press <strong>New clue</strong> to hear the first one.</div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="cd-AFC" onclick="curveGuess('AFC')">AFC &mdash; average fixed cost</button>
+    <button class="sb-diag-btn" id="cd-AVC" onclick="curveGuess('AVC')">AVC &mdash; average variable cost</button>
+    <button class="sb-diag-btn" id="cd-ATC" onclick="curveGuess('ATC')">ATC &mdash; average total cost</button>
+    <button class="sb-diag-btn" id="cd-MC" onclick="curveGuess('MC')">MC &mdash; marginal cost</button>
+  </div>
+  <div class="sb-readout" id="cd-readout">The lineup awaits your identification.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newClue()">New clue</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetCurveScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
+<p>Your identification record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, revisit Station 2 with the cursor and watch each curve's signature behavior until the clues feel obvious.</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">clues heard</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">identified correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; cost curves are a firm's biography, and MC is the only chapter that decides</div>
+  <p>Here is the reading I want you to leave with. AFC is the firm's <em>history</em> &mdash; commitments already made, spread ever thinner. ATC is its <em>accounting</em> &mdash; what the accountant reports at year's end. But MC is its <em>present tense</em>: the only number that answers "should we make one more?" Station 3 was the proof. The rent tripled, the accountant's curves jumped, the profit line moved &mdash; and the production decision did not budge, because the decision never consulted anything but MC and the shutdown floor. Most costly business mistakes are category errors between these chapters of the biography: pricing off average cost, chasing volume to "spread the overhead," staying open to "cover the rent."</p>
+  <p>And keep the mirror from Station 1 in your pocket, because it turns cost data into a diagnostic. Whenever you see a firm's marginal cost curve bend upward, you are looking at diminishing returns to some fixed factor &mdash; a crowded kitchen, a saturated server, a full truck. Rising MC is not a pricing choice; it is the shadow of a production constraint. Find the constraint, and you have found both the reason costs rise and the most valuable thing to fix.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Keep going</h3>
+  <p>This lab pairs with Chapter 9 of <em>Introduction to Microeconomics</em>. The very next chapter takes these curves to market: price meets MC, and the supply curve is born.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Cost Curve Lab &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Cost Curve Lab — companion arena to Chapter 9.
+   Production (Station 1): the textbook worker schedule
+     TP = [0,4,10,18,24,28,30], MP = [4,6,8,6,4,2]; wage $12;
+     MC of worker L's output = 12 / MP[L].
+   Cost family (Stations 2–3): the shared cubic
+     TC(q) = F + 3.6q − 0.12q² + 0.006q³ (base F = 48):
+     MC  = 3.6 − 0.24q + 0.018q²
+     AVC = 3.6 − 0.12q + 0.006q²   (min $3 at q = 10)
+     ATC = F/q + AVC               (min $6 at q = 20 when F = 48)
+   Station 4: curve-identification game, saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+var TP = [0, 4, 10, 18, 24, 28, 30];
+var WAGE = 12;
+
+function mpOf(L) { return TP[L] - TP[L - 1]; }
+
+function mcCurve(q) { return 3.6 - 0.24 * q + 0.018 * q * q; }
+function avcCurve(q) { return 3.6 - 0.12 * q + 0.006 * q * q; }
+function atcCurve(q, F) { return F / q + avcCurve(q); }
+function tcOf(q, F) { return F + 3.6 * q - 0.12 * q * q + 0.006 * q * q * q; }
+
+function curvePts(fn, qmin, qmax) {
+  var a = [], q;
+  for (q = qmin; q <= qmax + 0.001; q += 1) { a.push({ x: q, y: Math.round(fn(q) * 100) / 100 }); }
+  return a;
+}
+
+function fmt2(x) { return "$" + x.toFixed(2); }
+
+/* ══════════ STATION 1 — the mirror ══════════ */
+var pmMpChart = null, pmMcChart = null;
+var pmL = 1;
+
+function pmSeries() {
+  var mp = [], mc = [], L;
+  for (L = 1; L <= 6; L++) {
+    mp.push({ x: L, y: mpOf(L) });
+    mc.push({ x: L, y: Math.round((WAGE / mpOf(L)) * 100) / 100 });
+  }
+  return { mp: mp, mc: mc };
+}
+
+function initPm() {
+  var c1 = document.getElementById("pm-mp-canvas");
+  var c2 = document.getElementById("pm-mc-canvas");
+  if (!c1 || !c2 || typeof Chart === "undefined") { return; }
+  var s = pmSeries();
+  pmMpChart = new Chart(c1.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Marginal product", data: s.mp, showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 4, borderWidth: 2, tension: 0.3, clip: false },
+      { label: "This worker", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 8, clip: false }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Worker number", font: { family: "Inter" } }, min: 0, max: 7, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Cups added", font: { family: "Inter" } }, min: 0, max: 10, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  pmMcChart = new Chart(c2.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Marginal cost of those cups", data: s.mc, showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 4, borderWidth: 2, tension: 0.3, clip: false },
+      { label: "This worker's cups", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 8, clip: false }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Worker number", font: { family: "Inter" } }, min: 0, max: 7, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Cost per cup ($)", font: { family: "Inter" } }, min: 0, max: 7, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sl = document.getElementById("pm-L");
+  if (sl) { sl.addEventListener("input", function () { pmL = parseInt(sl.value, 10); updatePm(); }); }
+  updatePm();
+}
+
+function updatePm() {
+  var mp = mpOf(pmL);
+  var mc = Math.round((WAGE / mp) * 100) / 100;
+  if (pmMpChart) { pmMpChart.data.datasets[1].data = [ { x: pmL, y: mp } ]; pmMpChart.update("none"); }
+  if (pmMcChart) { pmMcChart.data.datasets[1].data = [ { x: pmL, y: mc } ]; pmMcChart.update("none"); }
+  var lv = document.getElementById("pm-L-val");
+  if (lv) { lv.textContent = "worker #" + pmL; }
+  var out = document.getElementById("pm-readout");
+  if (!out) { return; }
+  var phase;
+  if (pmL <= 3) {
+    phase = "Marginal product is still <strong>rising</strong> — early workers specialize and share the machine well — so each successive cup is getting <strong>cheaper</strong>.";
+  } else {
+    phase = "Diminishing returns have set in: the cart is fixed, the counter is crowded, and each extra worker adds <strong>less</strong> — so each successive cup costs <strong>more</strong>.";
+  }
+  out.innerHTML = "Worker #" + pmL + " adds <strong>" + mp + " cups</strong>; at a $12 wage those cups cost <strong>" + fmt2(mc) +
+    "</strong> each (12 &divide; " + mp + "). " + phase;
+}
+
+/* ══════════ STATION 2 — anatomy ══════════ */
+var ccChart = null;
+var ccQ = 15;
+
+function initCc() {
+  var canvas = document.getElementById("cc-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  ccChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "MC", data: curvePts(mcCurve, 5, 30), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 0, borderWidth: 2, tension: 0.3 },
+      { label: "ATC", data: curvePts(function (q) { return atcCurve(q, 48); }, 5, 30), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2, tension: 0.3 },
+      { label: "AVC", data: curvePts(avcCurve, 5, 30), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+      { label: "AFC", data: curvePts(function (q) { return 48 / q; }, 5, 30), showLine: true, borderColor: "#94a3b8", backgroundColor: "#94a3b8", pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+      { label: "_cursor", data: [], showLine: true, borderColor: "#64748b", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: 0 },
+      { label: "Readings at your output", data: [], borderColor: "#166534", backgroundColor: "#166534", pointRadius: 5, clip: false }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8,
+        filter: function (item) { return item.text.indexOf("_") !== 0; } } } },
+      scales: {
+        x: { title: { display: true, text: "Output (cups/day)", font: { family: "Inter" } }, min: 0, max: 32, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Cost ($ per cup)", font: { family: "Inter" } }, min: 0, max: 14, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sl = document.getElementById("cc-q");
+  if (sl) { sl.addEventListener("input", function () { ccQ = parseInt(sl.value, 10); updateCc(); }); }
+  updateCc();
+}
+
+function updateCc() {
+  var q = ccQ;
+  var mc = mcCurve(q), avc = avcCurve(q), atc = atcCurve(q, 48), afc = 48 / q;
+  if (ccChart) {
+    ccChart.data.datasets[4].data = [ { x: q, y: 0 }, { x: q, y: 14 } ];
+    ccChart.data.datasets[5].data = [ { x: q, y: mc }, { x: q, y: avc }, { x: q, y: atc }, { x: q, y: afc } ];
+    ccChart.update("none");
+  }
+  var qv = document.getElementById("cc-q-val");
+  if (qv) { qv.textContent = q + " cups"; }
+  var ids = { "cc-mc": mc, "cc-avc": avc, "cc-atc": atc, "cc-afc": afc };
+  var k;
+  for (k in ids) {
+    if (ids.hasOwnProperty(k)) {
+      var el = document.getElementById(k);
+      if (el) { el.textContent = fmt2(ids[k]); }
+    }
+  }
+  var out = document.getElementById("cc-readout");
+  if (!out) { return; }
+  var head = "At <strong>" + q + " cups</strong>: total cost " + fmt2(tcOf(q, 48)) + " ($48 fixed + " + fmt2(tcOf(q, 48) - 48) + " variable). ";
+  var note;
+  if (q === 10) {
+    note = "<strong>Landmark:</strong> AVC bottoms here at exactly $3.00 — and MC crosses it at this very point (MC = $3.00 too). Below $3, no price could even cover the variable cost of operating.";
+  } else if (q === 20) {
+    note = "<strong>Landmark:</strong> ATC bottoms here at exactly $6.00 — with MC crossing at precisely this point. $6 is the break-even price this cost structure can live with in the long run.";
+  } else if (mc < avc) {
+    note = "MC (" + fmt2(mc) + ") is still below both averages — the next cup is cheaper than the average cup, so it is <strong>pulling the averages down</strong>.";
+  } else if (mc < atc) {
+    note = "MC (" + fmt2(mc) + ") has climbed above AVC — AVC is now rising — but remains below ATC, which is <strong>still falling</strong>: the marginal drags each average only once it passes it.";
+  } else {
+    note = "MC (" + fmt2(mc) + ") now exceeds every average — each extra cup costs more than the average cup, so <strong>all the averages are rising</strong>.";
+  }
+  out.innerHTML = head + note;
+}
+
+/* ══════════ STATION 3 — rent shock ══════════ */
+var fcChart = null;
+var fcRent = 48;
+
+function minAtc(F) {
+  /* scan for the minimum of ATC(q, F) on q in [5, 40] */
+  var bestQ = 5, bestV = atcCurve(5, F), q, v;
+  for (q = 5; q <= 40.0001; q += 0.5) {
+    v = atcCurve(q, F);
+    if (v < bestV) { bestV = v; bestQ = q; }
+  }
+  return { q: bestQ, v: bestV };
+}
+
+function initFc() {
+  var canvas = document.getElementById("fc-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  fcChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "_ghostATC", data: curvePts(function (q) { return atcCurve(q, 48); }, 5, 30), showLine: true, borderColor: "#cbd5e1", borderDash: [6, 5], pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+      { label: "_ghostAFC", data: curvePts(function (q) { return 48 / q; }, 5, 30), showLine: true, borderColor: "#e2e8f0", borderDash: [6, 5], pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+      { label: "MC (never moves)", data: curvePts(mcCurve, 5, 30), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 0, borderWidth: 2, tension: 0.3 },
+      { label: "AVC (never moves)", data: curvePts(avcCurve, 5, 30), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+      { label: "ATC at your rent", data: [], showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0.3 },
+      { label: "AFC at your rent", data: [], showLine: true, borderColor: "#94a3b8", backgroundColor: "#94a3b8", pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+      { label: "Break-even point (min ATC)", data: [], borderColor: "#166534", backgroundColor: "#166534", pointRadius: 7 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8,
+        filter: function (item) { return item.text.indexOf("_") !== 0; } } } },
+      scales: {
+        x: { title: { display: true, text: "Output (cups/day)", font: { family: "Inter" } }, min: 0, max: 32, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Cost ($ per cup)", font: { family: "Inter" } }, min: 0, max: 14, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sl = document.getElementById("fc-rent");
+  if (sl) { sl.addEventListener("input", function () { fcRent = parseInt(sl.value, 10); updateFc(); }); }
+  updateFc();
+}
+
+function updateFc() {
+  var F = fcRent;
+  var m = minAtc(F);
+  if (fcChart) {
+    fcChart.data.datasets[4].data = curvePts(function (q) { return atcCurve(q, F); }, 5, 30);
+    fcChart.data.datasets[5].data = curvePts(function (q) { return F / q; }, 5, 30);
+    fcChart.data.datasets[6].data = [ { x: m.q, y: Math.round(m.v * 100) / 100 } ];
+    fcChart.update("none");
+  }
+  var rv = document.getElementById("fc-rent-val");
+  if (rv) { rv.textContent = "$" + F + " per day" + (F === 48 ? " (the base case)" : ""); }
+  var out = document.getElementById("fc-readout");
+  if (!out) { return; }
+  if (F === 48) {
+    out.innerHTML = "Base rent, $48: ATC bottoms at <strong>$6.00 at 20 cups</strong> — the familiar break-even. Now shock the rent in either direction and watch which curves respond.";
+  } else {
+    var dir = F > 48 ? "up" : "down";
+    out.innerHTML = "Rent " + dir + " to <strong>$" + F + "</strong>: ATC and AFC shifted " + dir + " — the break-even point is now about <strong>" + fmt2(m.v) + " at " + m.q + " cups</strong> — while <strong>MC and AVC did not move a hair</strong>. Rent never appears in the cost of the <em>next</em> cup, so every short-run production and shutdown decision is exactly what it was before the landlord called.";
+  }
+}
+
+/* ══════════ STATION 4 — which curve am I? ══════════ */
+var CD_CASES = [
+  { clue: "I never stop falling: every extra cup spreads me thinner, and I approach zero without ever arriving.", key: "AFC",
+    why: "Only average fixed cost declines monotonically — a constant divided by ever-larger output." },
+  { clue: "Multiply me by output and you always get the same $48, no matter how many cups the cart makes.", key: "AFC",
+    why: "AFC × q = fixed cost by definition; the rectangle under AFC is always the $48 rent." },
+  { clue: "I am the vertical gap between ATC and AVC — a gap that shrinks toward nothing as output grows.", key: "AFC",
+    why: "ATC = AVC + AFC, so the space between them is exactly AFC, thinning as the fixed cost spreads." },
+  { clue: "I am the cost of the very next cup, and I slice through both averages precisely at their lowest points.", key: "MC",
+    why: "Marginal cost prices the next unit, and the average-marginal (GPA) rule forces it through each average's minimum." },
+  { clue: "When I run below an average I drag it downward; the moment I climb above, I start pushing it up.", key: "MC",
+    why: "That is the marginal's defining pull on any average — the GPA rule, and only MC plays that role." },
+  { clue: "I am the mirror of marginal product: when the next worker adds more cups, I fall; when returns diminish, I rise.", key: "MC",
+    why: "MC = wage / MP — Station 1's mirror. Diminishing marginal product is exactly what bends MC upward." },
+  { clue: "Ignore the rent entirely: I average only the costs that vary, and I bottom out at $3.00 when the cart brews 10 cups.", key: "AVC",
+    why: "Average variable cost excludes fixed cost; on this cost family its minimum is $3 at q = 10." },
+  { clue: "The shutdown question is a comparison between the market price and my minimum value.", key: "AVC",
+    why: "A firm operates in the short run only if price covers minimum AVC — the shutdown floor of Chapter 10." },
+  { clue: "Take ATC and remove the ever-shrinking fixed slice; what remains is me.", key: "AVC",
+    why: "AVC = ATC − AFC: strip the fixed cost per unit out of the all-in average and AVC is what is left." },
+  { clue: "Break-even lives at my minimum: on this cart, $6.00 a cup at 20 cups a day.", key: "ATC",
+    why: "Price equal to minimum ATC yields exactly zero economic profit — the long-run break-even of this cost family." },
+  { clue: "I am the all-in cost per cup — rent included — falling while the fixed cost spreads, rising once diminishing returns win.", key: "ATC",
+    why: "ATC's U comes from that tug-of-war: falling AFC early, rising AVC late." },
+  { clue: "A price above my valley means profit and below it means loss — though a loss need not mean shutting down.", key: "ATC",
+    why: "Profit compares price with ATC; but the shutdown call compares price with AVC, so a firm can lose money yet keep operating." }
+];
+
+var CD = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentCd = null;
+var cdAnswered = true;
+
+function loadCd() {
+  try {
+    var raw = localStorage.getItem("costLab.detective");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { CD.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { CD.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { CD.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { CD.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveCd() {
+  try {
+    localStorage.setItem("costLab.detective", JSON.stringify(CD));
+  } catch (e) { /* ignore */ }
+}
+
+function renderCdStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(CD.attempted); }
+  if (cor) { cor.textContent = String(CD.correct); }
+  if (acc) { acc.innerHTML = CD.attempted > 0 ? Math.round((CD.correct / CD.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(CD.best); }
+}
+
+var CD_IDS = ["AFC", "AVC", "ATC", "MC"];
+
+function setCdButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < CD_IDS.length; i++) {
+    btn = document.getElementById("cd-" + CD_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newClue() {
+  currentCd = CD_CASES[Math.floor(Math.random() * CD_CASES.length)];
+  cdAnswered = false;
+  setCdButtons(false);
+  var story = document.getElementById("cd-story");
+  if (story) { story.innerHTML = "<strong>The curve speaks:</strong> \u201C" + currentCd.clue + "\u201D"; }
+  var out = document.getElementById("cd-readout");
+  if (out) { out.innerHTML = "The lineup awaits your identification."; }
+}
+
+function curveGuess(choice) {
+  if (!currentCd || cdAnswered) { return; }
+  cdAnswered = true;
+  setCdButtons(true);
+  var correct = choice === currentCd.key;
+  var btnChosen = document.getElementById("cd-" + choice);
+  var btnRight = document.getElementById("cd-" + currentCd.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  CD.attempted += 1;
+  if (correct) {
+    CD.correct += 1;
+    CD.streak += 1;
+    if (CD.streak > CD.best) { CD.best = CD.streak; }
+  } else {
+    CD.streak = 0;
+  }
+  saveCd();
+  renderCdStats();
+
+  var out = document.getElementById("cd-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Identified</strong> — it was " + currentCd.key + ". " + currentCd.why +
+        " Streak: <strong>" + CD.streak + "</strong>. Press <strong>New clue</strong> for another.";
+    } else {
+      out.innerHTML = "<strong>Wrong suspect.</strong> That was " + currentCd.key + ". " + currentCd.why +
+        " Revisit the cursor in Station 2 if the signatures are blurring. Next clue when ready.";
+    }
+  }
+}
+
+function resetCurveScore() {
+  CD.attempted = 0;
+  CD.correct = 0;
+  CD.streak = 0;
+  CD.best = 0;
+  saveCd();
+  renderCdStats();
+  var out = document.getElementById("cd-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New clue</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  loadCd();
+  renderCdStats();
+  initPm();
+  initCc();
+  initFc();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

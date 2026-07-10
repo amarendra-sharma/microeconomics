@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oligopoly Arena — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink:        #0f172a;
+  --ink-light:  #334155;
+  --ink-muted:  #64748b;
+  --ink-faint:  #94a3b8;
+  --bg:         #fafaf9;
+  --bg-warm:    #f5f0e8;
+  --bg-card:    #ffffff;
+  --rule:       #e2e8f0;
+  --accent:     #0f3d9e;
+  --accent-mid: #1e56c0;
+  --accent-lt:  #dbeafe;
+  --gold:       #b87408;
+  --gold-lt:    #fef3c7;
+  --green:      #166534;
+  --green-lt:   #dcfce7;
+  --red:        #991b1b;
+  --red-lt:     #fee2e2;
+  --serif:      'Lora', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+  --radius:     8px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+
+#sb-header {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200;
+  background: var(--ink); color: #fff;
+  display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 300px; }
+
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-primary:disabled { background: var(--ink-faint); cursor: default; }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sb-ghost.active { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.btn-sb-ghost:disabled { color: var(--ink-faint); cursor: default; border-color: var(--rule); background: transparent; }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+
+/* payoff matrix */
+table.sb-matrix { border-collapse: collapse; margin: 0.875rem auto; font-size: 0.875rem; }
+.sb-matrix th { padding: 0.5rem 0.875rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); }
+.sb-matrix td.cell { border: 2px solid var(--rule); padding: 0.875rem 1.1rem; text-align: center; min-width: 150px; background: var(--bg-card); transition: all 0.2s; }
+.sb-matrix td.cell .who { display: block; font-size: 0.6875rem; color: var(--ink-faint); }
+.sb-matrix td.cell.active { border-color: var(--accent); background: var(--accent-lt); }
+.sb-matrix td.cell.nash { border-color: var(--green); background: var(--green-lt); }
+.sb-matrix td.cell.coop { border-color: var(--gold); background: var(--gold-lt); }
+
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 100px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+
+/* repeated-game log */
+.sb-log { background: var(--bg-warm); border-radius: var(--radius); padding: 0.75rem 1rem; margin: 0.75rem 0; font-family: var(--mono); font-size: 0.78rem; color: var(--ink-light); max-height: 190px; overflow-y: auto; }
+.sb-log div { padding: 1px 0; }
+
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+  .sb-matrix td.cell { min-width: 110px; padding: 0.625rem 0.5rem; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Oligopoly Arena</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 13: Oligopoly &amp; Game Theory</div>
+<h1 class="sb-title">Oligopoly Arena</h1>
+<p class="sb-subtitle">Markets where rivals watch each other: feel the payoff matrix drag Mara and Tomas into an equilibrium neither wants, measure the exact dollar temptation to cheat a cartel, then defend cooperation across ten rounds against opponents with long memories &mdash; the bridge from this course into full game theory.</p>
+<hr class="sb-divider">
+
+<p>Chapter 13 is where "the market" gets faces. With two sellers instead of many, every choice is a move in a game, and this arena plays the chapter's own game: Mara and Tomas each pick <strong>High ($3)</strong> or <strong>Low ($2)</strong> prices, with the daily profits <strong>(90,&thinsp;90)</strong> if both stay High, <strong>(60,&thinsp;60)</strong> if both go Low, and <strong>100 vs. 50</strong> when one undercuts the other. Station 2 adds the quantitative version using Chapter 11's ferry market. The Strategy Detective record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: BEST-RESPONSE ENGINE ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>The best-response engine</h2>
+<p>Pick a price for Mara, and watch Tomas answer with <em>his</em> best reply to it &mdash; then let Mara re-answer, and keep going. The matrix will drag you somewhere specific no matter where you start. When you have felt the pull, press <strong>Reveal the logic</strong> and see it named.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The pricing game, live</div>
+  <h4>Move, counter-move, rest</h4>
+  <table class="sb-matrix">
+    <tr><th></th><th>Tomas: High ($3)</th><th>Tomas: Low ($2)</th></tr>
+    <tr>
+      <th>Mara: High ($3)</th>
+      <td class="cell" id="ol-HH"><span class="who">Mara 90 &middot; Tomas 90</span><strong>Both comfortable</strong></td>
+      <td class="cell" id="ol-HL"><span class="who">Mara 50 &middot; Tomas 100</span><strong>Mara undercut</strong></td>
+    </tr>
+    <tr>
+      <th>Mara: Low ($2)</th>
+      <td class="cell" id="ol-LH"><span class="who">Mara 100 &middot; Tomas 50</span><strong>Tomas undercut</strong></td>
+      <td class="cell" id="ol-LL"><span class="who">Mara 60 &middot; Tomas 60</span><strong>Price war</strong></td>
+    </tr>
+  </table>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Mara's move (Tomas will best-respond)</span>
+    <button class="btn-sb btn-sb-ghost" onclick="olPick('H')">Mara prices High</button>
+    <button class="btn-sb btn-sb-ghost" onclick="olPick('L')">Mara prices Low</button>
+    <button class="btn-sb btn-sb-ghost" id="ol-rebtn" onclick="olMaraRespond()" disabled>Now let Mara best-respond</button>
+    <button class="btn-sb btn-sb-primary" onclick="olReveal()">Reveal the logic</button>
+  </div>
+  <div class="sb-readout" id="ol-readout">Choose Mara's opening price.</div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; A dilemma is not a mistake</div>
+  <p>The maddening thing you just verified: Low is Tomas's best reply to <em>either</em> of Mara's prices, and hers to either of his &mdash; a <strong>dominant strategy</strong> for both. Two flawless reasoners therefore land on (Low, Low) and 60 each, staring across the square at the (90, 90) they both preferred. Nobody blundered. The outcome is worse for everyone <em>because</em> everyone played perfectly &mdash; that is what makes it a dilemma rather than an error, and why Chapter 7's invisible hand has no grip here.</p>
+</div>
+
+<!-- ═══ STATION 2: THE TEMPTATION METER ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>The temptation meter</h2>
+<p>Now measure the dilemma in dollars, using Chapter 11's ferry market: town demand <code>P = 12 &minus; 0.2Q</code>, marginal cost <strong>$4</strong>. Mara and Tomas have formed a cartel to run it jointly like a monopoly &mdash; 20 crossings total, <strong>10 each</strong>, at $8, for <strong>$40 apiece</strong>. Tomas honors the deal. You are Mara, alone with the schedule tonight. Every crossing you add slides the price down the <em>residual</em> demand left after Tomas's 10: <code>P = 10 &minus; 0.2q</code>. Find your most profitable betrayal &mdash; then find out what it costs.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Cheat the cartel (quantitatively)</div>
+  <h4>Tomas runs his promised 10. How many do <em>you</em> run?</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="tm-q">Your crossings tonight &mdash; <span id="tm-q-val"></span></label>
+      <input type="range" id="tm-q" min="8" max="22" step="1" value="10">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="tm-canvas" height="270"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="tm-p">&mdash;</div><div class="sb-mini-label">market fare tonight</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="tm-you">&mdash;</div><div class="sb-mini-label">your profit</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="tm-him">&mdash;</div><div class="sb-mini-label">Tomas's profit (honest 10)</div></div>
+  </div>
+  <div class="sb-readout" id="tm-readout"></div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="tmRetaliate()">Then Tomas retaliates &mdash; both best-respond forever</button>
+    <button class="btn-sb btn-sb-ghost" onclick="tmReset()">Back to the honest cartel</button>
+  </div>
+</div>
+
+<p>You just ran Chapter 11's own machinery against your partner: your residual demand has marginal revenue <code>MR = 10 &minus; 0.4q</code>, and MR = MC picks <strong>q = 15</strong> &mdash; profit <strong>$45</strong>, a $5 raise stolen while Tomas's honest 10 crossings shrivel to $30. The retaliation button shows the ending: when both play best responses against each other, each runs about 13.3 crossings, the fare sags to about $6.67, and each earns <strong>&asymp; $35.60 &mdash; forever</strong>. Five dollars once, four and a half dollars a night for good: that arithmetic is why cartels need something the one-shot game cannot supply.</p>
+
+<!-- ═══ STATION 3: THE LONG GAME ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>The long game</h2>
+<p>What the one-shot game cannot supply, repetition can: a <em>future</em> that can be threatened. Play ten mornings against Tomas, using the Station 1 payoffs each round. Choose his strategy first &mdash; then decide, morning by morning, whether cooperation is worth it. The benchmark: ten peaceful mornings pay <strong>900</strong>.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Ten mornings against Tomas</div>
+  <h4>His memory is the whole game</h4>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Tomas plays&hellip;</span>
+    <button class="btn-sb btn-sb-ghost active" id="rp-opp-tft" onclick="rpSetOpp('tft')">Tit-for-Tat (copies your last move)</button>
+    <button class="btn-sb btn-sb-ghost" id="rp-opp-grim" onclick="rpSetOpp('grim')">Grim Trigger (one betrayal = war forever)</button>
+    <button class="btn-sb btn-sb-ghost" id="rp-opp-alld" onclick="rpSetOpp('alld')">Always Low (no memory, no mercy)</button>
+  </div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="rp-round">1 / 10</div><div class="sb-mini-label">morning</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="rp-you-total">0</div><div class="sb-mini-label">your total (max 900)</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="rp-opp-total">0</div><div class="sb-mini-label">Tomas's total</div></div>
+  </div>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-primary" id="rp-H" onclick="rpPlay('H')">Price High (cooperate)</button>
+    <button class="btn-sb btn-sb-primary" id="rp-L" onclick="rpPlay('L')">Price Low (defect)</button>
+    <button class="btn-sb btn-sb-ghost" onclick="rpReset()">Start a fresh ten mornings</button>
+  </div>
+  <div class="sb-log" id="rp-log"><div>The market opens. Tomas is watching.</div></div>
+  <div class="sb-readout" id="rp-readout">Morning 1: make your first pricing call.</div>
+</div>
+
+<!-- ═══ STATION 4: STRATEGY DETECTIVE ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Strategy Detective</h2>
+<p>The graded round. Each case is a strategic situation from the business world. Diagnose the game-theory structure at work: a one-shot dilemma grinding everyone down, repetition quietly sustaining cooperation, a commitment that makes a threat <em>credible</em> &mdash; or a threat that backward induction exposes as empty.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Name the mechanism</div>
+  <h4>Four structures, one verdict</h4>
+  <div class="sb-case" id="gd-story">Press <strong>New case</strong> to open the first file.</div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="gd-PD" onclick="gdVerdict('PD')">One-shot dilemma &mdash; dominant strategies grind everyone down</button>
+    <button class="sb-diag-btn" id="gd-REP" onclick="gdVerdict('REP')">Repeated game &mdash; the shadow of the future sustains cooperation</button>
+    <button class="sb-diag-btn" id="gd-CRED" onclick="gdVerdict('CRED')">Credible threat &mdash; a commitment makes carrying it out rational</button>
+    <button class="sb-diag-btn" id="gd-EMPTY" onclick="gdVerdict('EMPTY')">Empty threat &mdash; backward induction says they'd never do it</button>
+  </div>
+  <div class="sb-readout" id="gd-readout">The case file awaits your diagnosis.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newGdCase()">New case</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetGdScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
+<p>Your Strategy Detective record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, replay Stations 1&ndash;3 and ask each case the two sorting questions: is the game played once or repeatedly, and would the threatened action actually pay when the moment came?</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases diagnosed</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">diagnosed correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; the shadow of the future is civilization's load-bearing wall</div>
+  <p>Station 2 gave you the dilemma at its cruelest: a guaranteed $5 tonight against $4.40 a night forever, and yet the one-shot logic says take the $5, because in a game with no tomorrow the forever never arrives. Then Station 3 showed the repair, and I want you to see how little it required &mdash; no contract, no regulator, no goodness of heart. Just an opponent who <em>remembers</em>, and enough future left to matter. Tit-for-Tat sustained the $90 mornings with nothing but the credible promise that betrayal would be answered. That is the deepest result in this chapter: cooperation among the self-interested is not a miracle of character; it is an equilibrium of repeated play.</p>
+  <p>And once you see it, you see it everywhere the textbook cannot follow: why reputations are worth more than any single deal, why merchants cheat tourists but not regulars, why the last month of a lease goes badly, why "we'll be doing business for years" is the strongest clause in any contract. Whenever cooperation puzzles you, find the repetition; whenever betrayal does, look for an endgame someone could see coming. This chapter is the doorway &mdash; the full house of game theory is next door, and it runs on exactly these hinges.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Cross the bridge</h3>
+  <p>This arena pairs with Chapter 13 of <em>Introduction to Microeconomics</em> &mdash; and it is also the on-ramp to <strong>StrategyArena</strong>, the full game-theory course: sequential games, Cournot and Bertrand competition, auctions, bargaining, and graded tournaments.</p>
+  <div style="margin-top:1rem;" class="sb-shock-row" >
+    <a class="btn-sb btn-sb-primary" id="sa-link" href="#" style="display:inline-block;text-decoration:none;margin:0 auto;">Continue in StrategyArena &rarr;</a>
+    <a class="btn-sb btn-sb-ghost" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;margin:0 auto;">Open the textbook</a>
+  </div>
+</div>
+
+</main>
+
+<footer>Oligopoly Arena &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Oligopoly Arena — companion arena to Chapter 13, and the
+   bridge into StrategyArena.
+   Station 1: the chapter's pricing game.
+     Payoffs (Mara, Tomas): HH (90,90), HL (50,100),
+     LH (100,50), LL (60,60). Low dominates for both;
+     unique Nash (L,L); cooperative cell (H,H).
+   Station 2: cartel cheating on the Ch. 11 ferry market.
+     Market demand P = 12 − 0.2Q, MC = $4. Cartel: 10 each at
+     $8 → $40 apiece. With Tomas honest at 10, Mara's residual
+     demand is P = 10 − 0.2q, MR = 10 − 0.4q; MR = MC ⇒ q = 15,
+     profit $45 (Tomas falls to $30). Mutual best responses:
+     q = 40/3 each, P = $6.67, ≈ $35.60 apiece.
+   Station 3: 10-round repeated game vs Tit-for-Tat / Grim /
+     Always-Low, using the Station 1 payoffs.
+   Station 4: strategy-diagnosis game, saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+var STRATEGY_ARENA_URL = "https://amarendra-sharma.github.io/strategyarena/"; /* StrategyArena deployment; boot() forwards ?mn_sid= when this arena's own URL carries one, for cross-app session stitching */
+
+/* payoffs[mara][tomas] = [maraProfit, tomasProfit] */
+var PAYOFF = {
+  H: { H: [90, 90], L: [50, 100] },
+  L: { H: [100, 50], L: [60, 60] }
+};
+
+function tomasBest(mara) {
+  /* Tomas compares his payoff across his two replies */
+  return PAYOFF[mara].H[1] >= PAYOFF[mara].L[1] ? "H" : "L";
+}
+function maraBest(tomas) {
+  return PAYOFF.H[tomas][0] >= PAYOFF.L[tomas][0] ? "H" : "L";
+}
+
+/* ══════════ STATION 1 — best-response engine ══════════ */
+var olMara = null, olTomas = null;
+
+function olCells() { return ["HH", "HL", "LH", "LL"]; }
+
+function olClearCells(keepReveal) {
+  var ids = olCells(), i, el;
+  for (i = 0; i < ids.length; i++) {
+    el = document.getElementById("ol-" + ids[i]);
+    if (el) {
+      el.classList.remove("active");
+      if (!keepReveal) { el.classList.remove("nash"); el.classList.remove("coop"); }
+    }
+  }
+}
+
+function olHighlight() {
+  olClearCells(true);
+  if (olMara && olTomas) {
+    var el = document.getElementById("ol-" + olMara + olTomas);
+    if (el) { el.classList.add("active"); }
+  }
+}
+
+function olPick(mara) {
+  olMara = mara;
+  olTomas = tomasBest(mara);
+  olHighlight();
+  var re = document.getElementById("ol-rebtn");
+  if (re) { re.disabled = false; }
+  var pay = PAYOFF[olMara][olTomas];
+  var out = document.getElementById("ol-readout");
+  if (out) {
+    var why = mara === "H"
+      ? "against your High, undercutting pays him 100 instead of 90"
+      : "against your Low, matching pays him 60 instead of the sucker's 50";
+    out.innerHTML = "Mara opens <strong>" + (mara === "H" ? "High" : "Low") + "</strong>. Tomas's best reply is <strong>" +
+      (olTomas === "H" ? "High" : "Low") + "</strong> — " + why + ". Outcome: Mara " + pay[0] + ", Tomas " + pay[1] +
+      ". Now let Mara re-answer <em>his</em> move.";
+  }
+}
+
+function olMaraRespond() {
+  if (!olTomas) { return; }
+  var newMara = maraBest(olTomas);
+  var moved = newMara !== olMara;
+  olMara = newMara;
+  olTomas = tomasBest(olMara);   /* Tomas re-answers too */
+  olHighlight();
+  var pay = PAYOFF[olMara][olTomas];
+  var out = document.getElementById("ol-readout");
+  if (!out) { return; }
+  if (olMara === "L" && olTomas === "L") {
+    out.innerHTML = (moved ? "Mara's best reply is <strong>Low</strong> — and Tomas's answer to that is Low again. " : "") +
+      "The game has come to rest at <strong>(Low, Low): 60 each</strong>. Try any other start — every path of best replies drains into this square. Press <strong>Reveal the logic</strong> to see it named.";
+  } else {
+    out.innerHTML = "Best replies land on Mara " + pay[0] + ", Tomas " + pay[1] + ". Keep pressing — the game has not come to rest yet.";
+  }
+}
+
+function olReveal() {
+  olClearCells(false);
+  var nash = document.getElementById("ol-LL");
+  var coop = document.getElementById("ol-HH");
+  if (nash) { nash.classList.add("nash"); }
+  if (coop) { coop.classList.add("coop"); }
+  var out = document.getElementById("ol-readout");
+  if (out) {
+    out.innerHTML = "<strong>The logic, named.</strong> Low beats High for Tomas whatever Mara does (100&gt;90, 60&gt;50), and for Mara whatever Tomas does — <strong>Low is a dominant strategy for both</strong>. The green square (Low, Low) is the unique <strong>Nash equilibrium</strong>: neither can gain by changing alone. The gold square (High, High) pays both more — and is unreachable by self-interest in a single play, because from it each player can grab 100 by defecting. A prisoners' dilemma, in coffee.";
+  }
+}
+
+/* ══════════ STATION 2 — temptation meter ══════════ */
+function tmYourProfit(q) { return (10 - 0.2 * q - 4) * q; }   /* residual: P = 10 − 0.2q, MC 4 */
+function tmFare(q) { return 12 - 0.2 * (q + 10); }
+function tmTomasProfit(q) { return (tmFare(q) - 4) * 10; }
+
+var tmChart = null;
+var tmQ = 10;
+
+function tmHillPts() {
+  var r = [], q;
+  for (q = 0; q <= 25.0001; q += 1) { r.push({ x: q, y: Math.round(tmYourProfit(q) * 100) / 100 }); }
+  return r;
+}
+
+function initTm() {
+  var canvas = document.getElementById("tm-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  tmChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Your profit at each output (Tomas honest at 10)", data: tmHillPts(), showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 2.5, tension: 0.3 },
+      { label: "The honest cartel (q = 10, $40)", data: [ { x: 10, y: 40 } ], borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 6, pointStyle: "rectRot" },
+      { label: "You are here", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 7 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Your crossings tonight", font: { family: "Inter" } }, min: 0, max: 26, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Your profit ($)", font: { family: "Inter" } }, min: 0, max: 50, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sq = document.getElementById("tm-q");
+  if (sq) { sq.addEventListener("input", function () { tmQ = parseInt(sq.value, 10); updateTm(); }); }
+  updateTm();
+}
+
+function updateTm() {
+  var q = tmQ;
+  var you = tmYourProfit(q), him = tmTomasProfit(q), fare = tmFare(q);
+  if (tmChart) {
+    tmChart.data.datasets[2].data = [ { x: q, y: Math.round(you * 100) / 100 } ];
+    tmChart.update("none");
+  }
+  var qv = document.getElementById("tm-q-val");
+  if (qv) { qv.textContent = q + " crossings" + (q === 10 ? " (the deal)" : ""); }
+  var cards = { "tm-p": "$" + fare.toFixed(2), "tm-you": "$" + you.toFixed(2), "tm-him": "$" + him.toFixed(2) };
+  var k;
+  for (k in cards) {
+    if (cards.hasOwnProperty(k)) {
+      var el = document.getElementById(k);
+      if (el) { el.textContent = cards[k]; }
+    }
+  }
+  var out = document.getElementById("tm-readout");
+  if (!out) { return; }
+  if (q === 10) {
+    out.innerHTML = "The honest cartel: 20 crossings total at <strong>$8</strong>, $40 each — the monopoly outcome, split. But look at the hill: it keeps rising to your right. Your marginal revenue on the <em>residual</em> demand (10 &minus; 0.4q = $6 here) still beats the $4 cost. The deal is leaving your money on the table — that is the temptation.";
+  } else if (q === 15) {
+    out.innerHTML = "<strong>The summit of betrayal.</strong> At 15 crossings your residual MR (10 &minus; 0.4&times;15 = $4) exactly meets marginal cost: profit <strong>$45</strong>, a $5 raise — while the fare you dragged to $7 cuts honest Tomas to <strong>$30</strong>. Your gain $5; his loss $10; the town's fare, lower. Now press the retaliation button.";
+  } else if (q < 15) {
+    out.innerHTML = "At " + q + " crossings you earn <strong>$" + you.toFixed(2) + "</strong>. Your residual MR is " + (10 - 0.4 * q).toFixed(2) + ", still above the $4 cost — the cheating hill keeps climbing to your right.";
+  } else {
+    out.innerHTML = "At " + q + " crossings you earn <strong>$" + you.toFixed(2) + "</strong> — past the summit: residual MR (" + (10 - 0.4 * q).toFixed(2) + ") has fallen below the $4 cost, so the extra crossings now cost you more than they bring in. Even betrayal has an optimum, and it is 15.";
+  }
+}
+
+function tmRetaliate() {
+  var out = document.getElementById("tm-readout");
+  if (out) {
+    out.innerHTML = "<strong>Tomas stops honoring a broken deal.</strong> Each of you now best-responds to the other, round after round, until neither wants to move: about <strong>13.3 crossings each</strong>, 26.7 total, fare &asymp; <strong>$6.67</strong> — and profit &asymp; <strong>$35.60 apiece, every night from now on</strong>. The ledger of the betrayal: +$5 once, then &minus;$4.40 a night relative to the $40 cartel, forever. One night of arithmetic destroyed an annuity.";
+  }
+}
+
+function tmReset() {
+  tmQ = 10;
+  var sq = document.getElementById("tm-q");
+  if (sq) { sq.value = "10"; }
+  updateTm();
+}
+
+/* ══════════ STATION 3 — the long game ══════════ */
+var rpOpp = "tft";
+var rpRound = 1;
+var rpYou = 0, rpTomas = 0;
+var rpBetrayed = false;      /* for grim */
+var rpYourLast = null;       /* for tit-for-tat */
+var rpOver = false;
+
+function rpOppMove() {
+  if (rpOpp === "alld") { return "L"; }
+  if (rpOpp === "grim") { return rpBetrayed ? "L" : "H"; }
+  /* tit-for-tat: open High, then copy your last move */
+  return rpYourLast === null ? "H" : rpYourLast;
+}
+
+function rpSetOpp(mode) {
+  rpOpp = mode;
+  var names = ["tft", "grim", "alld"], i, btn;
+  for (i = 0; i < names.length; i++) {
+    btn = document.getElementById("rp-opp-" + names[i]);
+    if (btn) { if (names[i] === mode) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
+  }
+  rpReset();
+}
+
+function rpLog(line) {
+  var log = document.getElementById("rp-log");
+  if (log) {
+    var d = document.createElement("div");
+    d.innerHTML = line;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+function rpRender() {
+  var r = document.getElementById("rp-round");
+  var y = document.getElementById("rp-you-total");
+  var t = document.getElementById("rp-opp-total");
+  if (r) { r.textContent = Math.min(rpRound, 10) + " / 10"; }
+  if (y) { y.textContent = String(rpYou); }
+  if (t) { t.textContent = String(rpTomas); }
+  var bH = document.getElementById("rp-H");
+  var bL = document.getElementById("rp-L");
+  if (bH) { bH.disabled = rpOver; }
+  if (bL) { bL.disabled = rpOver; }
+}
+
+function rpPlay(you) {
+  if (rpOver) { return; }
+  var tomas = rpOppMove();
+  var pay = PAYOFF[you][tomas];
+  rpYou += pay[0];
+  rpTomas += pay[1];
+  if (you === "L") { rpBetrayed = true; }
+  rpYourLast = you;
+  rpLog("Morning " + rpRound + ": you " + (you === "H" ? "High" : "<strong>Low</strong>") + ", Tomas " + (tomas === "H" ? "High" : "<strong>Low</strong>") + " &rarr; +" + pay[0] + " / +" + pay[1]);
+  var out = document.getElementById("rp-readout");
+  rpRound += 1;
+  if (rpRound > 10) {
+    rpOver = true;
+    rpRender();
+    var verdictLine;
+    if (rpYou >= 900) { verdictLine = "A perfect peace: ten cooperative mornings, the full <strong>900</strong>. Against a remembering opponent, decency was also the best strategy."; }
+    else if (rpYou >= 800) { verdictLine = "You finished with <strong>" + rpYou + "</strong> of the 900 the peace was worth. Close — count what each defection actually netted once the reply came."; }
+    else { verdictLine = "You finished with <strong>" + rpYou + "</strong> against a cooperative ceiling of <strong>900</strong>. The one-shot logic is expensive when the game remembers."; }
+    if (out) { out.innerHTML = "<strong>The ten mornings are over.</strong> " + verdictLine + " Choose an opponent and run it again."; }
+    return;
+  }
+  rpRender();
+  if (out) {
+    var hint;
+    if (tomas === "L" && rpOpp === "grim" && rpBetrayed) { hint = "Tomas is in grim mode — the war is permanent now."; }
+    else if (rpOpp === "tft") { hint = "Remember: tomorrow he plays whatever you just played."; }
+    else if (rpOpp === "alld") { hint = "He will price Low regardless — respond accordingly."; }
+    else { hint = "He stays High only as long as you never defect."; }
+    out.innerHTML = "Morning " + rpRound + " of 10. " + hint;
+  }
+}
+
+function rpReset() {
+  rpRound = 1;
+  rpYou = 0;
+  rpTomas = 0;
+  rpBetrayed = false;
+  rpYourLast = null;
+  rpOver = false;
+  var log = document.getElementById("rp-log");
+  if (log) { log.innerHTML = "<div>The market opens. Tomas is watching.</div>"; }
+  var out = document.getElementById("rp-readout");
+  if (out) { out.innerHTML = "Morning 1: make your first pricing call."; }
+  rpRender();
+}
+
+/* ══════════ STATION 4 — strategy detective ══════════ */
+var GD_CASES = [
+  { story: "Two rival soda giants each spend fortunes on advertising. Both know that if neither advertised, both would profit more — yet every year, both advertise.", key: "PD",
+    why: "Advertise is each firm's dominant strategy (it wins whether or not the rival advertises), so both land on the costly equilibrium both regret — a one-shot dilemma in structure." },
+  { story: "An OPEC-style cartel member quietly pumps past its quota this month, betting the others won't notice one tanker.", key: "PD",
+    why: "Overproducing is the individually dominant move against a fixed agreement — the Station 2 temptation, played as if there were no tomorrow." },
+  { story: "Two nations locked in an arms race each build more missiles; both would be safer and richer if neither did, but neither dares stop unilaterally.", key: "PD",
+    why: "Arming dominates disarming for each regardless of the other's choice — the classic dilemma payoff structure outside economics." },
+  { story: "The two gas stations at a rural crossroads have posted identical, comfortably high prices for twenty years. They have never met, spoken, or signed anything.", key: "REP",
+    why: "No agreement is needed: both know a price cut today invites a matching cut tomorrow, forever. Repetition and the shadow of the future sustain tacit collusion." },
+  { story: "Airlines on a busy route hold fares steady for years; when one briefly discounts, rivals match within hours, everyone bleeds for a month, and fares quietly return to the old level.", key: "REP",
+    why: "The swift matching and eventual restoration is punishment-and-forgiveness — a repeated game enforcing cooperation through retaliation, tit-for-tat at airline scale." },
+  { story: "A wholesaler gives its regular customers honest weights and its one-time tourist buyers a thumb on the scale.", key: "REP",
+    why: "Regulars are a repeated game — cheating them forfeits a stream of future deals; tourists are a one-shot game, and the one-shot logic shows." },
+  { story: "Before a rival can decide whether to enter, the incumbent chain signs a binding ten-year lease on a second storefront in the same small town — a space it doesn't currently need.", key: "CRED",
+    why: "The sunk lease changes the incumbent's own future payoffs: fighting for the town is now cheaper than idling the space, so the threat to compete hard becomes rational to execute — commitment creates credibility." },
+  { story: "A manufacturer builds a factory with double the capacity it can currently sell, visible to everyone in the industry.", key: "CRED",
+    why: "Excess capacity is a paid-for weapon: flooding the market on entry would now be cheap, so the implicit threat is one the firm would actually carry out." },
+  { story: "A retailer publicly guarantees it will refund double the difference if any rival advertises a lower price — a promise written into every receipt.", key: "CRED",
+    why: "The guarantee is a binding commitment that makes instant, automatic retaliation to any undercutting unavoidable — would-be price-cutters know the response is certain, so the deterrent is credible." },
+  { story: "A monopolist warns a well-funded entrant it will price below cost 'for as long as it takes,' though everyone can compute that the war would cost the monopolist far more than sharing the market.", key: "EMPTY",
+    why: "Reason backward from the moment of entry: once the entrant is in, accommodation beats a ruinous war, so the rational monopolist wouldn't fight — the threat fails backward induction." },
+  { story: "A landlord tells a reliable, paying tenant that any complaint to the housing board means immediate eviction — though re-letting the unit would cost months of vacancy and fees.", key: "EMPTY",
+    why: "Carrying out the eviction hurts the landlord more than tolerating the complaint; a threat that would not be executed when the moment came is cheap talk." },
+  { story: "A small firm announces it will 'never be undersold' — but it has thin margins, no cash reserves, and everyone in the industry knows a price war would bankrupt it in a quarter.", key: "EMPTY",
+    why: "Credibility is capacity: a threat the threatener demonstrably cannot afford to execute deters no one who reasons one step ahead." }
+];
+
+var GD = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentGd = null;
+var gdAnswered = true;
+
+function loadGd() {
+  try {
+    var raw = localStorage.getItem("oligopolyArena.detective");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { GD.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { GD.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { GD.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { GD.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveGd() {
+  try {
+    localStorage.setItem("oligopolyArena.detective", JSON.stringify(GD));
+  } catch (e) { /* ignore */ }
+}
+
+function renderGdStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(GD.attempted); }
+  if (cor) { cor.textContent = String(GD.correct); }
+  if (acc) { acc.innerHTML = GD.attempted > 0 ? Math.round((GD.correct / GD.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(GD.best); }
+}
+
+var GD_IDS = ["PD", "REP", "CRED", "EMPTY"];
+var GD_NAMES = {
+  PD: "a one-shot dilemma (dominant strategies)",
+  REP: "a repeated game sustaining cooperation",
+  CRED: "a credible threat built on commitment",
+  EMPTY: "an empty threat that fails backward induction"
+};
+
+function setGdButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < GD_IDS.length; i++) {
+    btn = document.getElementById("gd-" + GD_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newGdCase() {
+  currentGd = GD_CASES[Math.floor(Math.random() * GD_CASES.length)];
+  gdAnswered = false;
+  setGdButtons(false);
+  var story = document.getElementById("gd-story");
+  if (story) { story.innerHTML = "<strong>The case:</strong> " + currentGd.story; }
+  var out = document.getElementById("gd-readout");
+  if (out) { out.innerHTML = "The case file awaits your diagnosis."; }
+}
+
+function gdVerdict(choice) {
+  if (!currentGd || gdAnswered) { return; }
+  gdAnswered = true;
+  setGdButtons(true);
+  var correct = choice === currentGd.key;
+  var btnChosen = document.getElementById("gd-" + choice);
+  var btnRight = document.getElementById("gd-" + currentGd.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  GD.attempted += 1;
+  if (correct) {
+    GD.correct += 1;
+    GD.streak += 1;
+    if (GD.streak > GD.best) { GD.best = GD.streak; }
+  } else {
+    GD.streak = 0;
+  }
+  saveGd();
+  renderGdStats();
+
+  var out = document.getElementById("gd-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Correct</strong> — " + GD_NAMES[currentGd.key] + ". " + currentGd.why +
+        " Streak: <strong>" + GD.streak + "</strong>. Press <strong>New case</strong> for another.";
+    } else {
+      out.innerHTML = "<strong>Not this one.</strong> This is " + GD_NAMES[currentGd.key] + ". " + currentGd.why +
+        " The two sorting questions: once or repeated? and would the threat actually pay when the moment came? Next case when ready.";
+    }
+  }
+}
+
+function resetGdScore() {
+  GD.attempted = 0;
+  GD.correct = 0;
+  GD.streak = 0;
+  GD.best = 0;
+  saveGd();
+  renderGdStats();
+  var out = document.getElementById("gd-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function saUrlWithSession() {
+  /* If MacroNations routed here with ?mn_sid=..., carry that id onward so
+     StrategyArena can stitch the visitor's session across both apps. Safe if absent. */
+  var base = STRATEGY_ARENA_URL;
+  var search = "";
+  if (typeof window !== "undefined" && window.location && typeof window.location.search === "string") {
+    search = window.location.search;
+  }
+  var sid = "";
+  if (search && search.length > 1) {
+    var parts = search.substring(1).split("&");
+    var i, kv;
+    for (i = 0; i < parts.length; i++) {
+      kv = parts[i].split("=");
+      if (kv[0] === "mn_sid" && kv.length > 1 && kv[1]) { sid = kv[1]; }
+    }
+  }
+  if (!sid) { return base; }
+  var joiner = base.indexOf("?") >= 0 ? "&" : "?";
+  return base + joiner + "mn_sid=" + encodeURIComponent(sid);
+}
+
+function boot() {
+  var sa = document.getElementById("sa-link");
+  if (sa) { sa.setAttribute("href", saUrlWithSession()); }
+  loadGd();
+  renderGdStats();
+  initTm();
+  rpRender();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

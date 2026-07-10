@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Externality Arena — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink: #0f172a; --ink-light: #334155; --ink-muted: #64748b; --ink-faint: #94a3b8;
+  --bg: #fafaf9; --bg-warm: #f5f0e8; --bg-card: #ffffff; --rule: #e2e8f0;
+  --accent: #0f3d9e; --accent-mid: #1e56c0; --accent-lt: #dbeafe;
+  --gold: #b87408; --gold-lt: #fef3c7; --green: #166534; --green-lt: #dcfce7;
+  --red: #991b1b; --red-lt: #fee2e2;
+  --serif: 'Lora', Georgia, serif; --sans: 'Inter', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+#sb-header { position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200; background: var(--ink); color: #fff; display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 310px; }
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sb-ghost.active { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 100px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+.sb-mini.bad .sb-mini-num { color: var(--red); }
+.sb-mini.good .sb-mini-num { color: var(--green); }
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Externality Arena</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 15: Externalities &amp; Public Goods</div>
+<h1 class="sb-title">Externality Arena</h1>
+<p class="sb-subtitle">See the bill the market never opens &mdash; the cost that lands on people who never signed the deal; fix it with a tax dialed to the exact size of the harm; try fixing it with nothing but a property right and a conversation; then diagnose a dozen broken markets by their failure type.</p>
+<hr class="sb-divider">
+
+<p>Chapter 15 is where the invisible hand drops something. When a riverside dye works serves its customers, part of the true cost &mdash; the fouled water downstream &mdash; appears on <em>nobody's</em> invoice, so the market oversupplies the thing that causes it. This arena runs the chapter's market: demand <code>P = 10 &minus; 0.1Q</code>, the firms' private cost <code>MPC = 2 + 0.1Q</code>, and a constant <strong>$2 per unit of harm</strong> to the river &mdash; so the market chooses <strong>40 units</strong> while society's best is <strong>30</strong>. The Failure Detective record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: THE INVISIBLE BILL ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>The invisible bill</h2>
+<p>Two supply curves live on this chart. The gold one is what the dye works <em>pays</em>; the red one adds the $2 the river pays for every unit &mdash; the <strong>marginal social cost</strong>. The market clears where demand meets the gold curve, at 40. Slide the industry's output yourself and read the ledger: at every unit past 30, the buyer's value falls short of the true cost, and the waste piles into the deadweight card.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Two cost curves, one truth</div>
+  <h4>Where would <em>you</em> set the industry's output?</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="ex-q">Barrels of dye per day &mdash; <span id="ex-q-val"></span></label>
+      <input type="range" id="ex-q" min="10" max="50" step="1" value="40">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="ex-canvas" height="300"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini bad"><div class="sb-mini-num" id="ex-harm">&mdash;</div><div class="sb-mini-label">total harm to the river (2 &times; Q)</div></div>
+    <div class="sb-mini bad"><div class="sb-mini-num" id="ex-dwl">&mdash;</div><div class="sb-mini-label">deadweight loss vs. the optimum</div></div>
+  </div>
+  <div class="sb-readout" id="ex-readout"></div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; The optimum is not zero</div>
+  <p>Notice what your slider proved on the way down: pushing output <em>below</em> 30 creates deadweight loss too. Society's best point is not "no pollution" &mdash; it is the output where the last barrel's value to buyers exactly covers its full cost, harm included. Dye is genuinely useful; the river is genuinely harmed; the optimum is where those two truths balance, and Chapter 15's whole machinery exists to find that point, not to shut the factory.</p>
+</div>
+
+<!-- ═══ STATION 2: THE PIGOUVIAN DIAL ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>The Pigouvian dial</h2>
+<p>Now the classic repair: a per-barrel tax that makes the invisible bill visible. Every dollar of tax shifts the firms' private cost up, and the market re-solves on its own &mdash; no inspector chooses the output; prices do. Your job: find the tax that lands the market exactly on 30. There is only one right answer, and you already know what it should equal.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Internalize the externality</div>
+  <h4>Dial the tax; let the market do the rest</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="pg-t">Tax per barrel &mdash; <span id="pg-t-val"></span></label>
+      <input type="range" id="pg-t" min="0" max="4" step="0.5" value="0">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="pg-canvas" height="300"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="pg-q">40</div><div class="sb-mini-label">barrels produced</div></div>
+    <div class="sb-mini good"><div class="sb-mini-num" id="pg-rev">$0</div><div class="sb-mini-label">tax revenue</div></div>
+    <div class="sb-mini bad"><div class="sb-mini-num" id="pg-dwl">$10</div><div class="sb-mini-label">remaining deadweight loss</div></div>
+  </div>
+  <div class="sb-readout" id="pg-readout"></div>
+</div>
+
+<p>Two things make this tax different from every tax in Chapter 6. There, a tax on a healthy market <em>created</em> deadweight loss; here, a tax on a broken one <em>destroys</em> it &mdash; because the wedge it drives is a wedge that belonged in the prices all along. And it raises <strong>$60</strong> while doing so: revenue collected not by distorting behavior but by correcting it, which is why economists across the political spectrum harbor a soft spot for taxing harms instead of paychecks.</p>
+
+<!-- ═══ STATION 3: THE COASE CORNER ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>The Coase corner</h2>
+<p>Ronald Coase asked a question that rearranged the field: if the polluter and the victim can <em>bargain cheaply</em>, do we need the tax at all? Run the experiment. A smokehouse and a laundry share a wall. Choose the numbers, choose who holds the legal right &mdash; and watch where the bargain lands.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; One right, one conversation</div>
+  <h4>Assign the property right; let them talk</h4>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">The stakes</span>
+    <button class="btn-sb btn-sb-ghost active" id="co-btn-a" onclick="coSetCase('a')">Smoke worth $80 to the smokehouse; costs the laundry $120</button>
+    <button class="btn-sb btn-sb-ghost" id="co-btn-b" onclick="coSetCase('b')">Smoke worth $150 to the smokehouse; costs the laundry $90</button>
+  </div>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Who holds the right?</span>
+    <button class="btn-sb btn-sb-ghost active" id="co-btn-smoke" onclick="coSetRight('smoke')">The smokehouse may smoke</button>
+    <button class="btn-sb btn-sb-ghost" id="co-btn-clean" onclick="coSetRight('clean')">The laundry may demand clean air</button>
+  </div>
+  <div class="sb-readout" id="co-readout"></div>
+</div>
+
+<p>Run all four combinations and the pattern is the theorem: <strong>the smoke's fate never depends on who holds the right</strong> &mdash; it depends only on whether the smoke is worth more than the harm. The right decides who <em>pays whom</em>; bargaining steers the resource to its highest-valued use either way. The fine print is everything, though: this works only when the parties are few, identifiable, and cheap to assemble. One laundry can bargain with one smokehouse; ten thousand downstream households cannot bargain with forty factories &mdash; which is why the river needed Station 2 and the shared wall did not.</p>
+
+<!-- ═══ STATION 4: FAILURE DETECTIVE ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Failure Detective</h2>
+<p>The graded round. Each case is a market misbehaving. Diagnose the failure type: a cost spilling onto bystanders, a benefit spilling onto them, a commons being raced to exhaustion, or a public good nobody will pay for because nobody can be excluded from it.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Name the failure</div>
+  <h4>Four diagnoses, one verdict</h4>
+  <div class="sb-case" id="fd-story">Press <strong>New case</strong> to open the first file.</div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="fd-NEG" onclick="fdVerdict('NEG')">Negative externality &mdash; a cost spills onto bystanders (tax it)</button>
+    <button class="sb-diag-btn" id="fd-POS" onclick="fdVerdict('POS')">Positive externality &mdash; a benefit spills over (subsidize it)</button>
+    <button class="sb-diag-btn" id="fd-COM" onclick="fdVerdict('COM')">Tragedy of the commons &mdash; rival, but no one can be excluded</button>
+    <button class="sb-diag-btn" id="fd-PUB" onclick="fdVerdict('PUB')">Public good &mdash; non-rival and non-excludable (free riders)</button>
+  </div>
+  <div class="sb-readout" id="fd-readout">The case file awaits your diagnosis.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newFdCase()">New case</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetFdScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
+<p>Your Failure Detective record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, re-run the cases with the two sorting questions: is the good <em>rival</em> (does my use deplete yours)? is it <em>excludable</em> (can non-payers be kept out)?</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases diagnosed</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">diagnosed correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; the price was wrong, so fix the price</div>
+  <p>Everything in this arena is one idea wearing four costumes: <strong>markets fail when prices lie</strong>. The dye market overproduced not because anyone was greedy but because the price of dye omitted the river; the vaccine market underproduces because the price omits the neighbors you protect; the fishery empties because the price of a catch omits the fish it removes from everyone else's future. And notice the elegance of the repair you dialed in Station 2 &mdash; it does not command, inspect, or forbid. It corrects the <em>lie in the price</em> and then trusts the same self-interest that caused the problem to solve it. That is why a carbon price is the policy economists of nearly every persuasion converge on: not because markets failed, but because it is the most market-like repair of a market that was fed the wrong numbers.</p>
+  <p>Coase's corner adds the deepest footnote: sometimes the missing ingredient is not a tax but an <em>owner</em>. Many tragedies of the commons are simply externality problems where nobody holds the right that Station 3 handed out &mdash; and history's fixes (fencing the pasture, fishing quotas you can sell, tradable emission permits) are all ways of minting that missing property right. Ask of every broken market: what does the price leave out, and who, if anyone, owns the thing being damaged? The answer usually writes the policy for you.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Keep going</h3>
+  <p>This arena pairs with Chapter 15 of <em>Introduction to Microeconomics</em>. The next failure is subtler still: markets where one side of the deal knows something the other doesn't.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Externality Arena &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Externality Arena — companion arena to Chapter 15.
+   The dye market: demand P = 10 − 0.1Q, private cost
+   MPC = 2 + 0.1Q, constant marginal external cost $2, so
+   MSC = 4 + 0.1Q. Market: (40, $6). Optimum: (30, $7).
+   DWL at output Q (either side): 0.1 (Q − 30)².
+   Pigouvian tax t: firms see MPC + t ⇒ Q(t) = 40 − 5t;
+   t* = $2 lands Q = 30 with revenue $60 and DWL $0.
+   Coase corner: outcome depends only on gain vs. harm;
+   the right assigns who pays whom.
+   Failure Detective saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+function seg(x1, y1, x2, y2) { return [ { x: x1, y: y1 }, { x: x2, y: y2 } ]; }
+function fmt0(x) { return "$" + Math.round(x); }
+function exDemand(Q) { return 10 - 0.1 * Q; }
+function exDWL(Q) { return 0.1 * (Q - 30) * (Q - 30); }
+
+/* ══════════ STATION 1 — the invisible bill ══════════ */
+var exChart = null;
+var exQ = 40;
+
+function initEx() {
+  var canvas = document.getElementById("ex-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  exChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Demand (buyers' value)", data: seg(0, 10, 100, 0), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "Private cost (what firms pay)", data: seg(0, 2, 60, 8), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "Social cost (+$2 the river pays)", data: seg(0, 4, 60, 10), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "Market outcome (40)", data: [ { x: 40, y: 6 } ], borderColor: "#94a3b8", backgroundColor: "#94a3b8", pointRadius: 6 },
+      { label: "Social optimum (30)", data: [ { x: 30, y: 7 } ], borderColor: "#166534", backgroundColor: "#166534", pointRadius: 6, pointStyle: "rectRot" },
+      { label: "Your output", data: [], showLine: true, borderColor: "#64748b", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: 0 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Barrels of dye per day", font: { family: "Inter" } }, min: 0, max: 60, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "$ per barrel", font: { family: "Inter" } }, min: 0, max: 11, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sq = document.getElementById("ex-q");
+  if (sq) { sq.addEventListener("input", function () { exQ = parseInt(sq.value, 10); updateEx(); }); }
+  updateEx();
+}
+
+function updateEx() {
+  var Q = exQ;
+  var dwl = exDWL(Q);
+  if (exChart) {
+    exChart.data.datasets[5].data = seg(Q, 0, Q, 11);
+    exChart.update("none");
+  }
+  var qv = document.getElementById("ex-q-val");
+  if (qv) { qv.textContent = Q + " barrels"; }
+  var h = document.getElementById("ex-harm");
+  var d = document.getElementById("ex-dwl");
+  if (h) { h.textContent = fmt0(2 * Q); }
+  if (d) { d.textContent = "$" + (Math.round(dwl * 10) / 10); }
+  var out = document.getElementById("ex-readout");
+  if (!out) { return; }
+  if (Q === 30) {
+    out.innerHTML = "<strong>The social optimum.</strong> At 30 barrels, the last one is valued at $7 by its buyer and costs exactly $7 all-in — $5 to the firm plus $2 to the river. Every barrel to the left was worth more than its full cost; every barrel to the right would cost more than it's worth. Deadweight loss: <strong>$0</strong>.";
+  } else if (Q === 40) {
+    out.innerHTML = "<strong>The market's choice.</strong> Left alone, the industry lands here: demand meets the <em>private</em> cost curve, because the river's $2 is on nobody's invoice. Each of barrels 31–40 is worth less to buyers than its true cost, wasting <strong>$10</strong> — the red triangle between social cost and demand. The market didn't malfunction; it optimized against the wrong prices.";
+  } else if (Q > 30) {
+    out.innerHTML = "At <strong>" + Q + " barrels</strong>, output exceeds the optimum: barrel " + Q + " is valued at $" + exDemand(Q).toFixed(2) + " but truly costs $" + (4 + 0.1 * Q).toFixed(2) + ". Overproduction is wasting <strong>$" + (Math.round(exDWL(Q) * 10) / 10) + "</strong>.";
+  } else {
+    out.innerHTML = "At <strong>" + Q + " barrels</strong>, output is <em>below</em> the optimum: barrel " + (Q + 1) + " would be worth about $" + exDemand(Q).toFixed(2) + " against a full cost of about $" + (4 + 0.1 * Q).toFixed(2) + " — a worthwhile trade not happening. Underproduction wastes <strong>$" + (Math.round(exDWL(Q) * 10) / 10) + "</strong> too: the goal is the right amount of dye, not the least.";
+  }
+}
+
+/* ══════════ STATION 2 — the Pigouvian dial ══════════ */
+var pgChart = null;
+var pgT = 0;
+
+function pgQ(t) { return 40 - 5 * t; }
+
+function initPg() {
+  var canvas = document.getElementById("pg-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  pgChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Demand", data: seg(0, 10, 100, 0), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "Private cost + tax", data: seg(0, 2, 60, 8), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "Social cost (the target)", data: seg(0, 4, 60, 10), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", borderDash: [6, 5], pointRadius: 0, borderWidth: 2, tension: 0 },
+      { label: "Where the market now clears", data: [ { x: 40, y: 6 } ], borderColor: "#166534", backgroundColor: "#166534", pointRadius: 8 },
+      { label: "Social optimum (30)", data: [ { x: 30, y: 7 } ], borderColor: "#94a3b8", backgroundColor: "#94a3b8", pointRadius: 6, pointStyle: "rectRot" }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Barrels of dye per day", font: { family: "Inter" } }, min: 0, max: 60, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "$ per barrel", font: { family: "Inter" } }, min: 0, max: 11, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var st = document.getElementById("pg-t");
+  if (st) { st.addEventListener("input", function () { pgT = parseFloat(st.value); updatePg(); }); }
+  updatePg();
+}
+
+function updatePg() {
+  var t = pgT;
+  var Q = pgQ(t);
+  var P = exDemand(Q);
+  var rev = t * Q;
+  var dwl = exDWL(Q);
+  if (pgChart) {
+    pgChart.data.datasets[1].data = seg(0, 2 + t, 60, 8 + t);
+    pgChart.data.datasets[3].data = [ { x: Q, y: P } ];
+    pgChart.update("none");
+  }
+  var tv = document.getElementById("pg-t-val");
+  if (tv) { tv.textContent = "$" + t.toFixed(2) + " per barrel"; }
+  var qEl = document.getElementById("pg-q");
+  var rEl = document.getElementById("pg-rev");
+  var dEl = document.getElementById("pg-dwl");
+  if (qEl) { qEl.textContent = String(Q); }
+  if (rEl) { rEl.textContent = fmt0(rev); }
+  if (dEl) { dEl.textContent = "$" + (Math.round(dwl * 10) / 10); }
+  var out = document.getElementById("pg-readout");
+  if (!out) { return; }
+  if (t === 0) {
+    out.innerHTML = "No tax: the taxed-cost curve sits on the private one, the market runs at 40, and $10 of value burns each day. Start raising the dial toward the size of the harm.";
+  } else if (Math.abs(t - 2) < 0.01) {
+    out.innerHTML = "<strong>Perfect: $2 — exactly the marginal harm.</strong> The firms' cost curve now coincides with the social cost curve, the market re-solves itself to <strong>30 barrels</strong>, deadweight loss falls to <strong>$0</strong>, and the treasury collects <strong>$60</strong>. Nobody was ordered to do anything; the price simply stopped lying.";
+  } else if (t < 2) {
+    out.innerHTML = "At <strong>$" + t.toFixed(2) + "</strong> the market moves to " + Q + " barrels — closer, but the tax still understates the harm: $" + (Math.round(dwl * 10) / 10) + " of overproduction waste remains. The dial has one right setting, and it is the size of the externality itself.";
+  } else {
+    out.innerHTML = "At <strong>$" + t.toFixed(2) + "</strong> you have overshot: the market contracts to " + Q + " barrels, <em>below</em> the optimum, and $" + (Math.round(dwl * 10) / 10) + " of worthwhile trades now die — the same disease as an ordinary Chapter 6 tax. A Pigouvian tax heals only at the dose of the harm; beyond it, it wounds.";
+  }
+}
+
+/* ══════════ STATION 3 — the Coase corner ══════════ */
+var CO_CASES = {
+  a: { gain: 80, harm: 120 },
+  b: { gain: 150, harm: 90 }
+};
+var coCase = "a";
+var coRight = "smoke";
+
+function coSetCase(c) {
+  coCase = c;
+  var ba = document.getElementById("co-btn-a");
+  var bb = document.getElementById("co-btn-b");
+  if (ba) { if (c === "a") { ba.classList.add("active"); } else { ba.classList.remove("active"); } }
+  if (bb) { if (c === "b") { bb.classList.add("active"); } else { bb.classList.remove("active"); } }
+  updateCo();
+}
+
+function coSetRight(r) {
+  coRight = r;
+  var bs = document.getElementById("co-btn-smoke");
+  var bc = document.getElementById("co-btn-clean");
+  if (bs) { if (r === "smoke") { bs.classList.add("active"); } else { bs.classList.remove("active"); } }
+  if (bc) { if (r === "clean") { bc.classList.add("active"); } else { bc.classList.remove("active"); } }
+  updateCo();
+}
+
+function updateCo() {
+  var c = CO_CASES[coCase];
+  var smokeWins = c.gain > c.harm;   /* efficient outcome: smoke iff gain > harm */
+  var out = document.getElementById("co-readout");
+  if (!out) { return; }
+  var line;
+  if (coRight === "smoke") {
+    if (smokeWins) {
+      line = "The smokehouse holds the right, and smoking is worth <strong>$" + c.gain + "</strong> against <strong>$" + c.harm + "</strong> of harm. The laundry would pay at most $" + c.harm + " to stop it — not enough. <strong>The smoke continues</strong>, no money changes hands, and that is the efficient outcome: the smoke is worth more than it costs.";
+    } else {
+      line = "The smokehouse holds the right — but smoking is worth only <strong>$" + c.gain + "</strong> against <strong>$" + c.harm + "</strong> of harm. The laundry offers something between $" + c.gain + " and $" + c.harm + " to stop it; the smokehouse, offered more than smoking is worth, takes the deal. <strong>The smoke stops</strong> — the victim paid, but the efficient outcome arrived.";
+    }
+  } else {
+    if (smokeWins) {
+      line = "The laundry holds the right to clean air — but smoke is worth <strong>$" + c.gain + "</strong> against <strong>$" + c.harm + "</strong> of harm. The smokehouse offers something between $" + c.harm + " and $" + c.gain + " for permission; the laundry, offered more than its damage, accepts. <strong>The smoke continues</strong> — the polluter paid, and again the efficient outcome arrived.";
+    } else {
+      line = "The laundry holds the right, and the smokehouse's best offer tops out at <strong>$" + c.gain + "</strong>, short of the <strong>$" + c.harm + "</strong> the laundry would need. No deal: <strong>the smoke stops</strong>, this time for free from the laundry's side — the same efficient outcome.";
+    }
+  }
+  out.innerHTML = line + " <em>Same stakes, different right: the outcome holds; only the payments move.</em>";
+}
+
+/* ══════════ STATION 4 — failure detective ══════════ */
+var FD_CASES = [
+  { story: "A tannery's cheapest disposal method sends runoff into the river; downstream, a fishing village's catch collapses. The tannery's prices reflect none of it.", key: "NEG",
+    why: "A cost lands on bystanders outside the transaction, so the market oversupplies tanning — the classic case for a Pigouvian tax equal to the harm." },
+  { story: "Every commuter who drives at 8 a.m. adds a few seconds of delay to thousands of other drivers — a cost that appears on no one's fuel bill.", key: "NEG",
+    why: "Congestion is a mutual negative externality: each trip imposes uncharged costs on everyone else, which is why congestion pricing is a Pigouvian tax in traffic clothing." },
+  { story: "Late-night construction next to an apartment block saves the builder overtime penalties while robbing three hundred residents of sleep.", key: "NEG",
+    why: "The builder's private saving comes at an unpriced cost to bystanders — a negative externality that noise ordinances and fines attempt to internalize." },
+  { story: "When a homeowner restores a historic fa\u00E7ade, every neighbor's property value rises and every passerby enjoys the street — yet only the owner pays.", key: "POS",
+    why: "Benefits spill over to people who paid nothing, so restoration is underprovided — the case for restoration grants or tax credits (a subsidy)." },
+  { story: "Each vaccination protects not only the patient but everyone the patient would have infected. Left to private choice, uptake stalls below what the town needs.", key: "POS",
+    why: "The spillover protection is a benefit the buyer cannot charge for, so the market under-delivers — precisely why vaccines are subsidized or free." },
+  { story: "A tech firm's basic research is published and copied industry-wide within a year; rivals gain nearly as much as the inventor, and firms invest less than the payoff to society would justify.", key: "POS",
+    why: "Knowledge spills over: private returns understate social returns, so research is underprovided — the rationale for R&D subsidies and patents." },
+  { story: "Any boat may fish the bay, and every cod one crew lands is a cod no other crew — and no future season — can catch. The fleet grows until the fishery collapses.", key: "COM",
+    why: "The fish are rival (your catch depletes mine) but no one can be excluded — the tragedy of the commons, cured historically by quotas, licenses, or ownership." },
+  { story: "Herders share an unfenced pasture; each added animal fattens its owner while thinning the grass for all. The pasture is grazed to dirt.", key: "COM",
+    why: "Hardin's original: rival grass, open access, and individually rational overuse destroying the shared resource." },
+  { story: "A free aquifer under the valley: every farmer's new well lowers the water table for all, and pumping races ahead of recharge.", key: "COM",
+    why: "Groundwater is rival and, unowned, non-excludable — each pumper ignores the cost imposed on neighbors and the future: a commons draining itself." },
+  { story: "Everyone in the harbor wants the lighthouse lit, no ship's use of the beam dims it for others, and no one can be prevented from steering by it — so no private firm will build it.", key: "PUB",
+    why: "Non-rival and non-excludable: free riders can't be charged, so private supply fails — the textbook public good, usually provided publicly." },
+  { story: "A crime-deterring streetlight brightens the block for every resident whether or not they chipped in; the voluntary fund to install one keeps falling short.", key: "PUB",
+    why: "One person's safety from the light subtracts nothing from another's, and non-payers can't be kept in the dark — free riding starves the project." },
+  { story: "Mosquito control sprayed across a district protects every household at once; each family reasons its own contribution changes nothing, and the program goes unfunded.", key: "PUB",
+    why: "The protection is non-rival and non-excludable across the district — individually rational free riding defeats voluntary funding, the public-good signature." }
+];
+
+var FD = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentFd = null;
+var fdAnswered = true;
+
+function loadFd() {
+  try {
+    var raw = localStorage.getItem("externalityArena.detective");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { FD.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { FD.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { FD.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { FD.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveFd() {
+  try {
+    localStorage.setItem("externalityArena.detective", JSON.stringify(FD));
+  } catch (e) { /* ignore */ }
+}
+
+function renderFdStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(FD.attempted); }
+  if (cor) { cor.textContent = String(FD.correct); }
+  if (acc) { acc.innerHTML = FD.attempted > 0 ? Math.round((FD.correct / FD.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(FD.best); }
+}
+
+var FD_IDS = ["NEG", "POS", "COM", "PUB"];
+var FD_NAMES = {
+  NEG: "a negative externality",
+  POS: "a positive externality",
+  COM: "a tragedy of the commons",
+  PUB: "a public good (free-rider problem)"
+};
+
+function setFdButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < FD_IDS.length; i++) {
+    btn = document.getElementById("fd-" + FD_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newFdCase() {
+  currentFd = FD_CASES[Math.floor(Math.random() * FD_CASES.length)];
+  fdAnswered = false;
+  setFdButtons(false);
+  var story = document.getElementById("fd-story");
+  if (story) { story.innerHTML = "<strong>The case:</strong> " + currentFd.story; }
+  var out = document.getElementById("fd-readout");
+  if (out) { out.innerHTML = "The case file awaits your diagnosis."; }
+}
+
+function fdVerdict(choice) {
+  if (!currentFd || fdAnswered) { return; }
+  fdAnswered = true;
+  setFdButtons(true);
+  var correct = choice === currentFd.key;
+  var btnChosen = document.getElementById("fd-" + choice);
+  var btnRight = document.getElementById("fd-" + currentFd.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  FD.attempted += 1;
+  if (correct) {
+    FD.correct += 1;
+    FD.streak += 1;
+    if (FD.streak > FD.best) { FD.best = FD.streak; }
+  } else {
+    FD.streak = 0;
+  }
+  saveFd();
+  renderFdStats();
+
+  var out = document.getElementById("fd-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Correct</strong> — this is " + FD_NAMES[currentFd.key] + ". " + currentFd.why +
+        " Streak: <strong>" + FD.streak + "</strong>. Press <strong>New case</strong> for another.";
+    } else {
+      out.innerHTML = "<strong>Not this one.</strong> This is " + FD_NAMES[currentFd.key] + ". " + currentFd.why +
+        " Sort with the two questions: rival? excludable? Next case when ready.";
+    }
+  }
+}
+
+function resetFdScore() {
+  FD.attempted = 0;
+  FD.correct = 0;
+  FD.streak = 0;
+  FD.best = 0;
+  saveFd();
+  renderFdStats();
+  var out = document.getElementById("fd-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  loadFd();
+  renderFdStats();
+  initEx();
+  initPg();
+  updateCo();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

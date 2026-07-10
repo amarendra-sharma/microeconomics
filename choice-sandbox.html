@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consumer Choice Sandbox — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink:        #0f172a;
+  --ink-light:  #334155;
+  --ink-muted:  #64748b;
+  --ink-faint:  #94a3b8;
+  --bg:         #fafaf9;
+  --bg-warm:    #f5f0e8;
+  --bg-card:    #ffffff;
+  --rule:       #e2e8f0;
+  --accent:     #0f3d9e;
+  --accent-mid: #1e56c0;
+  --accent-lt:  #dbeafe;
+  --gold:       #b87408;
+  --gold-lt:    #fef3c7;
+  --green:      #166534;
+  --green-lt:   #dcfce7;
+  --red:        #991b1b;
+  --red-lt:     #fee2e2;
+  --serif:      'Lora', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+  --radius:     8px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+
+#sb-header {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200;
+  background: var(--ink); color: #fff;
+  display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 320px; }
+.sb-chart-title { font-size: 0.8125rem; font-weight: 600; color: var(--ink-muted); margin-bottom: 0.25rem; }
+
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+
+/* Basket steppers */
+.sb-basket { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.875rem 0; }
+.sb-good { flex: 1; min-width: 200px; border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; background: var(--bg-card); }
+.sb-good-name { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.125rem; }
+.sb-good-price { font-size: 0.75rem; color: var(--ink-muted); margin-bottom: 0.5rem; }
+.sb-stepper { display: flex; align-items: center; gap: 0.75rem; }
+.sb-stepper button { width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--rule); background: var(--bg-card); font-size: 1.25rem; font-weight: 700; color: var(--accent); cursor: pointer; line-height: 1; }
+.sb-stepper button:hover { border-color: var(--accent); background: var(--accent-lt); }
+.sb-stepper .sb-count { font-family: var(--serif); font-size: 1.625rem; font-weight: 700; min-width: 2ch; text-align: center; }
+
+/* MU-per-dollar bars */
+.sb-mubar-wrap { margin: 0.875rem 0; }
+.sb-mubar-row { display: flex; align-items: center; gap: 0.625rem; margin: 0.375rem 0; }
+.sb-mubar-label { flex: 0 0 190px; font-size: 0.78rem; font-weight: 600; color: var(--ink-light); text-align: right; }
+.sb-mubar-track { flex: 1; height: 26px; background: var(--bg-warm); border-radius: 6px; overflow: hidden; }
+.sb-mubar-fill { height: 100%; display: flex; align-items: center; padding-left: 8px; color: #fff; font-size: 0.72rem; font-weight: 700; transition: width 0.2s; white-space: nowrap; }
+
+/* Budget meter */
+.sb-meter-wrap { margin: 0.75rem 0; }
+.sb-meter-title { font-size: 0.75rem; font-weight: 600; color: var(--ink-muted); margin-bottom: 0.375rem; }
+.sb-meter { display: flex; height: 30px; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--rule); }
+.sb-meter div { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 0.72rem; transition: width 0.25s; white-space: nowrap; overflow: hidden; }
+
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 105px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+  .sb-mubar-label { flex-basis: 120px; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Choice Sandbox</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 8: Consumer Choice</div>
+<h1 class="sb-title">Consumer Choice Sandbox</h1>
+<p class="sb-subtitle">Fill a real basket under a real budget and hunt the utility maximum with your own hands; watch the budget line and indifference curves find each other; then do what the whole chapter was building toward &mdash; construct a demand curve out of nothing but choices.</p>
+<hr class="sb-divider">
+
+<p>Chapter 8 answers the question the earlier chapters postponed: <em>where does the demand curve come from?</em> The answer is built in three moves &mdash; a budget that limits, satisfaction that diminishes, and a rule that balances the last dollar &mdash; and this sandbox makes you perform each one. Station 1 is the chapter's opening problem with the training wheels off. Stations 2 and 3 run the smooth geometry of budget lines and indifference curves. Station 4 is the <strong>Basket Check</strong>, the graded game whose record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: FILL THE BASKET ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>Fill the basket</h2>
+<p>Mara has <strong>$18</strong> for her morning round: coffee at <strong>$2</strong> a cup, pastries at <strong>$3</strong> each. Later units please less than earlier ones &mdash; her exact satisfaction schedules are the chapter's. In the book, a slider spent the whole budget for you. Here nobody helps: add and remove items freely, overspending is simply impossible, and <em>underspending is legal but costly</em>. Hunt the best basket; the meter remembers your record.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Build the best $18 basket</div>
+  <h4>Two goods, one budget, no training wheels</h4>
+  <p class="sb-panel-intro">The bars compare the satisfaction-per-dollar of the <em>last unit</em> of each good in your basket. The chapter's rule: whenever one bar beats the other, a dollar moved toward the taller bar buys more happiness.</p>
+  <div class="sb-basket">
+    <div class="sb-good">
+      <div class="sb-good-name">Coffee</div>
+      <div class="sb-good-price">$2.00 per cup</div>
+      <div class="sb-stepper">
+        <button onclick="basketAdd('c', -1)" aria-label="one fewer coffee">&minus;</button>
+        <span class="sb-count" id="bk1-c">0</span>
+        <button onclick="basketAdd('c', 1)" aria-label="one more coffee">+</button>
+      </div>
+    </div>
+    <div class="sb-good">
+      <div class="sb-good-name">Pastries</div>
+      <div class="sb-good-price">$3.00 each</div>
+      <div class="sb-stepper">
+        <button onclick="basketAdd('p', -1)" aria-label="one fewer pastry">&minus;</button>
+        <span class="sb-count" id="bk1-p">0</span>
+        <button onclick="basketAdd('p', 1)" aria-label="one more pastry">+</button>
+      </div>
+    </div>
+  </div>
+  <div class="sb-meter-wrap">
+    <div class="sb-meter-title">The budget: $18</div>
+    <div class="sb-meter">
+      <div id="bk1-spent" style="background:#0f3d9e;width:0%;">Spent: $0</div>
+      <div id="bk1-left" style="background:#94a3b8;width:100%;">Unspent: $18</div>
+    </div>
+  </div>
+  <div class="sb-mubar-wrap">
+    <div class="sb-mubar-row">
+      <div class="sb-mubar-label">Last coffee, per dollar</div>
+      <div class="sb-mubar-track"><div class="sb-mubar-fill" id="bk1-bar-c" style="background:#0f3d9e;width:0%;"></div></div>
+    </div>
+    <div class="sb-mubar-row">
+      <div class="sb-mubar-label">Last pastry, per dollar</div>
+      <div class="sb-mubar-track"><div class="sb-mubar-fill" id="bk1-bar-p" style="background:#b87408;width:0%;"></div></div>
+    </div>
+  </div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="bk1-total">0</div><div class="sb-mini-label">total utility (utils)</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="bk1-best">0</div><div class="sb-mini-label">your best so far (max is 141)</div></div>
+  </div>
+  <div class="sb-readout" id="bk1-readout"></div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-ghost" onclick="basketReset()">Empty the basket</button>
+  </div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; The rule is per dollar, not per unit</div>
+  <p>The most common Chapter 8 error is comparing raw marginal utilities. A pastry's last unit may deliver more utils than a coffee's &mdash; and still be the worse buy, because it costs half again as much. Divide by the price first, always: the currency of choice is <em>utility per dollar</em>. That single division is why cheap pleasures crowd expensive ones out of an optimal basket more than raw enjoyment alone would suggest.</p>
+</div>
+
+<!-- ═══ STATION 2: TANGENCY MACHINE ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>The tangency machine</h2>
+<p>Section 8.4 replaced counted utils with drawn preferences: <strong>indifference curves</strong>, each connecting bundles the consumer likes equally, climbing in satisfaction away from the origin. The consumer's problem becomes geometric &mdash; reach the highest curve the budget line touches &mdash; and the answer is always a <strong>tangency</strong>. Here is a consumer with smooth, even-handed preferences over coffee and pastries. Move her income and the price of coffee; the machine recomputes her best bundle live. Watch two things: <em>how the line moves</em> (parallel for income, pivot for price) and how the tangency point slides along with it.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Budget line meets indifference map</div>
+  <h4>Shift the line; the optimum follows</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="bl-i">Income &mdash; <span id="bl-i-val"></span></label>
+      <input type="range" id="bl-i" min="12" max="30" step="2" value="18">
+    </div>
+    <div>
+      <label for="bl-px">Price of coffee &mdash; <span id="bl-px-val"></span></label>
+      <input type="range" id="bl-px" min="1" max="4" step="0.5" value="2">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="bl-canvas" height="320"></canvas></div>
+  <div class="sb-readout" id="bl-readout"></div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-ghost" onclick="blReset()">Back to $18 income, $2 coffee</button>
+  </div>
+</div>
+
+<p>At every tangency you just produced, the same condition held: the slope of the indifference curve (the <strong>marginal rate of substitution</strong> &mdash; the consumer's own exchange rate between the goods) equals the slope of the budget line (the <em>market's</em> exchange rate, the price ratio). MRS = P<sub>x</sub>/P<sub>y</sub> is the equimarginal rule of Station 1 wearing geometry: two roads, one optimum.</p>
+
+<!-- ═══ STATION 3: BUILD A DEMAND CURVE ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>Build a demand curve from choices alone</h2>
+<p>Now the chapter's finale. Fix income at $18 and pastries at $3, and let only the price of coffee move. Every price you visit poses the full choice problem; the consumer solves it; and her chosen coffee quantity at that price is <strong>one point on her demand curve</strong>. Visit at least five different prices and the curve you have been drawing since Chapter 4 will assemble itself in the lower chart &mdash; not assumed, <em>derived</em>.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The demand-curve factory</div>
+  <h4>Every price you set stamps out one point of demand</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="dd-px">Price of coffee &mdash; <span id="dd-px-val"></span></label>
+      <input type="range" id="dd-px" min="1" max="4" step="0.5" value="2">
+    </div>
+  </div>
+  <div class="sb-chart-title">The choice problem at your current price (budget line, indifference curve, best bundle)</div>
+  <div class="sb-chart-box"><canvas id="dd-canvas" height="270"></canvas></div>
+  <div class="sb-chart-title">The demand curve you are building: her chosen coffee at every price visited</div>
+  <div class="sb-chart-box"><canvas id="dd-demand" height="250"></canvas></div>
+  <div class="sb-readout" id="dd-readout"></div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-ghost" onclick="ddReset()">Clear my collected points</button>
+  </div>
+</div>
+
+<!-- ═══ STATION 4: BASKET CHECK ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Basket Check</h2>
+<p>The graded round. Each case reports the state of somebody's basket &mdash; the satisfaction-per-dollar of the last unit of each good, and whether the budget is fully spent. Your job is the shopper's diagnosis: which single move improves this basket, or is it already the best one possible? The rule from Station 1 decides every case.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Diagnose the basket</div>
+  <h4>One look at the margins, one verdict</h4>
+  <div class="sb-case" id="bc-story">Press <strong>New basket</strong> to inspect the first one.</div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="bc-X" onclick="basketCheck('X')">Shift spending toward the <strong>first</strong> good</button>
+    <button class="sb-diag-btn" id="bc-Y" onclick="basketCheck('Y')">Shift spending toward the <strong>second</strong> good</button>
+    <button class="sb-diag-btn" id="bc-OPT" onclick="basketCheck('OPT')">Nothing &mdash; this basket is optimal</button>
+    <button class="sb-diag-btn" id="bc-SPEND" onclick="basketCheck('SPEND')">Spend the unspent money first</button>
+  </div>
+  <div class="sb-readout" id="bc-readout">The basket awaits inspection.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newBasketCase()">New basket</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetBasketScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
+<p>Your Basket Check record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, run more baskets, always asking the two questions in order &mdash; is the budget spent? are the per-dollar margins equal?</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">baskets inspected</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">diagnosed correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; you already run this algorithm; the chapter just names it</div>
+  <p>Students meet "utils" and suspect economists of inventing a fake substance. Fair &mdash; but watch what you did in Station 1. Nobody handed you utility numbers in a grocery store, yet you constantly perform the comparison they formalize: <em>is the last dollar here worth more than the last dollar there?</em> Streaming subscriptions you trimmed, the third coffee you skipped, the upgrade you decided wasn't worth it &mdash; each was an equimarginal judgment. The model doesn't claim you compute; it claims your choices behave <em>as if</em> you do, and that "as if" is what lets one curve summarize a million shoppers.</p>
+  <p>And Station 3 is the chapter's quiet triumph, so don't rush past what happened there. The demand curve you traced was not assumed, surveyed, or decreed &mdash; it precipitated out of one consumer's repeated best choices as a single price moved. Every demand curve you have drawn since Chapter 4, and every one you will draw after, is exactly that: the visible trail of invisible optimizing. When a curve is built from a mechanism rather than sketched from habit, you know precisely when to trust it &mdash; and what has to change for it to move.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Keep going</h3>
+  <p>This sandbox pairs with Chapter 8 of <em>Introduction to Microeconomics</em>. Next the spotlight crosses the counter: Chapter 9 gives the <em>seller</em> the same treatment, and costs get their own geometry.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Consumer Choice Sandbox &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Consumer Choice Sandbox — companion arena to Chapter 8.
+   Station 1: the textbook's exact discrete problem —
+     income $18, coffee $2, pastries $3,
+     MUC = [20,16,12,8,4, 0,0,0,0], MUP = [30,24,21,18,12,8];
+     optimum (3 coffees, 4 pastries), total utility 141.
+   Stations 2–3: smooth even-handed preferences (U = √(xy)):
+     best bundle x* = I/(2·Px), y* = I/(2·Py);
+     indifference curve through utility level U: y = U²/x.
+   Station 4: equimarginal-diagnosis game, saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+var MUC = [20, 16, 12, 8, 4, 0, 0, 0, 0];
+var MUP = [30, 24, 21, 18, 12, 8];
+var INCOME1 = 18, PC1 = 2, PP1 = 3;
+
+function sumFirst(arr, n) {
+  var s = 0, i;
+  for (i = 0; i < n && i < arr.length; i++) { s += arr[i]; }
+  return s;
+}
+
+function basketUtility(c, p) { return sumFirst(MUC, c) + sumFirst(MUP, p); }
+
+/* ══════════ STATION 1 — fill the basket ══════════ */
+var bkC = 0, bkP = 0, bkBest = 0;
+
+function basketAdd(good, delta) {
+  var c = bkC, p = bkP;
+  if (good === "c") { c += delta; } else { p += delta; }
+  if (c < 0 || p < 0) { return; }
+  if (c > MUC.length || p > MUP.length) { return; }
+  if (PC1 * c + PP1 * p > INCOME1) { flagOverBudget(); return; }
+  bkC = c; bkP = p;
+  updateBasket();
+}
+
+function flagOverBudget() {
+  var out = document.getElementById("bk1-readout");
+  if (out) {
+    out.innerHTML = "<strong>That would break the budget.</strong> The basket already costs $" +
+      (PC1 * bkC + PP1 * bkP) + " of the $18 — the budget constraint is not a suggestion. Remove something first.";
+  }
+}
+
+function updateBasket() {
+  var spent = PC1 * bkC + PP1 * bkP;
+  var left = INCOME1 - spent;
+  var total = basketUtility(bkC, bkP);
+  if (total > bkBest) { bkBest = total; }
+
+  var cEl = document.getElementById("bk1-c");
+  var pEl = document.getElementById("bk1-p");
+  if (cEl) { cEl.textContent = String(bkC); }
+  if (pEl) { pEl.textContent = String(bkP); }
+
+  var spentBar = document.getElementById("bk1-spent");
+  var leftBar = document.getElementById("bk1-left");
+  var pct = Math.round((spent / INCOME1) * 100);
+  if (spentBar) { spentBar.style.width = pct + "%"; spentBar.textContent = "Spent: $" + spent; }
+  if (leftBar) { leftBar.style.width = (100 - pct) + "%"; leftBar.textContent = left > 0 ? "Unspent: $" + left : ""; }
+
+  var mudC = bkC > 0 ? MUC[bkC - 1] / PC1 : 0;
+  var mudP = bkP > 0 ? MUP[bkP - 1] / PP1 : 0;
+  var barC = document.getElementById("bk1-bar-c");
+  var barP = document.getElementById("bk1-bar-p");
+  if (barC) { barC.style.width = Math.round(mudC * 10) + "%"; barC.textContent = bkC > 0 ? (Math.round(mudC * 10) / 10) + " utils/$" : ""; }
+  if (barP) { barP.style.width = Math.round(mudP * 10) + "%"; barP.textContent = bkP > 0 ? (Math.round(mudP * 10) / 10) + " utils/$" : ""; }
+
+  var totEl = document.getElementById("bk1-total");
+  var bestEl = document.getElementById("bk1-best");
+  if (totEl) { totEl.textContent = String(total); }
+  if (bestEl) { bestEl.textContent = String(bkBest); }
+
+  var out = document.getElementById("bk1-readout");
+  if (!out) { return; }
+  if (bkC === 0 && bkP === 0) {
+    out.innerHTML = "An empty basket: $18 in hand, zero satisfaction. The first coffee delivers " + (MUC[0] / PC1) + " utils per dollar and the first pastry " + (MUP[0] / PP1) + " — start adding and follow the taller bar.";
+    return;
+  }
+  var line = "Basket: <strong>" + bkC + " coffee" + (bkC === 1 ? "" : "s") + ", " + bkP + " pastr" + (bkP === 1 ? "y" : "ies") + "</strong> ($" + spent + " spent" + (left > 0 ? ", $" + left + " idle" : "") + "). Total utility: <strong>" + total + "</strong>. ";
+  if (bkC === 3 && bkP === 4) {
+    line += "<strong>This is the optimum.</strong> The last dollar on each good buys exactly 6 utils, the budget is fully used, and no rearrangement of $18 can beat 141.";
+  } else if ((left >= PC1 && MUC[bkC] > 0) || (left >= PP1 && MUP[bkP] > 0)) {
+    line += "There is still money on the table — an affordable unit of something with positive marginal utility always beats an idle dollar.";
+  } else if (mudC > mudP) {
+    line += "The last coffee out-earns the last pastry per dollar — rearrange <strong>toward coffee</strong>.";
+  } else if (mudP > mudC) {
+    line += "The last pastry out-earns the last coffee per dollar — rearrange <strong>toward pastries</strong>.";
+  } else {
+    line += "The per-dollar margins are level, but a better full-budget arrangement still exists — keep exploring (the maximum is 141).";
+  }
+  out.innerHTML = line;
+}
+
+function basketReset() {
+  bkC = 0; bkP = 0;
+  updateBasket();
+}
+
+/* ══════════ STATIONS 2–3 — smooth preferences ══════════ */
+var PY = 3;   /* pastries stay $3 throughout */
+
+function bestBundle(income, px) {
+  return { x: income / (2 * px), y: income / (2 * PY) };
+}
+
+function icPoints(u, xmax, ymax) {
+  /* y = u² / x, clipped to the chart box */
+  var pts = [], x;
+  for (x = 0.4; x <= xmax + 0.0001; x += 0.2) {
+    var y = (u * u) / x;
+    if (y <= ymax && y >= 0.2) { pts.push({ x: x, y: y }); }
+  }
+  return pts;
+}
+
+var blChart = null;
+var blI = 18, blPx = 2;
+
+function initBl() {
+  var canvas = document.getElementById("bl-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  blChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Budget line", data: [], showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "_baseBudget", data: [ { x: 9, y: 0 }, { x: 0, y: 6 } ], showLine: true, borderColor: "#cbd5e1", borderDash: [6, 5], pointRadius: 0, borderWidth: 1.5, tension: 0 },
+        { label: "Reachable curve (tangent)", data: [], showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 2, tension: 0.3 },
+        { label: "A lower curve", data: [], showLine: true, borderColor: "rgba(22,101,52,0.35)", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+        { label: "An unreachable curve", data: [], showLine: true, borderColor: "rgba(153,27,27,0.4)", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+        { label: "Best bundle (tangency)", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 7 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8,
+        filter: function (item) { return item.text.indexOf("_") !== 0; } } } },
+      scales: {
+        x: { title: { display: true, text: "Coffee (cups)", font: { family: "Inter" } }, min: 0, max: 16, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Pastries", font: { family: "Inter" } }, min: 0, max: 11, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var si = document.getElementById("bl-i");
+  var sp = document.getElementById("bl-px");
+  if (si) { si.addEventListener("input", function () { blI = parseInt(si.value, 10); updateBl(); }); }
+  if (sp) { sp.addEventListener("input", function () { blPx = parseFloat(sp.value); updateBl(); }); }
+  updateBl();
+}
+
+function updateBl() {
+  var b = bestBundle(blI, blPx);
+  var uStar = Math.sqrt(b.x * b.y);
+  if (blChart) {
+    blChart.data.datasets[0].data = [ { x: blI / blPx, y: 0 }, { x: 0, y: blI / PY } ];
+    blChart.data.datasets[2].data = icPoints(uStar, 16, 11);
+    blChart.data.datasets[3].data = icPoints(uStar * 0.75, 16, 11);
+    blChart.data.datasets[4].data = icPoints(uStar * 1.3, 16, 11);
+    blChart.data.datasets[5].data = [ { x: b.x, y: b.y } ];
+    blChart.update("none");
+  }
+  var iv = document.getElementById("bl-i-val");
+  var pv = document.getElementById("bl-px-val");
+  if (iv) { iv.textContent = "$" + blI; }
+  if (pv) { pv.textContent = "$" + blPx.toFixed(2) + " per cup"; }
+  var out = document.getElementById("bl-readout");
+  if (!out) { return; }
+  var moved;
+  if (blI !== 18 && blPx === 2) {
+    moved = "Income changed with prices fixed, so the budget line moved <strong>in parallel</strong> — same slope, new reach — and the best bundle scaled with it.";
+  } else if (blI === 18 && blPx !== 2) {
+    moved = "One price changed, so the line <strong>pivoted</strong> around the pastry intercept — the market's exchange rate between the goods is different now, and the tangency slid to match.";
+  } else if (blI !== 18 && blPx !== 2) {
+    moved = "Both income and a price moved: a parallel shift <em>and</em> a pivot at once.";
+  } else {
+    moved = "This is the base case — $18 of income, $2 coffee.";
+  }
+  out.innerHTML = "Best affordable bundle: <strong>" + (Math.round(b.x * 10) / 10) + " coffees, " + (Math.round(b.y * 10) / 10) +
+    " pastries</strong> — the tangency, where her willingness to trade (MRS) equals the price ratio " + blPx.toFixed(2) + "/" + PY + ". " + moved;
+}
+
+function blReset() {
+  blI = 18; blPx = 2;
+  var si = document.getElementById("bl-i");
+  var sp = document.getElementById("bl-px");
+  if (si) { si.value = "18"; }
+  if (sp) { sp.value = "2"; }
+  updateBl();
+}
+
+/* ══════════ STATION 3 — build demand ══════════ */
+var ddChart = null;
+var ddDemand = null;
+var ddPx = 2;
+var ddVisited = {};   /* px (string) -> x* */
+
+function ddTrueCurve() {
+  var pts = [], p;
+  for (p = 1; p <= 4.0001; p += 0.25) {
+    pts.push({ x: 18 / (2 * p), y: p });
+  }
+  return pts;
+}
+
+function initDd() {
+  var c1 = document.getElementById("dd-canvas");
+  var c2 = document.getElementById("dd-demand");
+  if (!c1 || !c2 || typeof Chart === "undefined") { return; }
+  ddChart = new Chart(c1.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Budget line", data: [], showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "Indifference curve reached", data: [], showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 2, tension: 0.3 },
+        { label: "Chosen bundle", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 7 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Coffee (cups)", font: { family: "Inter" } }, min: 0, max: 16, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Pastries", font: { family: "Inter" } }, min: 0, max: 11, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  ddDemand = new Chart(c2.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Points you have collected", data: [], borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 6 },
+        { label: "Her full demand curve", data: [], showLine: true, borderColor: "rgba(15,61,158,0.45)", borderDash: [6, 5], pointRadius: 0, borderWidth: 2, tension: 0.3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Coffee chosen (cups)", font: { family: "Inter" } }, min: 0, max: 10, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Price of coffee ($)", font: { family: "Inter" } }, min: 0, max: 4.5, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sp = document.getElementById("dd-px");
+  if (sp) { sp.addEventListener("input", function () { ddPx = parseFloat(sp.value); updateDd(); }); }
+  updateDd();
+}
+
+function ddVisitedCount() {
+  var k, n = 0;
+  for (k in ddVisited) { if (ddVisited.hasOwnProperty(k)) { n += 1; } }
+  return n;
+}
+
+function updateDd() {
+  var b = bestBundle(18, ddPx);
+  var uStar = Math.sqrt(b.x * b.y);
+  ddVisited[ddPx.toFixed(2)] = b.x;
+
+  if (ddChart) {
+    ddChart.data.datasets[0].data = [ { x: 18 / ddPx, y: 0 }, { x: 0, y: 6 } ];
+    ddChart.data.datasets[1].data = icPoints(uStar, 16, 11);
+    ddChart.data.datasets[2].data = [ { x: b.x, y: b.y } ];
+    ddChart.update("none");
+  }
+
+  var collected = [];
+  var k;
+  for (k in ddVisited) {
+    if (ddVisited.hasOwnProperty(k)) { collected.push({ x: ddVisited[k], y: parseFloat(k) }); }
+  }
+  var n = collected.length;
+  if (ddDemand) {
+    ddDemand.data.datasets[0].data = collected;
+    ddDemand.data.datasets[1].data = n >= 5 ? ddTrueCurve() : [];
+    ddDemand.update("none");
+  }
+
+  var pv = document.getElementById("dd-px-val");
+  if (pv) { pv.textContent = "$" + ddPx.toFixed(2) + " per cup"; }
+  var out = document.getElementById("dd-readout");
+  if (!out) { return; }
+  var head = "At <strong>$" + ddPx.toFixed(2) + "</strong> her best choice is <strong>" + (Math.round(b.x * 10) / 10) +
+    " cups</strong> — one demand-curve point stamped at ($" + ddPx.toFixed(2) + ", " + (Math.round(b.x * 10) / 10) + "). ";
+  if (n >= 5) {
+    out.innerHTML = head + "<strong>" + n + " prices visited — the curve is yours.</strong> The dashed line through your points is her entire demand for coffee, and you built it from nothing but repeated best choices. Notice it slopes down without ever being told to.";
+  } else {
+    out.innerHTML = head + "Prices visited: <strong>" + n + " of the 5</strong> needed to reveal the whole curve. Keep moving the price.";
+  }
+}
+
+function ddReset() {
+  ddVisited = {};
+  updateDd();
+}
+
+/* ══════════ STATION 4 — basket check ══════════ */
+var BC_CASES = [
+  { story: "Tomas's last dollar on <strong>bus rides</strong> buys 9 utils; his last dollar on <strong>paperbacks</strong> buys 5. His budget is fully spent.", key: "X",
+    why: "Budget spent, margins unequal: a dollar moved from paperbacks (5 utils) to bus rides (9 utils) gains him 4 utils. Shift toward the first good until the margins meet." },
+  { story: "Mara's last dollar on <strong>coffee</strong> yields 6 utils; her last dollar on <strong>pastries</strong> also yields 6. Every dollar of her budget is spent.", key: "OPT",
+    why: "Budget exhausted and per-dollar margins equal — the equimarginal condition holds. No rearrangement can improve this basket." },
+  { story: "A student's last dollar on <strong>streaming</strong> buys 3 utils; her last dollar on <strong>concert tickets</strong> buys 8. The budget is fully committed.", key: "Y",
+    why: "Margins unequal with the second good ahead: dollars should migrate from streaming toward concerts until per-dollar utility levels out." },
+  { story: "A shopper's last dollar on <strong>cheese</strong> gives 7 utils and on <strong>olives</strong> gives 7 — but $6 of the grocery budget sits unspent, and more of either still adds utility.", key: "SPEND",
+    why: "Check the budget before the margins: idle money buys zero utils, and either good's next unit buys more than zero. Spend first; rebalance after." },
+  { story: "Verenia's commuter finds her last dollar on <strong>tram passes</strong> worth 10 utils and on <strong>lunches</strong> worth 4, with nothing left in the wallet.", key: "X",
+    why: "Fully spent, first good's margin dominates: shift lunch money toward tram passes and total utility rises with every reallocated dollar." },
+  { story: "The last dollar on <strong>video games</strong> returns 5 utils; the last on <strong>gym visits</strong> returns 11. All income is allocated.", key: "Y",
+    why: "The second good's per-dollar margin more than doubles the first's — reallocate toward the gym until the two margins converge." },
+  { story: "A collector's last dollar on <strong>vinyl records</strong> and on <strong>film prints</strong> each buys 4 utils, with the whole month's hobby budget used up.", key: "OPT",
+    why: "Equal margins, exhausted budget: the equimarginal rule is satisfied and the basket cannot be improved by any shuffle." },
+  { story: "Tomas's last dollar on <strong>flour</strong> yields 12 utils versus 9 for <strong>butter</strong> — and he still has $4 uncommitted that could buy more of either, both with positive marginal utility.", key: "SPEND",
+    why: "Unspent money is the first inefficiency to fix: any positive-utility purchase beats an idle dollar. The flour-versus-butter rebalancing comes after the $4 is deployed." },
+  { story: "A traveler's last dollar on <strong>museum entries</strong> buys 8 utils; on <strong>street food</strong>, 2. The trip budget is fully drawn down.", key: "X",
+    why: "A four-to-one gap in per-dollar returns, budget spent: move money toward museums until the margins close." },
+  { story: "The last dollar on <strong>houseplants</strong> delivers 3 utils; the last on <strong>cookbooks</strong> delivers 6 — every dollar already allocated.", key: "Y",
+    why: "The second good wins per dollar; reallocation toward cookbooks raises total utility until the margins equalize." },
+  { story: "Mara checks her weekend basket: last dollar on <strong>cinema</strong> = 5 utils, last dollar on <strong>caf&eacute; visits</strong> = 5 utils, budget fully spent.", key: "OPT",
+    why: "Both tests pass at once — full spending and equal per-dollar margins — so this basket is already the best her budget can do." },
+  { story: "A reader's last dollar on <strong>novels</strong> gives 9 utils and on <strong>magazines</strong> 9, yet a fifth of the book budget still sits idle and more of either would please.", key: "SPEND",
+    why: "Equal margins are not enough: the unspent fifth buys nothing at all. Spending it on either good (or both) strictly beats leaving it idle." }
+];
+
+var BC = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentBc = null;
+var bcAnswered = true;
+
+function loadBc() {
+  try {
+    var raw = localStorage.getItem("choiceSandbox.basket");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { BC.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { BC.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { BC.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { BC.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveBc() {
+  try {
+    localStorage.setItem("choiceSandbox.basket", JSON.stringify(BC));
+  } catch (e) { /* ignore */ }
+}
+
+function renderBcStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(BC.attempted); }
+  if (cor) { cor.textContent = String(BC.correct); }
+  if (acc) { acc.innerHTML = BC.attempted > 0 ? Math.round((BC.correct / BC.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(BC.best); }
+}
+
+var BC_IDS = ["X", "Y", "OPT", "SPEND"];
+var BC_NAMES = {
+  X: "shift spending toward the first good",
+  Y: "shift spending toward the second good",
+  OPT: "nothing — the basket is optimal",
+  SPEND: "spend the unspent money first"
+};
+
+function setBcButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < BC_IDS.length; i++) {
+    btn = document.getElementById("bc-" + BC_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newBasketCase() {
+  currentBc = BC_CASES[Math.floor(Math.random() * BC_CASES.length)];
+  bcAnswered = false;
+  setBcButtons(false);
+  var story = document.getElementById("bc-story");
+  if (story) { story.innerHTML = "<strong>The basket:</strong> " + currentBc.story; }
+  var out = document.getElementById("bc-readout");
+  if (out) { out.innerHTML = "The basket awaits inspection."; }
+}
+
+function basketCheck(choice) {
+  if (!currentBc || bcAnswered) { return; }
+  bcAnswered = true;
+  setBcButtons(true);
+  var correct = choice === currentBc.key;
+  var btnChosen = document.getElementById("bc-" + choice);
+  var btnRight = document.getElementById("bc-" + currentBc.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  BC.attempted += 1;
+  if (correct) {
+    BC.correct += 1;
+    BC.streak += 1;
+    if (BC.streak > BC.best) { BC.best = BC.streak; }
+  } else {
+    BC.streak = 0;
+  }
+  saveBc();
+  renderBcStats();
+
+  var out = document.getElementById("bc-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Correct</strong> — " + BC_NAMES[currentBc.key] + ". " + currentBc.why +
+        " Streak: <strong>" + BC.streak + "</strong>. Press <strong>New basket</strong> for another.";
+    } else {
+      out.innerHTML = "<strong>Not this one.</strong> The right move: " + BC_NAMES[currentBc.key] + ". " + currentBc.why +
+        " Two questions, in order: budget spent? margins equal? Take the next basket.";
+    }
+  }
+}
+
+function resetBasketScore() {
+  BC.attempted = 0;
+  BC.correct = 0;
+  BC.streak = 0;
+  BC.best = 0;
+  saveBc();
+  renderBcStats();
+  var out = document.getElementById("bc-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New basket</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  loadBc();
+  renderBcStats();
+  updateBasket();
+  initBl();
+  initDd();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

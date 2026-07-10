@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Policy &amp; Tax-Incidence Lab — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink:        #0f172a;
+  --ink-light:  #334155;
+  --ink-muted:  #64748b;
+  --ink-faint:  #94a3b8;
+  --bg:         #fafaf9;
+  --bg-warm:    #f5f0e8;
+  --bg-card:    #ffffff;
+  --rule:       #e2e8f0;
+  --accent:     #0f3d9e;
+  --accent-mid: #1e56c0;
+  --accent-lt:  #dbeafe;
+  --gold:       #b87408;
+  --gold-lt:    #fef3c7;
+  --green:      #166534;
+  --green-lt:   #dcfce7;
+  --red:        #991b1b;
+  --red-lt:     #fee2e2;
+  --serif:      'Lora', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+  --radius:     8px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+
+/* ── Header ─────────────────────────────────────────────── */
+#sb-header {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200;
+  background: var(--ink); color: #fff;
+  display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+
+/* ── Typography ─────────────────────────────────────────── */
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+/* ── Panels ─────────────────────────────────────────────── */
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 320px; }
+
+/* ── Buttons ────────────────────────────────────────────── */
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sb-ghost.active { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+
+/* ── Mini surplus stats ─────────────────────────────────── */
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 105px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+.sb-mini.cs .sb-mini-num { color: var(--accent); }
+.sb-mini.ps .sb-mini-num { color: var(--gold); }
+.sb-mini.rev .sb-mini-num { color: var(--green); }
+.sb-mini.dwl .sb-mini-num { color: var(--red); }
+
+/* ── Burden bar ─────────────────────────────────────────── */
+.sb-gapbar-wrap { margin: 0.75rem 0; }
+.sb-gapbar-title { font-size: 0.75rem; font-weight: 600; color: var(--ink-muted); margin-bottom: 0.375rem; }
+.sb-gapbar { display: flex; height: 40px; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--rule); }
+.sb-gapbar div { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 0.78rem; transition: width 0.25s; white-space: nowrap; overflow: hidden; }
+
+/* ── Verdict game ───────────────────────────────────────── */
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+
+/* ── Stats / insets / footer ────────────────────────────── */
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Policy Lab</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapters 6 &amp; 7: Policy, Welfare &amp; Incidence</div>
+<h1 class="sb-title">Policy &amp; Tax-Incidence Lab</h1>
+<p class="sb-subtitle">You hold the government's three levers &mdash; ceilings, floors, and taxes &mdash; over a live market with a full surplus ledger. Cap a price and watch the welfare accounts bleed; drive a tax wedge and discover who <em>really</em> pays it; then pass judgment on twelve policies from their descriptions alone.</p>
+<hr class="sb-divider">
+
+<p>This lab runs the market Chapters 6 and 7 share: demand <code>Qd = 100 &minus; 10P</code>, supply <code>Qs = 10P &minus; 20</code>, clearing at <strong>$6 and 40 units</strong> with <strong>$160</strong> of total surplus &mdash; $80 to buyers, $80 to sellers &mdash; the maximum this market can generate. Every policy you impose below is scored against that ledger, in dollars, live. Station 3's verdict record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: PRICE CONTROLS ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>The price-control surgeon</h2>
+<p>Choose your instrument &mdash; a legal <strong>ceiling</strong> (sellers may not charge more) or a legal <strong>floor</strong> (they may not charge less) &mdash; and set its level. The shaded regions are the welfare accounts themselves: blue is consumer surplus, gold is producer surplus, and red is the deadweight loss, value that simply stops existing. Two things to discover: what a binding control does to each account, and what a control on the <em>wrong side</em> of the market price does at all.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Operate on the market</div>
+  <h4>Pick the instrument, set the level, read the ledger</h4>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Instrument</span>
+    <button class="btn-sb btn-sb-ghost active" id="pc-btn-ceiling" onclick="setPcMode('ceiling')">Price ceiling (legal maximum)</button>
+    <button class="btn-sb btn-sb-ghost" id="pc-btn-floor" onclick="setPcMode('floor')">Price floor (legal minimum)</button>
+  </div>
+  <div class="sb-controls">
+    <div>
+      <label for="pc-level">Legal price level &mdash; <span id="pc-level-val"></span></label>
+      <input type="range" id="pc-level" min="3" max="9" step="0.5" value="4">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="pc-canvas" height="320"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini cs"><div class="sb-mini-num" id="pc-cs">$80</div><div class="sb-mini-label">consumer surplus (was $80)</div></div>
+    <div class="sb-mini ps"><div class="sb-mini-num" id="pc-ps">$80</div><div class="sb-mini-label">producer surplus (was $80)</div></div>
+    <div class="sb-mini dwl"><div class="sb-mini-num" id="pc-dwl">$0</div><div class="sb-mini-label">deadweight loss</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="pc-q">40</div><div class="sb-mini-label">units traded (was 40)</div></div>
+  </div>
+  <div class="sb-readout" id="pc-readout"></div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; The short side always wins</div>
+  <p>Under any binding control, the quantity that actually trades is the <em>smaller</em> of what buyers want and what sellers offer &mdash; the short side of the market. A ceiling leaves willing buyers unserved (shortage, queues, waiting lists); a floor leaves willing sellers unsold (surplus &mdash; and when the "good" is labor and the floor is a minimum wage, that unsold surplus is unemployment). The surplus ledger above also hides one generosity: it assumes the scarce units reach the buyers who value them most. Real rationing &mdash; by luck, queues, or connections &mdash; usually does worse, so the red triangle is a <em>lower bound</em> on the damage.</p>
+</div>
+
+<!-- ═══ STATION 2: TAX WEDGE ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>The tax wedge &mdash; and who really pays</h2>
+<p>Now the subtler lever. A per-unit tax drives a <strong>wedge</strong> between what buyers pay and what sellers keep: the two prices split apart until the gap equals the tax, and the quantity shrinks to where both sides accept their share. The chapter's deepest result hides in the two responsiveness sliders: the law can say "sellers remit this tax" all it likes &mdash; the <em>burden</em> lands wherever it wants. Rebuild the textbook's 50/50 case, then make one side inelastic and watch the burden pile onto it.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; The incidence machine</div>
+  <h4>Set the tax. Set each side's responsiveness. Read who pays.</h4>
+  <p class="sb-panel-intro">Both curves pivot around the free-market point ($6, 40), so the pre-tax market never changes &mdash; only the <em>shapes</em> do. Steep means unresponsive (inelastic); flat means quick to walk away.</p>
+  <div class="sb-controls">
+    <div>
+      <label for="tx-t">Per-unit tax &mdash; <span id="tx-t-val"></span></label>
+      <input type="range" id="tx-t" min="0" max="4" step="0.5" value="2">
+    </div>
+    <div>
+      <label for="tx-d">Buyer responsiveness (units lost per $1 to buyers) &mdash; <span id="tx-d-val"></span></label>
+      <input type="range" id="tx-d" min="2" max="20" step="2" value="10">
+    </div>
+    <div>
+      <label for="tx-s">Seller responsiveness (units withdrawn per $1 off sellers) &mdash; <span id="tx-s-val"></span></label>
+      <input type="range" id="tx-s" min="2" max="20" step="2" value="10">
+    </div>
+  </div>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Preset markets</span>
+    <button class="btn-sb btn-sb-ghost" onclick="setTaxPreset(10, 10, 2)">The textbook case: equal responsiveness</button>
+    <button class="btn-sb btn-sb-ghost" onclick="setTaxPreset(2, 14, 2)">Cigarettes: buyers can't quit</button>
+    <button class="btn-sb btn-sb-ghost" onclick="setTaxPreset(18, 4, 2)">Luxury yachts: buyers flee, shipyards can't</button>
+  </div>
+  <div class="sb-chart-box"><canvas id="tx-canvas" height="320"></canvas></div>
+  <div class="sb-gapbar-wrap">
+    <div class="sb-gapbar-title">Who bears the tax &mdash; the burden split</div>
+    <div class="sb-gapbar">
+      <div id="tx-bar-b" style="background:#0f3d9e;width:50%;">Buyers</div>
+      <div id="tx-bar-s" style="background:#b87408;width:50%;">Sellers</div>
+    </div>
+  </div>
+  <div class="sb-mini-row">
+    <div class="sb-mini rev"><div class="sb-mini-num" id="tx-rev">$0</div><div class="sb-mini-label">government revenue</div></div>
+    <div class="sb-mini dwl"><div class="sb-mini-num" id="tx-dwl">$0</div><div class="sb-mini-label">deadweight loss</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="tx-q">40</div><div class="sb-mini-label">units traded (was 40)</div></div>
+  </div>
+  <div class="sb-readout" id="tx-readout"></div>
+</div>
+
+<p>Two regularities worth extracting before you leave this station. First, the burden shares always mirror the responsiveness ratio &mdash; <strong>the inelastic side pays</strong>, because it is the side that cannot walk away. Second, double the tax and watch the deadweight loss <em>quadruple</em>: the red triangle grows with the square of the tax, which is why economists prefer broad low taxes to narrow high ones.</p>
+
+<!-- ═══ STATION 3: POLICY VERDICT ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>Policy Verdict</h2>
+<p>Time to rule from the bench. Each case describes a real-style policy in a market whose clearing price you are told. No charts, no sliders &mdash; just the description, and your verdict on what the policy does. The traps are the ones that catch voters and legislators alike: controls that do not bind, and floors that "help" sellers by leaving them unsold.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Case before the court</div>
+  <h4>What does this policy actually do?</h4>
+  <div class="sb-case" id="pv-story">Press <strong>New case</strong> to hear the first one.</div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="pv-SH" onclick="verdict('SH')">A shortage &mdash; buyers want more than sellers offer</button>
+    <button class="sb-diag-btn" id="pv-SU" onclick="verdict('SU')">A surplus &mdash; sellers offer more than buyers take</button>
+    <button class="sb-diag-btn" id="pv-NB" onclick="verdict('NB')">Nothing &mdash; the policy doesn't bind</button>
+    <button class="sb-diag-btn" id="pv-TX" onclick="verdict('TX')">Fewer trades, a price wedge, and deadweight loss</button>
+  </div>
+  <div class="sb-readout" id="pv-readout">The court awaits your ruling.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newVerdictCase()">New case</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetVerdictScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Your record</h2>
+<p>Your Policy Verdict record is saved in this browser. Report the numbers below if this arena was assigned; below 80% accuracy, run more cases and check the binding condition <em>first</em>, every time: a ceiling matters only below the market price, a floor only above it.</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases ruled on</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">ruled correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; the law names the payer; the elasticities choose one</div>
+  <p>Station 2 holds the lesson I most want you to carry out of these two chapters. In 1990, the United States taxed luxury yachts, aiming squarely at wealthy buyers. But yacht buyers are the flat curve &mdash; they can buy abroad, buy later, buy a beach house instead &mdash; while shipyards and their workers are the steep one. The burden landed on the boatbuilders; thousands of jobs vanished; the tax was repealed within three years. Every incidence question yields to the same two-step you drilled here: forget who writes the check, find who cannot walk away.</p>
+  <p>And keep the ledger's other lesson beside it: every one of these levers shrinks the pie while rearranging the slices. That is not an argument for never using them &mdash; revenue must be raised, and societies may accept some deadweight loss for distributional goals. It is an argument for choosing the version that shreds least: broad and low over narrow and high, taxes on inelastic margins over elastic ones, and honest accounting of the red triangle before the vote, not after.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Keep going</h3>
+  <p>This lab pairs with Chapters 6 and 7 of <em>Introduction to Microeconomics</em>. The surplus tools you used here return in every market-structure chapter that follows &mdash; monopoly's markup, trade's gains, the externality wedge.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Policy &amp; Tax-Incidence Lab &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Policy & Tax-Incidence Lab — companion arena to Ch. 6–7.
+   Shared market: Qd = 100 − 10P, Qs = 10P − 20 → ($6, 40),
+   CS = PS = $80, TS = $160 at the free-market optimum.
+   Station 1: ceiling/floor with live CS/PS/DWL shading.
+     Binding control at effective price e trading Q units
+     (highest-value buyers served, lowest-cost sellers selling):
+       CS = Q(10−e) − Q²/20,  PS = Q(e−2) − Q²/20, DWL = 160−CS−PS.
+   Station 2: incidence machine. Curves pivot around ($6, 40):
+       Qd = 40 − d(P−6),  Qs = 40 + s(P−6).
+     Tax t:  buyers' share = s/(d+s), sellers' = d/(d+s);
+       Pb = 6 + t·s/(d+s), Ps = 6 − t·d/(d+s),
+       Q  = 40 − t·ds/(d+s), Rev = t·Q, DWL = ½t²·ds/(d+s).
+   Station 3: verdict game on binding logic, saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+function mv(q) { return 10 - q / 10; }   /* demand height  */
+function mc(q) { return 2 + q / 10; }    /* supply height  */
+function fmtM(x) { return "$" + (Math.round(x * 10) / 10); }
+
+/* ══════════ STATION 1 — price controls ══════════ */
+var pcChart = null;
+var pcMode = "ceiling";
+var pcLevel = 4;
+
+function pcOutcome(mode, level) {
+  var binding, e, q, note;
+  if (mode === "ceiling") { binding = level < 6; } else { binding = level > 6; }
+  if (!binding) {
+    e = 6; q = 40;
+  } else if (mode === "ceiling") {
+    e = level; q = 10 * level - 20;          /* short side: sellers */
+  } else {
+    e = level; q = 100 - 10 * level;         /* short side: buyers  */
+  }
+  var cs = q * (10 - e) - q * q / 20;
+  var ps = q * (e - 2) - q * q / 20;
+  var dwl = 160 - cs - ps;
+  return { binding: binding, e: e, q: q, cs: cs, ps: ps, dwl: dwl };
+}
+
+function seg(x1, y1, x2, y2) { return [ { x: x1, y: y1 }, { x: x2, y: y2 } ]; }
+
+function initPc() {
+  var canvas = document.getElementById("pc-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  pcChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        /* 0 */ { label: "Demand", data: seg(0, 10, 100, 0), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        /* 1 */ { label: "Supply", data: seg(0, 2, 80, 10), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        /* 2 CS bottom (price line 0..Q) */ { label: "_csb", data: [], showLine: true, borderColor: "rgba(0,0,0,0)", pointRadius: 0, borderWidth: 0, tension: 0 },
+        /* 3 CS top (demand 0..Q), fills to 2 */ { label: "Consumer surplus", data: [], showLine: true, borderColor: "rgba(15,61,158,0.55)", backgroundColor: "rgba(15,61,158,0.22)", fill: "-1", pointRadius: 0, borderWidth: 1, tension: 0 },
+        /* 4 PS bottom (supply 0..Q) */ { label: "_psb", data: [], showLine: true, borderColor: "rgba(0,0,0,0)", pointRadius: 0, borderWidth: 0, tension: 0 },
+        /* 5 PS top (price line 0..Q), fills to 4 */ { label: "Producer surplus", data: [], showLine: true, borderColor: "rgba(184,116,8,0.55)", backgroundColor: "rgba(184,116,8,0.25)", fill: "-1", pointRadius: 0, borderWidth: 1, tension: 0 },
+        /* 6 DWL bottom (supply Q..40) */ { label: "_dwlb", data: [], showLine: true, borderColor: "rgba(0,0,0,0)", pointRadius: 0, borderWidth: 0, tension: 0 },
+        /* 7 DWL top (demand Q..40), fills to 6 */ { label: "Deadweight loss", data: [], showLine: true, borderColor: "rgba(153,27,27,0.55)", backgroundColor: "rgba(153,27,27,0.28)", fill: "-1", pointRadius: 0, borderWidth: 1, tension: 0 },
+        /* 8 legal price line */ { label: "Legal price", data: [], showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", borderDash: [7, 5], pointRadius: 0, borderWidth: 2, tension: 0 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8,
+        filter: function (item) { return item.text.indexOf("_") !== 0; } } } },
+      scales: {
+        x: { title: { display: true, text: "Quantity", font: { family: "Inter" } }, min: 0, max: 100, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Price ($)", font: { family: "Inter" } }, min: 0, max: 10, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sl = document.getElementById("pc-level");
+  if (sl) { sl.addEventListener("input", function () { pcLevel = parseFloat(sl.value); updatePc(); }); }
+  updatePc();
+}
+
+function updatePc() {
+  var o = pcOutcome(pcMode, pcLevel);
+  if (pcChart) {
+    pcChart.data.datasets[2].data = seg(0, o.e, o.q, o.e);
+    pcChart.data.datasets[3].data = seg(0, 10, o.q, mv(o.q));
+    pcChart.data.datasets[4].data = seg(0, 2, o.q, mc(o.q));
+    pcChart.data.datasets[5].data = seg(0, o.e, o.q, o.e);
+    if (o.q < 40) {
+      pcChart.data.datasets[6].data = seg(o.q, mc(o.q), 40, 6);
+      pcChart.data.datasets[7].data = seg(o.q, mv(o.q), 40, 6);
+    } else {
+      pcChart.data.datasets[6].data = [];
+      pcChart.data.datasets[7].data = [];
+    }
+    pcChart.data.datasets[8].data = seg(0, pcLevel, 100, pcLevel);
+    pcChart.update("none");
+  }
+  var lv = document.getElementById("pc-level-val");
+  if (lv) { lv.textContent = "$" + pcLevel.toFixed(2) + " (" + (pcMode === "ceiling" ? "no charging above" : "no charging below") + " this)"; }
+  var csEl = document.getElementById("pc-cs");
+  var psEl = document.getElementById("pc-ps");
+  var dwlEl = document.getElementById("pc-dwl");
+  var qEl = document.getElementById("pc-q");
+  if (csEl) { csEl.textContent = fmtM(o.cs); }
+  if (psEl) { psEl.textContent = fmtM(o.ps); }
+  if (dwlEl) { dwlEl.textContent = fmtM(o.dwl); }
+  if (qEl) { qEl.textContent = String(Math.round(o.q)); }
+
+  var out = document.getElementById("pc-readout");
+  if (!out) { return; }
+  if (!o.binding) {
+    out.innerHTML = "A " + pcMode + " at <strong>$" + pcLevel.toFixed(2) + "</strong> sits on the harmless side of the $6.00 market price, so it <strong>does not bind</strong>: the market simply clears at $6.00 and 40 units, the full $160 of surplus intact. A control only matters when it forbids the price the market wants.";
+  } else if (pcMode === "ceiling") {
+    var qd = 100 - 10 * pcLevel;
+    out.innerHTML = "A binding ceiling at <strong>$" + pcLevel.toFixed(2) + "</strong>: buyers want <strong>" + qd + "</strong> but sellers offer only <strong>" + o.q + "</strong> — a <strong>shortage of " + (qd - o.q) + "</strong>, with " + o.q + " units trading. Buyers who get served gain from the low price (CS " + fmtM(o.cs) + "), sellers are squeezed (PS " + fmtM(o.ps) + "), and <strong>" + fmtM(o.dwl) + " of surplus simply vanishes</strong> — the trades between " + o.q + " and 40 units were worth making and no longer happen.";
+  } else {
+    var qs = 10 * pcLevel - 20;
+    out.innerHTML = "A binding floor at <strong>$" + pcLevel.toFixed(2) + "</strong>: sellers offer <strong>" + qs + "</strong> but buyers take only <strong>" + o.q + "</strong> — a <strong>surplus of " + (qs - o.q) + "</strong>, with " + o.q + " units trading. Sellers who sell gain from the high price (PS " + fmtM(o.ps) + "), buyers are squeezed (CS " + fmtM(o.cs) + "), and <strong>" + fmtM(o.dwl) + " of surplus vanishes</strong>. In a labor market, that unsold overhang is unemployment.";
+  }
+}
+
+function setPcMode(mode) {
+  pcMode = mode;
+  var bc = document.getElementById("pc-btn-ceiling");
+  var bf = document.getElementById("pc-btn-floor");
+  if (bc) { if (mode === "ceiling") { bc.classList.add("active"); } else { bc.classList.remove("active"); } }
+  if (bf) { if (mode === "floor") { bf.classList.add("active"); } else { bf.classList.remove("active"); } }
+  updatePc();
+}
+
+/* ══════════ STATION 2 — tax incidence ══════════ */
+var txChart = null;
+var txT = 2, txD = 10, txS = 10;
+
+function taxOutcome(t, d, s) {
+  var bShare = s / (d + s);
+  var sShare = d / (d + s);
+  var pb = 6 + t * bShare;
+  var ps = 6 - t * sShare;
+  var q = 40 - t * (d * s) / (d + s);
+  if (q < 0) { q = 0; }
+  var rev = t * q;
+  var dwl = 0.5 * t * t * (d * s) / (d + s);
+  if (q === 0) { dwl = 160; rev = 0; }   /* tax destroyed the whole market */
+  return { bShare: bShare, sShare: sShare, pb: pb, ps: ps, q: q, rev: rev, dwl: dwl };
+}
+
+function txDemandPts(d) {
+  var pts = [], p;
+  for (p = 0; p <= 10.0001; p += 0.25) {
+    var q = 40 - d * (p - 6);
+    if (q >= 0 && q <= 100) { pts.push({ x: q, y: p }); }
+  }
+  return pts;
+}
+
+function txSupplyPts(s) {
+  var pts = [], p;
+  for (p = 0; p <= 10.0001; p += 0.25) {
+    var q = 40 + s * (p - 6);
+    if (q >= 0 && q <= 100) { pts.push({ x: q, y: p }); }
+  }
+  return pts;
+}
+
+function initTx() {
+  var canvas = document.getElementById("tx-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  txChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Demand", data: txDemandPts(txD), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "Supply", data: txSupplyPts(txS), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+        { label: "The tax wedge", data: [], showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 0, borderWidth: 4, tension: 0 },
+        { label: "Buyers pay", data: [], showLine: true, borderColor: "rgba(15,61,158,0.5)", borderDash: [7, 5], pointRadius: 0, borderWidth: 1.5, tension: 0 },
+        { label: "Sellers keep", data: [], showLine: true, borderColor: "rgba(184,116,8,0.6)", borderDash: [7, 5], pointRadius: 0, borderWidth: 1.5, tension: 0 },
+        { label: "Free-market point", data: [ { x: 40, y: 6 } ], borderColor: "#64748b", backgroundColor: "#64748b", pointRadius: 5 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Quantity", font: { family: "Inter" } }, min: 0, max: 100, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Price ($)", font: { family: "Inter" } }, min: 0, max: 10, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var st = document.getElementById("tx-t");
+  var sd = document.getElementById("tx-d");
+  var ss = document.getElementById("tx-s");
+  if (st) { st.addEventListener("input", function () { txT = parseFloat(st.value); updateTx(); }); }
+  if (sd) { sd.addEventListener("input", function () { txD = parseInt(sd.value, 10); updateTx(); }); }
+  if (ss) { ss.addEventListener("input", function () { txS = parseInt(ss.value, 10); updateTx(); }); }
+  updateTx();
+}
+
+function updateTx() {
+  var o = taxOutcome(txT, txD, txS);
+  if (txChart) {
+    txChart.data.datasets[0].data = txDemandPts(txD);
+    txChart.data.datasets[1].data = txSupplyPts(txS);
+    if (txT > 0 && o.q > 0) {
+      txChart.data.datasets[2].data = seg(o.q, o.ps, o.q, o.pb);
+      txChart.data.datasets[3].data = seg(0, o.pb, o.q, o.pb);
+      txChart.data.datasets[4].data = seg(0, o.ps, o.q, o.ps);
+    } else {
+      txChart.data.datasets[2].data = [];
+      txChart.data.datasets[3].data = [];
+      txChart.data.datasets[4].data = [];
+    }
+    txChart.update("none");
+  }
+  var tv = document.getElementById("tx-t-val");
+  var dv = document.getElementById("tx-d-val");
+  var sv = document.getElementById("tx-s-val");
+  if (tv) { tv.textContent = "$" + txT.toFixed(2) + " per unit"; }
+  if (dv) { dv.textContent = txD + " (" + (txD <= 6 ? "inelastic — they stay" : (txD >= 14 ? "elastic — they flee" : "moderate")) + ")"; }
+  if (sv) { sv.textContent = txS + " (" + (txS <= 6 ? "inelastic — they stay" : (txS >= 14 ? "elastic — they flee" : "moderate")) + ")"; }
+
+  var bPct = Math.round(o.bShare * 100);
+  var barB = document.getElementById("tx-bar-b");
+  var barS = document.getElementById("tx-bar-s");
+  if (barB) { barB.style.width = bPct + "%"; barB.textContent = "Buyers: " + bPct + "%"; }
+  if (barS) { barS.style.width = (100 - bPct) + "%"; barS.textContent = "Sellers: " + (100 - bPct) + "%"; }
+
+  var revEl = document.getElementById("tx-rev");
+  var dwlEl = document.getElementById("tx-dwl");
+  var qEl = document.getElementById("tx-q");
+  if (revEl) { revEl.textContent = fmtM(o.rev); }
+  if (dwlEl) { dwlEl.textContent = fmtM(o.dwl); }
+  if (qEl) { qEl.textContent = String(Math.round(o.q * 10) / 10); }
+
+  var out = document.getElementById("tx-readout");
+  if (!out) { return; }
+  if (txT === 0) {
+    out.innerHTML = "No tax: the market clears at <strong>$6.00 and 40 units</strong> with the full $160 of surplus. Raise the tax and watch the wedge open.";
+  } else if (o.q === 0) {
+    out.innerHTML = "This tax is so large, on curves this responsive, that <strong>no trade survives it</strong>: the wedge exceeds the entire gap between what any buyer will pay and any seller will accept. Revenue: <strong>$0</strong> — a tax that kills its market collects nothing and destroys all $160 of surplus.";
+  } else {
+    out.innerHTML = "A <strong>$" + txT.toFixed(2) + "</strong> tax splits the price in two: buyers pay <strong>$" + o.pb.toFixed(2) + "</strong>, sellers keep <strong>$" + o.ps.toFixed(2) + "</strong>, and quantity falls 40 &rarr; <strong>" + (Math.round(o.q * 10) / 10) + "</strong>. Buyers bear <strong>" + bPct + "%</strong> of the burden and sellers <strong>" + (100 - bPct) + "%</strong> — exactly the ratio of the two responsiveness settings, with the burden piling onto whichever side finds it harder to walk away. The government collects " + fmtM(o.rev) + "; " + fmtM(o.dwl) + " of surplus is lost to trades that no longer happen.";
+  }
+}
+
+function setTaxPreset(d, s, t) {
+  txD = d; txS = s; txT = t;
+  var sd = document.getElementById("tx-d");
+  var ss = document.getElementById("tx-s");
+  var st = document.getElementById("tx-t");
+  if (sd) { sd.value = String(d); }
+  if (ss) { ss.value = String(s); }
+  if (st) { st.value = String(t); }
+  updateTx();
+}
+
+/* ══════════ STATION 3 — policy verdict ══════════ */
+var PV_CASES = [
+  { story: "Verenia's capital caps apartment rents at $800 a month. Unregulated, rents clear at $1,100.", key: "SH",
+    why: "The ceiling sits below the market price, so it binds: at the low legal rent, tenants want more apartments than landlords supply." },
+  { story: "The city caps bread at $3 a loaf during a scare — but bakeries have been charging $2.40 all along.", key: "NB",
+    why: "A ceiling above the market price forbids nothing anyone was doing. The market goes on clearing at $2.40." },
+  { story: "After a hurricane, an anti-gouging law freezes bottled-water prices at their old level while the market price has tripled.", key: "SH",
+    why: "The frozen price is now far below the (new) market-clearing price — a binding ceiling, and the empty shelves are the shortage." },
+  { story: "Parliament sets a minimum wage of $16 in a labor market where the wage would otherwise settle at $12.", key: "SU",
+    why: "A floor above the market wage binds: more people seek work at $16 than employers hire — the overhang is unemployment." },
+  { story: "A minimum wage of $9 is enacted in a city where even fast-food jobs already pay $14.", key: "NB",
+    why: "A floor below the going wage forbids nothing. It binds no one and changes nothing." },
+  { story: "To help growers, the government decrees sugar may not sell below $0.90/kg; it has been trading at $0.60.", key: "SU",
+    why: "A binding floor: at $0.90 growers supply more than buyers take, and unsold sugar piles up (or the state must buy it)." },
+  { story: "The city announces landlords may not charge more than $2,000 for studios that currently rent for $1,300.", key: "NB",
+    why: "Check the binding condition first: this ceiling is far above the market rent, so it does nothing at all." },
+  { story: "A $2-per-cup levy is imposed on Verenia's coffee, collected from vendors at the till.", key: "TX",
+    why: "A per-unit tax: prices to buyers rise, receipts to sellers fall, the gap equals $2, quantity shrinks, and a deadweight-loss triangle opens — regardless of who legally remits it." },
+  { story: "Fuel is taxed $1 per liter; the law says filling stations, not drivers, must pay it.", key: "TX",
+    why: "The legal payer is irrelevant to the economics: the wedge splits between drivers and stations by their elasticities, trades fall, and DWL appears." },
+  { story: "Concert tickets clear at $90, but a law caps resale prices at $60 'to protect fans.'", key: "SH",
+    why: "A binding ceiling on the resale market: at $60 far more fans want tickets than holders will part with — hence sold-out sites and back-channel deals." },
+  { story: "A price floor of $4 is set for a crop whose market price has ranged between $5 and $7 for a decade.", key: "NB",
+    why: "The floor sits below every price the market actually produces, so it never binds." },
+  { story: "Airline seats to the islands clear at $220; regulators forbid fares below $300 to 'ensure service quality.'", key: "SU",
+    why: "A binding floor: at $300 airlines would happily fly more passengers than are willing to book — empty seats are the surplus." }
+];
+
+var PV = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentPv = null;
+var pvAnswered = true;
+
+function loadPv() {
+  try {
+    var raw = localStorage.getItem("policyLab.verdict");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { PV.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { PV.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { PV.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { PV.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function savePv() {
+  try {
+    localStorage.setItem("policyLab.verdict", JSON.stringify(PV));
+  } catch (e) { /* ignore */ }
+}
+
+function renderPvStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(PV.attempted); }
+  if (cor) { cor.textContent = String(PV.correct); }
+  if (acc) { acc.innerHTML = PV.attempted > 0 ? Math.round((PV.correct / PV.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(PV.best); }
+}
+
+var PV_IDS = ["SH", "SU", "NB", "TX"];
+var PV_NAMES = {
+  SH: "a shortage",
+  SU: "a surplus",
+  NB: "nothing — the policy doesn't bind",
+  TX: "fewer trades, a wedge, and deadweight loss"
+};
+
+function setPvButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < PV_IDS.length; i++) {
+    btn = document.getElementById("pv-" + PV_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newVerdictCase() {
+  currentPv = PV_CASES[Math.floor(Math.random() * PV_CASES.length)];
+  pvAnswered = false;
+  setPvButtons(false);
+  var story = document.getElementById("pv-story");
+  if (story) { story.innerHTML = "<strong>The case:</strong> " + currentPv.story; }
+  var out = document.getElementById("pv-readout");
+  if (out) { out.innerHTML = "The court awaits your ruling."; }
+}
+
+function verdict(choice) {
+  if (!currentPv || pvAnswered) { return; }
+  pvAnswered = true;
+  setPvButtons(true);
+  var correct = choice === currentPv.key;
+  var btnChosen = document.getElementById("pv-" + choice);
+  var btnRight = document.getElementById("pv-" + currentPv.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  PV.attempted += 1;
+  if (correct) {
+    PV.correct += 1;
+    PV.streak += 1;
+    if (PV.streak > PV.best) { PV.best = PV.streak; }
+  } else {
+    PV.streak = 0;
+  }
+  savePv();
+  renderPvStats();
+
+  var out = document.getElementById("pv-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Ruling upheld</strong> — the outcome is " + PV_NAMES[currentPv.key] + ". " + currentPv.why +
+        " Streak: <strong>" + PV.streak + "</strong>. Press <strong>New case</strong> for the next one.";
+    } else {
+      out.innerHTML = "<strong>Overruled.</strong> The outcome is " + PV_NAMES[currentPv.key] + ". " + currentPv.why +
+        " Check the binding condition first, then the short side. Take the next case.";
+    }
+  }
+}
+
+function resetVerdictScore() {
+  PV.attempted = 0;
+  PV.correct = 0;
+  PV.streak = 0;
+  PV.best = 0;
+  savePv();
+  renderPvStats();
+  var out = document.getElementById("pv-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  loadPv();
+  renderPvStats();
+  initPc();
+  initTx();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

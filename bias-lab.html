@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bias Lab — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink: #0f172a; --ink-light: #334155; --ink-muted: #64748b; --ink-faint: #94a3b8;
+  --bg: #fafaf9; --bg-warm: #f5f0e8; --bg-card: #ffffff; --rule: #e2e8f0;
+  --accent: #0f3d9e; --accent-mid: #1e56c0; --accent-lt: #dbeafe;
+  --gold: #b87408; --gold-lt: #fef3c7; --green: #166534; --green-lt: #dcfce7;
+  --red: #991b1b; --red-lt: #fee2e2;
+  --serif: 'Lora', Georgia, serif; --sans: 'Inter', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+#sb-header { position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200; background: var(--ink); color: #fff; display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-primary:disabled { background: var(--ink-faint); cursor: default; }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sb-ghost.active { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.btn-sb-ghost:disabled { color: var(--ink-faint); cursor: default; border-color: var(--rule); background: transparent; }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+.sb-num-input { font-family: var(--mono); font-size: 1rem; padding: 0.5rem 0.75rem; border: 1.5px solid var(--rule); border-radius: var(--radius); width: 140px; color: var(--ink); background: var(--bg-card); }
+.sb-num-input:focus { outline: none; border-color: var(--accent); }
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 100px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+.sb-gamble-row { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 0.875rem; border: 1px solid var(--rule); border-radius: var(--radius); margin: 0.375rem 0; background: var(--bg-card); flex-wrap: wrap; }
+.sb-gamble-desc { flex: 1; min-width: 200px; font-size: 0.875rem; color: var(--ink-light); }
+.sb-gamble-row .verdict { font-size: 0.75rem; font-weight: 700; min-width: 76px; text-align: center; }
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Bias Lab</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 17: Behavioral Economics</div>
+<h1 class="sb-title">Bias Lab</h1>
+<p class="sb-subtitle">Every other arena tested a market. This one tests <em>you</em>. Four classic experiments from the behavioral-economics literature, run on a subject pool of one &mdash; then a detective round to spot the same biases loose in the world. Answer honestly; the lab only works on the truth.</p>
+<hr class="sb-divider">
+
+<p>Sixteen chapters assumed the chooser was a cool calculator. Chapter 17 put that assumption in the dock, and this lab is the cross-examination. Each station reproduces a famous experiment &mdash; anchoring, loss aversion, framing, present bias &mdash; on <strong>you</strong>. For each: commit to your answers <em>first</em>, then read the reveal. Your Bias Detective record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: ANCHORING ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>The anchor experiment</h2>
+<p>You will be dealt a random comparison question about the Mississippi River &mdash; then asked for your own estimate. Answer both before reading anything further.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Experiment 1 of 4</div>
+  <h4>How long is the Mississippi River?</h4>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-primary" id="an-deal-btn" onclick="anDeal()">Deal my question</button>
+  </div>
+  <div class="sb-case" id="an-question" style="display:none;"></div>
+  <div class="sb-shock-row" id="an-mc" style="display:none;">
+    <button class="btn-sb btn-sb-ghost" id="an-more" onclick="anCompare('more')">More</button>
+    <button class="btn-sb btn-sb-ghost" id="an-less" onclick="anCompare('less')">Less</button>
+  </div>
+  <div class="sb-shock-row" id="an-est-row" style="display:none;">
+    <span class="sb-shock-head">Now: your best estimate of the river's length, in miles</span>
+    <input class="sb-num-input" type="number" id="an-est" min="1" max="100000" step="1">
+    <button class="btn-sb btn-sb-primary" id="an-submit" onclick="anSubmit()">Lock it in</button>
+  </div>
+  <div class="sb-readout" id="an-readout">The dealer is shuffling two versions of this experiment.</div>
+</div>
+
+<!-- ═══ STATION 2: LOSS AVERSION ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>The coin-flip gauntlet</h2>
+<p>Four fair coin flips, considered one at a time. Each risks the same <strong>$100 loss</strong> on tails; only the prize on heads changes. Accept or reject each one honestly &mdash; imagine the money is real &mdash; then read your own number.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Experiment 2 of 4</div>
+  <h4>Which of these flips would you actually take?</h4>
+  <div id="lg-rows">
+    <div class="sb-gamble-row"><div class="sb-gamble-desc">Flip A &mdash; heads: win <strong>$105</strong> / tails: lose <strong>$100</strong></div><button class="btn-sb btn-sb-ghost" id="lg-a0-acc" onclick="lgPick(0,true)">Accept</button><button class="btn-sb btn-sb-ghost" id="lg-a0-rej" onclick="lgPick(0,false)">Reject</button><span class="verdict" id="lg-v0"></span></div>
+    <div class="sb-gamble-row"><div class="sb-gamble-desc">Flip B &mdash; heads: win <strong>$130</strong> / tails: lose <strong>$100</strong></div><button class="btn-sb btn-sb-ghost" id="lg-a1-acc" onclick="lgPick(1,true)">Accept</button><button class="btn-sb btn-sb-ghost" id="lg-a1-rej" onclick="lgPick(1,false)">Reject</button><span class="verdict" id="lg-v1"></span></div>
+    <div class="sb-gamble-row"><div class="sb-gamble-desc">Flip C &mdash; heads: win <strong>$160</strong> / tails: lose <strong>$100</strong></div><button class="btn-sb btn-sb-ghost" id="lg-a2-acc" onclick="lgPick(2,true)">Accept</button><button class="btn-sb btn-sb-ghost" id="lg-a2-rej" onclick="lgPick(2,false)">Reject</button><span class="verdict" id="lg-v2"></span></div>
+    <div class="sb-gamble-row"><div class="sb-gamble-desc">Flip D &mdash; heads: win <strong>$220</strong> / tails: lose <strong>$100</strong></div><button class="btn-sb btn-sb-ghost" id="lg-a3-acc" onclick="lgPick(3,true)">Accept</button><button class="btn-sb btn-sb-ghost" id="lg-a3-rej" onclick="lgPick(3,false)">Reject</button><span class="verdict" id="lg-v3"></span></div>
+  </div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="lg-lambda">&mdash;</div><div class="sb-mini-label">your implied loss-aversion ratio &lambda;</div></div>
+  </div>
+  <div class="sb-readout" id="lg-readout">Decide all four flips to unlock your reading.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-ghost" onclick="lgReset()">Clear my choices</button>
+  </div>
+</div>
+
+<!-- ═══ STATION 3: FRAMING ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>The framing clinic</h2>
+<p>An outbreak threatens <strong>600 people</strong> in a Verenian port town, and you must choose between two response programs. You will be dealt one version of the briefing. Choose first; the reveal comes after.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Experiment 3 of 4</div>
+  <h4>Choose a program</h4>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-primary" id="fr-deal-btn" onclick="frDeal()">Deal my briefing</button>
+  </div>
+  <div class="sb-case" id="fr-brief" style="display:none;"></div>
+  <div class="sb-shock-row" id="fr-choices" style="display:none;">
+    <button class="btn-sb btn-sb-ghost" id="fr-A" onclick="frPick('A')">Program A (the sure thing)</button>
+    <button class="btn-sb btn-sb-ghost" id="fr-B" onclick="frPick('B')">Program B (the gamble)</button>
+  </div>
+  <div class="sb-readout" id="fr-readout">Two briefings describe the identical crisis. You get one at random.</div>
+</div>
+
+<!-- ═══ STATION 4: PRESENT BIAS ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>The two-question time machine</h2>
+<p>Two payment choices &mdash; the textbook's own diagnostic pair. Answer both, in order, before reading the verdict. There are no wrong answers to either question alone; the experiment lives in the <em>pair</em>.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Experiment 4 of 4</div>
+  <h4>Q1: which would you take?</h4>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-ghost" id="pb-q1-now" onclick="pbPick(1,'now')">$100 today</button>
+    <button class="btn-sb btn-sb-ghost" id="pb-q1-wait" onclick="pbPick(1,'wait')">$110 tomorrow</button>
+  </div>
+  <h4 style="margin-top:1rem;">Q2: and this one?</h4>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-ghost" id="pb-q2-now" onclick="pbPick(2,'now')">$100 in 30 days</button>
+    <button class="btn-sb btn-sb-ghost" id="pb-q2-wait" onclick="pbPick(2,'wait')">$110 in 31 days</button>
+  </div>
+  <div class="sb-readout" id="pb-readout">Answer both questions to run the diagnostic.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-ghost" onclick="pbReset()">Clear my answers</button>
+  </div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; Knowing the bias is not immunity</div>
+  <p>The uncomfortable finding of this literature: experts exhibit these biases too, at reduced but nonzero strength &mdash; anchoring works on judges setting sentences and realtors pricing houses <em>after</em> they've been taught about anchoring. The lab's goal is not to cure you; it is to teach you to build <strong>guardrails</strong>: decide your maximum price before hearing the asking price, automate the saving before the paycheck arrives, reframe every "70% survive" as "30% die" and see if your choice holds. Rationality, in practice, is mostly good architecture.</p>
+</div>
+
+<!-- ═══ STATION 5: BIAS DETECTIVE ═══ -->
+<h2 class="sb-section"><span class="sb-step">5</span>Bias Detective</h2>
+<p>The graded round. Each case is a decision going quietly wrong in the wild. Name the bias at work: an irrelevant number steering a judgment, losses looming larger than gains, the same facts flipping choices when re-worded, or the present overwhelming the future.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Name the bias</div>
+  <h4>Four diagnoses, one verdict</h4>
+  <div class="sb-case" id="bd-story">Press <strong>New case</strong> to open the first file.</div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="bd-ANCH" onclick="bdVerdict('ANCH')">Anchoring &mdash; an irrelevant number steers the estimate</button>
+    <button class="sb-diag-btn" id="bd-LOSS" onclick="bdVerdict('LOSS')">Loss aversion &mdash; losses loom larger than equal gains</button>
+    <button class="sb-diag-btn" id="bd-FRAME" onclick="bdVerdict('FRAME')">Framing &mdash; the same facts, re-worded, flip the choice</button>
+    <button class="sb-diag-btn" id="bd-PRES" onclick="bdVerdict('PRES')">Present bias &mdash; today crushes tomorrow, plans reverse</button>
+  </div>
+  <div class="sb-readout" id="bd-readout">The case file awaits your diagnosis.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newBdCase()">New case</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetBdScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">6</span>Your record</h2>
+<p>Your Bias Detective record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, re-run the cases asking: what irrelevant thing changed the decision &mdash; a number, a sign (gain vs. loss), a wording, or a date?</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases diagnosed</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">diagnosed correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; the calculator was a portrait of nobody, and a benchmark for everybody</div>
+  <p>Students sometimes finish this chapter believing behavioral economics <em>demolished</em> the sixteen chapters before it. Look more carefully at what you just did. Every experiment in this lab measured your behavior <strong>against the rational benchmark</strong> &mdash; the anchor's pull is the distance from the unanchored estimate, your &lambda; is a departure from the &lambda; = 1 of expected value, the framing flip is a violation only because the rational choice is frame-proof. Without homo economicus there is no yardstick, and without a yardstick there are no findings. Behavioral economics did not burn down the building; it installed better instruments in it.</p>
+  <p>And keep the practical asymmetry: markets punish some biases and prey on others. Arbitrageurs profit by correcting mispricings, which disciplines prices &mdash; but casinos, subscription trials that bill after you forget, "was $499, now $299" tags, and payday lenders are all business models built on the stations you just walked through. The chapter's deepest lesson is therefore self-defense: know which number anchored you, ask what the loss frame is hiding, and never negotiate with your own present self without a commitment device in hand. You now own both toolkits &mdash; the map of how people <em>should</em> choose, and the map of how they <em>do</em>. The economist's craft is knowing which map the moment calls for.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>The course, complete</h3>
+  <p>This lab pairs with Chapter 17 &mdash; the final chapter of <em>Introduction to Microeconomics</em>. You have now walked every arena: markets built, broken, repaired, and finally turned inward. Well done.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Bias Lab &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Bias Lab — companion arena to Chapter 17. Four self-run
+   experiments + a diagnosis game.
+   Station 1 (anchoring): random high (5,000 mi) or low
+     (500 mi) anchor; estimate; reveal true 2,340 mi.
+   Station 2 (loss aversion): four 50/50 flips, lose $100 vs
+     win [105,130,160,220]; implied λ ≈ (first accepted W)/100.
+   Station 3 (framing): random gain/loss frame of the 600-
+     person outbreak problem; identical outcomes.
+   Station 4 (present bias): $100 today vs $110 tomorrow;
+     $100 in 30 days vs $110 in 31. now/wait pattern = reversal.
+   Station 5: bias-diagnosis game, saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+/* ══════════ STATION 1 — anchoring ══════════ */
+var AN_TRUE = 2340;
+var anAnchor = null;      /* "high" | "low" */
+var anAnswered = false;
+
+function anDeal() {
+  anAnchor = Math.random() < 0.5 ? "low" : "high";
+  anAnswered = false;
+  var q = document.getElementById("an-question");
+  if (q) {
+    q.style.display = "block";
+    q.innerHTML = "<strong>Your dealt question:</strong> Is the Mississippi River longer or shorter than <strong>" +
+      (anAnchor === "low" ? "500" : "5,000") + " miles</strong>?";
+  }
+  var mc = document.getElementById("an-mc");
+  if (mc) { mc.style.display = "flex"; }
+  var mb = document.getElementById("an-more");
+  var lb = document.getElementById("an-less");
+  if (mb) { mb.disabled = false; mb.classList.remove("active"); }
+  if (lb) { lb.disabled = false; lb.classList.remove("active"); }
+  var er = document.getElementById("an-est-row");
+  if (er) { er.style.display = "none"; }
+  var db = document.getElementById("an-deal-btn");
+  if (db) { db.disabled = true; }
+  var out = document.getElementById("an-readout");
+  if (out) { out.innerHTML = "Answer the comparison first — more or less?"; }
+}
+
+function anCompare(side) {
+  if (anAnchor === null || anAnswered) { return; }
+  var mb = document.getElementById("an-more");
+  var lb = document.getElementById("an-less");
+  if (mb) { mb.disabled = true; if (side === "more") { mb.classList.add("active"); } }
+  if (lb) { lb.disabled = true; if (side === "less") { lb.classList.add("active"); } }
+  var er = document.getElementById("an-est-row");
+  if (er) { er.style.display = "flex"; }
+  var out = document.getElementById("an-readout");
+  if (out) { out.innerHTML = "Good. Now type your own best estimate and lock it in."; }
+}
+
+function anSubmit() {
+  if (anAnchor === null || anAnswered) { return; }
+  var inp = document.getElementById("an-est");
+  var val = inp ? parseFloat(inp.value) : NaN;
+  if (isNaN(val) || val <= 0) {
+    var o = document.getElementById("an-readout");
+    if (o) { o.innerHTML = "Enter a positive number of miles first."; }
+    return;
+  }
+  anAnswered = true;
+  var sb = document.getElementById("an-submit");
+  if (sb) { sb.disabled = true; }
+  var db = document.getElementById("an-deal-btn");
+  if (db) { db.disabled = false; }
+  var out = document.getElementById("an-readout");
+  if (!out) { return; }
+  var anchorTxt = anAnchor === "low" ? "500" : "5,000";
+  var otherTxt = anAnchor === "low" ? "5,000" : "500";
+  var direction = anAnchor === "low" ? "lower" : "higher";
+  var vsTruth;
+  if (Math.abs(val - AN_TRUE) <= 200) { vsTruth = "Your estimate of " + Math.round(val) + " miles is impressively close."; }
+  else if (val < AN_TRUE) { vsTruth = "Your estimate of " + Math.round(val) + " miles came in under."; }
+  else { vsTruth = "Your estimate of " + Math.round(val) + " miles came in over."; }
+  out.innerHTML = "<strong>The reveal.</strong> The Mississippi runs about <strong>2,340 miles</strong>. " + vsTruth +
+    " But here is the experiment: the \u201C" + anchorTxt + " miles\u201D in your question was <em>dealt at random</em> — half the people who open this page are asked about " + otherTxt +
+    " miles instead. In Tversky and Kahneman's studies, groups dealt the low anchor guess systematically " + direction + " than groups dealt the high one, <em>even knowing the number was arbitrary</em>. The anchor is informationally worthless — and it moves the answer anyway. Deal again to try the other version on yourself.";
+}
+
+/* ══════════ STATION 2 — loss aversion ══════════ */
+var LG_WINS = [105, 130, 160, 220];
+var lgChoices = [null, null, null, null];
+
+function lgPick(i, accept) {
+  lgChoices[i] = accept;
+  var acc = document.getElementById("lg-a" + i + "-acc");
+  var rej = document.getElementById("lg-a" + i + "-rej");
+  if (acc) { if (accept) { acc.classList.add("active"); } else { acc.classList.remove("active"); } }
+  if (rej) { if (!accept) { rej.classList.add("active"); } else { rej.classList.remove("active"); } }
+  var v = document.getElementById("lg-v" + i);
+  if (v) { v.textContent = accept ? "taken" : "declined"; }
+  lgEvaluate();
+}
+
+function lgEvaluate() {
+  var i;
+  for (i = 0; i < 4; i++) { if (lgChoices[i] === null) { return; } }
+  var firstAccept = -1;
+  for (i = 0; i < 4; i++) { if (lgChoices[i]) { firstAccept = i; break; } }
+  var lamEl = document.getElementById("lg-lambda");
+  var out = document.getElementById("lg-readout");
+  var inconsistent = false;
+  if (firstAccept >= 0) {
+    for (i = firstAccept + 1; i < 4; i++) { if (!lgChoices[i]) { inconsistent = true; } }
+  }
+  if (firstAccept === -1) {
+    if (lamEl) { lamEl.innerHTML = "&gt; 2.2"; }
+    if (out) { out.innerHTML = "<strong>You declined all four</strong> — including a flip paying $220 against $100, more than two-to-one in your favor. Your loss-aversion ratio \u03BB exceeds <strong>2.2</strong>: a dollar of loss weighs more than twice a dollar of gain in your gut. You are in numerous company — Kahneman and Tversky estimated the human average near \u03BB \u2248 2. A risk-neutral calculator would have taken all four; almost nobody is that calculator."; }
+  } else {
+    var lam = LG_WINS[firstAccept] / 100;
+    if (lamEl) { lamEl.textContent = "\u2248 " + lam.toFixed(2); }
+    var flavor;
+    if (firstAccept === 0) { flavor = "You took even the $105 flip — essentially the risk-neutral calculator of Chapters 1–16, \u03BB near 1. Rare in the lab: most people refuse small favorable gambles because the possible loss simply <em>hurts</em> more."; }
+    else if (firstAccept === 1) { flavor = "You needed roughly $130 of win to face $100 of loss — mild loss aversion, below the population average of \u03BB \u2248 2."; }
+    else if (firstAccept === 2) { flavor = "You needed about $160 to risk $100 — solid loss aversion, approaching Kahneman and Tversky's famous population estimate of \u03BB \u2248 2."; }
+    else { flavor = "You held out until $220 against $100 — \u03BB \u2248 2.2, right at the textbook estimate that losses weigh about twice as heavily as gains."; }
+    if (out) { out.innerHTML = "<strong>Your threshold:</strong> the first flip you accepted pays <strong>$" + LG_WINS[firstAccept] + "</strong> against the $100 loss, implying \u03BB \u2248 <strong>" + lam.toFixed(2) + "</strong> — a lost dollar weighs about " + lam.toFixed(2) + " won dollars in your decisions. " + flavor + (inconsistent ? " (One note: you accepted a smaller prize while declining a larger one — worth a second look; a consistent chooser who takes $" + LG_WINS[firstAccept] + " should also take everything above it.)" : "") + " Every flip here has positive expected value; only the <em>feel</em> of the $100 loss separates the four."; }
+  }
+}
+
+function lgReset() {
+  var i;
+  for (i = 0; i < 4; i++) {
+    lgChoices[i] = null;
+    var acc = document.getElementById("lg-a" + i + "-acc");
+    var rej = document.getElementById("lg-a" + i + "-rej");
+    var v = document.getElementById("lg-v" + i);
+    if (acc) { acc.classList.remove("active"); }
+    if (rej) { rej.classList.remove("active"); }
+    if (v) { v.textContent = ""; }
+  }
+  var lamEl = document.getElementById("lg-lambda");
+  if (lamEl) { lamEl.innerHTML = "&mdash;"; }
+  var out = document.getElementById("lg-readout");
+  if (out) { out.innerHTML = "Decide all four flips to unlock your reading."; }
+}
+
+/* ══════════ STATION 3 — framing ══════════ */
+var frFrame = null;   /* "gain" | "loss" */
+var frDone = false;
+
+function frDeal() {
+  frFrame = Math.random() < 0.5 ? "gain" : "loss";
+  frDone = false;
+  var b = document.getElementById("fr-brief");
+  if (b) {
+    b.style.display = "block";
+    if (frFrame === "gain") {
+      b.innerHTML = "<strong>Your dealt briefing:</strong> If Program A is adopted, <strong>200 people will be saved</strong>. If Program B is adopted, there is a 1/3 chance all 600 are saved and a 2/3 chance no one is saved.";
+    } else {
+      b.innerHTML = "<strong>Your dealt briefing:</strong> If Program A is adopted, <strong>400 people will die</strong>. If Program B is adopted, there is a 1/3 chance nobody dies and a 2/3 chance all 600 die.";
+    }
+  }
+  var ch = document.getElementById("fr-choices");
+  if (ch) { ch.style.display = "flex"; }
+  var ba = document.getElementById("fr-A");
+  var bb = document.getElementById("fr-B");
+  if (ba) { ba.disabled = false; ba.classList.remove("active"); }
+  if (bb) { bb.disabled = false; bb.classList.remove("active"); }
+  var db = document.getElementById("fr-deal-btn");
+  if (db) { db.disabled = true; }
+  var out = document.getElementById("fr-readout");
+  if (out) { out.innerHTML = "Read your briefing and commit to a program."; }
+}
+
+function frPick(prog) {
+  if (frFrame === null || frDone) { return; }
+  frDone = true;
+  var ba = document.getElementById("fr-A");
+  var bb = document.getElementById("fr-B");
+  if (ba) { ba.disabled = true; if (prog === "A") { ba.classList.add("active"); } }
+  if (bb) { bb.disabled = true; if (prog === "B") { bb.classList.add("active"); } }
+  var db = document.getElementById("fr-deal-btn");
+  if (db) { db.disabled = false; }
+  var out = document.getElementById("fr-readout");
+  if (!out) { return; }
+  var youGot = frFrame === "gain" ? "the <em>gain</em> frame (lives saved)" : "the <em>loss</em> frame (deaths)";
+  var typical = frFrame === "gain"
+    ? "most people choose the sure Program A — with lives to be saved, we turn risk-averse and bank the 200"
+    : "most people choose the gamble, Program B — facing deaths, we turn risk-seeking and roll the dice to avoid the certain 400";
+  var youPicked = prog === "A" ? "the sure thing" : "the gamble";
+  var conform = (frFrame === "gain" && prog === "A") || (frFrame === "loss" && prog === "B");
+  out.innerHTML = "<strong>The reveal.</strong> You were dealt " + youGot + " and chose " + youPicked + " — " +
+    (conform ? "exactly the majority pattern for your frame" : "against the majority pattern for your frame, as some subjects do") +
+    ". Now the trick: <strong>the two briefings describe identical programs.</strong> \u201C200 of 600 saved\u201D <em>is</em> \u201C400 die\u201D; the gambles match outcome for outcome. Yet in Tversky and Kahneman's experiment, " + typical +
+    " — a full preference reversal produced by wording alone. A frame-proof chooser would pick the same program in both versions. Deal again for the other briefing and check whether yours holds.";
+}
+
+/* ══════════ STATION 4 — present bias ══════════ */
+var pbQ1 = null, pbQ2 = null;
+
+function pbPick(q, choice) {
+  if (q === 1) { pbQ1 = choice; } else { pbQ2 = choice; }
+  var ids = { 1: ["pb-q1-now", "pb-q1-wait"], 2: ["pb-q2-now", "pb-q2-wait"] };
+  var pair = ids[q], i;
+  for (i = 0; i < 2; i++) {
+    var btn = document.getElementById(pair[i]);
+    if (btn) {
+      var isNow = i === 0;
+      var chosen = (choice === "now" && isNow) || (choice === "wait" && !isNow);
+      if (chosen) { btn.classList.add("active"); } else { btn.classList.remove("active"); }
+    }
+  }
+  pbEvaluate();
+}
+
+function pbEvaluate() {
+  if (pbQ1 === null || pbQ2 === null) { return; }
+  var out = document.getElementById("pb-readout");
+  if (!out) { return; }
+  if (pbQ1 === "now" && pbQ2 === "wait") {
+    out.innerHTML = "<strong>The classic reversal — present bias, live.</strong> You took $100 <em>today</em> over $110 tomorrow, but $110 in 31 days over $100 in 30. Both questions offer the identical trade: <strong>wait one extra day, earn $10</strong>. When that day sits a month away you gladly take it; when the day is <em>now</em>, the waiting becomes intolerable and you pay $10 to skip it. An exponential discounter — the Chapter 1 calculator — answers both the same way. This one reversal is the engine behind procrastination, unused gym memberships, and every diet that starts Monday: your today-self keeps outvoting the plans your yesterday-self made.";
+  } else if (pbQ1 === "wait" && pbQ2 === "wait") {
+    out.innerHTML = "<strong>Time-consistent — patient edition.</strong> You waited the extra day for $10 in both questions. Whatever your discount rate is, it treats a day as a day whether it starts now or in a month — the exponential pattern of the rational benchmark. (The famous result is that many people <em>don't</em> answer this way: they take $100 today in Q1 while waiting in Q2 — a reversal worth trying on a friend.)";
+  } else if (pbQ1 === "now" && pbQ2 === "now") {
+    out.innerHTML = "<strong>Time-consistent — impatient edition.</strong> You took the earlier $100 both times. That is a steep discount rate — $10 forgone per day of waiting — but it is <em>consistent</em>: a day costs you the same whether it starts today or next month, so no reversal, no bias, just strong impatience the rational model can accommodate. The bias would appear only if the delay's <em>position</em> changed your answer.";
+  } else {
+    out.innerHTML = "<strong>A reverse reversal — the rare pattern.</strong> You waited when the day was immediate but grabbed the earlier money when it was distant. That is the opposite of present bias (some call it future bias), and it's uncommon in the data — worth re-reading the two questions to make sure the choices reflect your considered view, since the standard human pattern runs the other way.";
+  }
+}
+
+function pbReset() {
+  pbQ1 = null; pbQ2 = null;
+  var ids = ["pb-q1-now", "pb-q1-wait", "pb-q2-now", "pb-q2-wait"], i;
+  for (i = 0; i < ids.length; i++) {
+    var btn = document.getElementById(ids[i]);
+    if (btn) { btn.classList.remove("active"); }
+  }
+  var out = document.getElementById("pb-readout");
+  if (out) { out.innerHTML = "Answer both questions to run the diagnostic."; }
+}
+
+/* ══════════ STATION 5 — bias detective ══════════ */
+var BD_CASES = [
+  { story: "A boutique lists a handbag at $900, crossed out, \u201Cnow $450.\u201D Shoppers who would never have paid $450 cold feel they are halving a price — and buy.", key: "ANCH",
+    why: "The crossed-out $900 is informationally empty — no one pays it — yet it drags every value judgment upward. Estimates and willingness-to-pay assimilate toward the first number seen: anchoring." },
+  { story: "In salary negotiations, whoever names the first figure tends to land the final number closer to it — even when the opening figure is aggressive and both sides know it.", key: "ANCH",
+    why: "The opening number anchors the entire bargaining range; counteroffers adjust from it insufficiently. The remedy is naming your figure first — or re-anchoring explicitly." },
+  { story: "Asked to write down the last two digits of their ID number and then bid on a bottle of wine, people with high digits bid substantially more.", key: "ANCH",
+    why: "Ariely's classic: a transparently random number contaminates a later valuation — the purest demonstration that anchors need no relevance to work." },
+  { story: "An investor refuses to sell a stock that has fallen 40%, though she agrees she would never buy it today, because selling would \u201Cmake the loss real.\u201D", key: "LOSS",
+    why: "Holding to avoid realizing a loss — the disposition effect — is loss aversion in a brokerage account: the pain of a booked loss outweighs the identical economics of holding versus rebuying." },
+  { story: "A homeowner turns down a fair offer just below what he paid years ago, saying he \u201Crefuses to lose money on the house,\u201D and lets it sit unsold for another year.", key: "LOSS",
+    why: "The purchase price sets a reference point; selling a dollar below it registers as a loss and looms far larger than the carrying costs of waiting — loss aversion setting the reservation price." },
+  { story: "Employees offered a new schedule as \u201Cgive up your current Friday flexibility for a $50 bonus\u201D refuse; framed to new hires as the default with an opt-out, nearly all keep it.", key: "LOSS",
+    why: "Incumbents weigh the surrendered flexibility as a loss (heavy); new hires weigh it as a forgone gain (light) — the endowment effect, loss aversion's signature in kind rather than cash." },
+  { story: "A surgeon tells one patient \u201Cthis operation has a 90% survival rate\u201D and another, identically situated, \u201Cthere is a 10% chance of dying.\u201D The second patient declines the surgery.", key: "FRAME",
+    why: "One probability, two wordings, two decisions: choice tracks the description rather than the odds — framing, in the setting where McNeil and colleagues first measured it." },
+  { story: "Ground beef labeled \u201C80% lean\u201D outsells the identical package labeled \u201C20% fat,\u201D at the same price, in the same cooler.", key: "FRAME",
+    why: "The attribute is the same number stated from two directions; preference follows the positive wording — attribute framing at the meat counter." },
+  { story: "Voters reject a policy described as \u201Callowing 2% unemployment to rise\u201D but support the same policy described as \u201Cpreserving 98% employment.\u201D", key: "FRAME",
+    why: "Identical statistics, complementary descriptions, opposite verdicts — the frame, not the fact, is driving the judgment." },
+  { story: "Every January a professional signs up for the gym's annual plan; badge records show attendance collapsing by March, year after year — and every January he signs again.", key: "PRES",
+    why: "Each January-self sincerely plans a future of workouts; each February-self faces the immediate cost and defects. The recurring gap between plan and execution is present bias on a subscription." },
+  { story: "A shopper puts a purchase on a card at 24% interest to get it today, while simultaneously holding savings earning 4% that she \u201Cdoesn't want to touch until summer.\u201D", key: "PRES",
+    why: "Paying a steep premium for immediacy while a cheaper resource waits a season reveals a discount rate that spikes at \u201Cnow\u201D — hyperbolic discounting arranging her balance sheet." },
+  { story: "Workers offered a savings plan starting <em>today</em> enroll at low rates; offered the identical plan deducting from <em>next year's</em> raises, enrollment triples — and they rarely back out later.", key: "PRES",
+    why: "Save More Tomorrow works because sacrifice scheduled for the future meets no present-bias resistance — and once the future arrives, inertia holds. A policy built from this station's diagnosis." }
+];
+
+var BD = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentBd = null;
+var bdAnswered = true;
+
+function loadBd() {
+  try {
+    var raw = localStorage.getItem("biasLab.detective");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { BD.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { BD.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { BD.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { BD.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveBd() {
+  try {
+    localStorage.setItem("biasLab.detective", JSON.stringify(BD));
+  } catch (e) { /* ignore */ }
+}
+
+function renderBdStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(BD.attempted); }
+  if (cor) { cor.textContent = String(BD.correct); }
+  if (acc) { acc.innerHTML = BD.attempted > 0 ? Math.round((BD.correct / BD.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(BD.best); }
+}
+
+var BD_IDS = ["ANCH", "LOSS", "FRAME", "PRES"];
+var BD_NAMES = {
+  ANCH: "anchoring",
+  LOSS: "loss aversion (with its endowment and disposition effects)",
+  FRAME: "framing",
+  PRES: "present bias"
+};
+
+function setBdButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < BD_IDS.length; i++) {
+    btn = document.getElementById("bd-" + BD_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newBdCase() {
+  currentBd = BD_CASES[Math.floor(Math.random() * BD_CASES.length)];
+  bdAnswered = false;
+  setBdButtons(false);
+  var story = document.getElementById("bd-story");
+  if (story) { story.innerHTML = "<strong>The case:</strong> " + currentBd.story; }
+  var out = document.getElementById("bd-readout");
+  if (out) { out.innerHTML = "The case file awaits your diagnosis."; }
+}
+
+function bdVerdict(choice) {
+  if (!currentBd || bdAnswered) { return; }
+  bdAnswered = true;
+  setBdButtons(true);
+  var correct = choice === currentBd.key;
+  var btnChosen = document.getElementById("bd-" + choice);
+  var btnRight = document.getElementById("bd-" + currentBd.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  BD.attempted += 1;
+  if (correct) {
+    BD.correct += 1;
+    BD.streak += 1;
+    if (BD.streak > BD.best) { BD.best = BD.streak; }
+  } else {
+    BD.streak = 0;
+  }
+  saveBd();
+  renderBdStats();
+
+  var out = document.getElementById("bd-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Correct</strong> — this is " + BD_NAMES[currentBd.key] + ". " + currentBd.why +
+        " Streak: <strong>" + BD.streak + "</strong>. Press <strong>New case</strong> for another.";
+    } else {
+      out.innerHTML = "<strong>Not this one.</strong> This is " + BD_NAMES[currentBd.key] + ". " + currentBd.why +
+        " Ask: what irrelevant thing changed the decision — a number, a sign, a wording, or a date? Next case when ready.";
+    }
+  }
+}
+
+function resetBdScore() {
+  BD.attempted = 0;
+  BD.correct = 0;
+  BD.streak = 0;
+  BD.best = 0;
+  saveBd();
+  renderBdStats();
+  var out = document.getElementById("bd-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  loadBd();
+  renderBdStats();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

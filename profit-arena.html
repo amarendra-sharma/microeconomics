@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profit-Max Arena — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink:        #0f172a;
+  --ink-light:  #334155;
+  --ink-muted:  #64748b;
+  --ink-faint:  #94a3b8;
+  --bg:         #fafaf9;
+  --bg-warm:    #f5f0e8;
+  --bg-card:    #ffffff;
+  --rule:       #e2e8f0;
+  --accent:     #0f3d9e;
+  --accent-mid: #1e56c0;
+  --accent-lt:  #dbeafe;
+  --gold:       #b87408;
+  --gold-lt:    #fef3c7;
+  --green:      #166534;
+  --green-lt:   #dcfce7;
+  --red:        #991b1b;
+  --red-lt:     #fee2e2;
+  --serif:      'Lora', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+  --radius:     8px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+
+#sb-header {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200;
+  background: var(--ink); color: #fff;
+  display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 300px; }
+.sb-chart-title { font-size: 0.8125rem; font-weight: 600; color: var(--ink-muted); margin-bottom: 0.25rem; }
+
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-primary:disabled { background: var(--ink-faint); cursor: default; }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 100px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+.sb-mini.pos .sb-mini-num { color: var(--green); }
+.sb-mini.neg .sb-mini-num { color: var(--red); }
+
+/* loss comparison bars */
+.sb-lossbar-wrap { margin: 0.875rem 0; }
+.sb-lossbar-row { display: flex; align-items: center; gap: 0.625rem; margin: 0.375rem 0; }
+.sb-lossbar-label { flex: 0 0 210px; font-size: 0.78rem; font-weight: 600; color: var(--ink-light); text-align: right; }
+.sb-lossbar-track { flex: 1; height: 26px; background: var(--bg-warm); border-radius: 6px; overflow: hidden; }
+.sb-lossbar-fill { height: 100%; display: flex; align-items: center; padding-left: 8px; color: #fff; font-size: 0.72rem; font-weight: 700; transition: width 0.2s; white-space: nowrap; }
+
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-lossbar-label { flex-basis: 130px; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Profit-Max Arena</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 10: Perfect Competition</div>
+<h1 class="sb-title">Profit-Max Arena</h1>
+<p class="sb-subtitle">Run Mara's cart for real: feel your way up the profit hill, face the coldest decision in the book &mdash; operate at a loss or shut the cart &mdash; watch entry and exit squeeze every profit to zero, then take the Manager's Round, where you must read the diagram like a professional because the profit number stays hidden until you commit.</p>
+<hr class="sb-divider">
+
+<p>Chapter 10 hands the competitive firm exactly one lever &mdash; how much to produce &mdash; and one rule for pulling it: <strong>P = MC</strong>. This arena runs the chapter's exact cost structure, <code>TC = 48 + 3.6q &minus; 0.12q&sup2; + 0.006q&sup3;</code>, with its two famous thresholds: the <strong>$3 shutdown floor</strong> (minimum AVC, at 10 cups) and the <strong>$6 break-even price</strong> (minimum ATC, at 20 cups). Everything below is that one formula, weaponized. The Manager's Round record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: THE PROFIT HILL ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>The profit hill</h2>
+<p>Set the market price, then take the output dial in hand. The upper chart is the firm diagram you know from the chapter; the lower one plots <strong>profit itself at every output</strong> &mdash; a hill with a single summit. Climb it by hand at a few prices and notice where the summit always sits: exactly where the price line crosses the rising marginal-cost curve. That is not a coincidence to memorize; it is the hill's geometry. To the left of the crossing each extra cup earns more than it costs (the hill climbs); to the right it costs more than it earns (the hill falls).</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Two dials, one summit</div>
+  <h4>Find the top of the hill &mdash; then check where MC crosses the price</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="ph-p">Market price &mdash; <span id="ph-p-val"></span></label>
+      <input type="range" id="ph-p" min="3" max="9" step="0.5" value="8">
+    </div>
+    <div>
+      <label for="ph-q">Your output (cups per day) &mdash; <span id="ph-q-val"></span></label>
+      <input type="range" id="ph-q" min="0" max="30" step="1" value="12">
+    </div>
+  </div>
+  <div class="sb-chart-title">The firm diagram: costs, the price line, and your chosen output</div>
+  <div class="sb-chart-box"><canvas id="ph-firm" height="270"></canvas></div>
+  <div class="sb-chart-title">The profit hill: profit at every output, with you on it</div>
+  <div class="sb-chart-box"><canvas id="ph-hill" height="250"></canvas></div>
+  <div class="sb-readout" id="ph-readout"></div>
+</div>
+
+<!-- ═══ STATION 2: SHUTDOWN DECIDER ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>The shutdown decider</h2>
+<p>Now the chapter's hardest-nosed lesson. When the price falls below $6, Mara loses money <em>no matter what she does</em> &mdash; the question is only <em>how much</em>. Shutting the cart still costs the $48 rent. Operating loses whatever the best output loses. The slider pits the two losses against each other as bars: the correct choice is always the shorter bar, and the crossover sits precisely at the $3 minimum of average variable cost.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Pick the smaller loss</div>
+  <h4>Operate or shut? Compare the two bars.</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="sd-p">Market price &mdash; <span id="sd-p-val"></span></label>
+      <input type="range" id="sd-p" min="2" max="7" step="0.25" value="4">
+    </div>
+  </div>
+  <div class="sb-lossbar-wrap">
+    <div class="sb-lossbar-row">
+      <div class="sb-lossbar-label">Result if she operates (best q)</div>
+      <div class="sb-lossbar-track"><div class="sb-lossbar-fill" id="sd-bar-op" style="background:#991b1b;width:0%;"></div></div>
+    </div>
+    <div class="sb-lossbar-row">
+      <div class="sb-lossbar-label">Result if she shuts down</div>
+      <div class="sb-lossbar-track"><div class="sb-lossbar-fill" id="sd-bar-sh" style="background:#64748b;width:0%;"></div></div>
+    </div>
+  </div>
+  <div class="sb-readout" id="sd-readout"></div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; Losing money is not the same as leaving</div>
+  <p>Between $3 and $6, Mara operates <em>while losing money</em>, because revenue covers all the variable costs plus part of the rent she owes anyway. Below $3, every cup fails to cover even its own ingredients, and operating deepens the hole. And note what never appears in either bar's calculation: how much she paid for the cart last year. Sunk costs sat this decision out entirely &mdash; only the $48 she cannot escape and the variable costs she can.</p>
+</div>
+
+<!-- ═══ STATION 3: THE LONG-RUN SQUEEZE ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>The long-run squeeze</h2>
+<p>Zoom out from one cart to the whole market. In the long run nobody needs permission to open a coffee cart, and nobody is chained to one. Start the market in a boom or a slump and press <strong>Advance one season</strong> repeatedly: profit lures entrants whose added supply pushes the price down; losses evict firms whose exit pushes it back up. There is exactly one price at which the churning stops.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Entry and exit, one season at a time</div>
+  <h4>Profit is an invitation; loss is an eviction notice</h4>
+  <div class="sb-shock-row">
+    <span class="sb-shock-head">Start the market in&hellip;</span>
+    <button class="btn-sb btn-sb-ghost" onclick="lrStart(9)">A boom (price $9)</button>
+    <button class="btn-sb btn-sb-ghost" onclick="lrStart(4)">A slump (price $4)</button>
+  </div>
+  <div class="sb-chart-box"><canvas id="lr-canvas" height="270"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="lr-p">$9.00</div><div class="sb-mini-label">market price</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="lr-firms">20</div><div class="sb-mini-label">carts in the market</div></div>
+    <div class="sb-mini" id="lr-profit-card"><div class="sb-mini-num" id="lr-profit">&mdash;</div><div class="sb-mini-label">profit per cart</div></div>
+  </div>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-primary" id="lr-step-btn" onclick="lrStep()">Advance one season</button>
+  </div>
+  <div class="sb-readout" id="lr-readout"></div>
+</div>
+
+<p>The resting point is <strong>$6 &mdash; minimum average total cost</strong> &mdash; and it is worth pausing on how strange and wonderful that is. No regulator chose it. Free entry and exit, each cart pursuing only its own profit, ground the price down to the cheapest each cart can produce for, handed the entire efficiency gain to consumers, and left every surviving firm earning exactly zero economic profit: covering all its costs, including the owner's next-best alternative, and not a cent more.</p>
+
+<!-- ═══ STATION 4: THE MANAGER'S ROUND ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>The Manager's Round</h2>
+<p>The graded game &mdash; and this one hides the answer. Each round deals a market price. You see the full firm diagram, but <strong>no live profit number</strong>: like a real manager, you must read the curves &mdash; find where MC meets the price, remember the $3 floor &mdash; set your output, and commit. Only then does the ledger open. Within <strong>$2</strong> of the best possible profit counts as an optimal call. Beware: some rounds deal a price where the only right output is <em>zero</em>.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Read the diagram, then commit</div>
+  <h4>No profit meter. Just you and the curves.</h4>
+  <div class="sb-case" id="mg-story">Press <strong>New round</strong> to receive your first market price.</div>
+  <div class="sb-controls">
+    <div>
+      <label for="mg-q">Your output (cups per day) &mdash; <span id="mg-q-val"></span></label>
+      <input type="range" id="mg-q" min="0" max="30" step="1" value="15">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="mg-canvas" height="280"></canvas></div>
+  <div class="sb-readout" id="mg-readout">The market is waiting for your first round.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" id="mg-commit-btn" onclick="mgCommit()" disabled>Commit this output</button>
+    <button class="btn-sb btn-sb-ghost" onclick="mgNewRound()">New round</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetMgScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
+<p>Your Manager's Round record is saved in this browser. Report the numbers below if this arena was assigned; below 80% optimal calls, drill Station 1's hill until "price meets rising MC" is the first thing your eye finds &mdash; and never forget the floor.</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">rounds managed</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">optimal calls (within $2)</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; zero profit is the strangest happy ending in economics</div>
+  <p>Students reach the end of Station 3 and feel they have witnessed a tragedy: every firm's profit ground to zero. Read it again &mdash; it is the system working perfectly. "Zero economic profit" means every cart covers its ingredients, its rent, <em>and the full value of what its owner could earn elsewhere</em>. Nobody is being exploited at $6; everyone is being paid exactly what their resources are worth, and consumers get coffee at the cheapest price the technology allows. The profits of the boom were never the destination &mdash; they were the <em>signal</em>, the flare that summoned new capacity to where society wanted it. When the flare goes dark, the message has been delivered.</p>
+  <p>And carry the Manager's Round discipline into any business you ever touch: the profit-maximizing question is never "how do we cover our costs?" or "how do we use the machine fully?" It is only ever "does the next unit bring in more than it costs?" &mdash; asked at the margin, with sunk costs banished from the room. Firms that price and produce off averages leave money on the table at every price you dealt yourself today; you now know exactly where it was left, and how to pick it up.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Keep going</h3>
+  <p>This arena pairs with Chapter 10 of <em>Introduction to Microeconomics</em>. Next, the assumptions crack: Chapter 11 hands one firm the whole market, and the price stops being given.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Profit-Max Arena &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Profit-Max Arena — companion arena to Chapter 10.
+   The chapter's cost structure:
+     TC(q)  = 48 + 3.6q − 0.12q² + 0.006q³
+     MC(q)  = 3.6 − 0.24q + 0.018q²
+     AVC(q) = 3.6 − 0.12q + 0.006q²   (min $3 at q = 10 → shutdown floor)
+     ATC(q) = 48/q + AVC(q)           (min $6 at q = 20 → break-even)
+   Optimal output: P = MC on the rising branch,
+     q*(P) = (0.24 + √(0.072P − 0.2016)) / 0.036 for P ≥ 3, else 0.
+   Profit: Π(q) = P·q − TC(q);  Π(0) = −48 (the fixed cost).
+   Long-run: entry/exit steps the price $0.50 per season toward $6.
+   Manager's Round record saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+function mc(q) { return 3.6 - 0.24 * q + 0.018 * q * q; }
+function avc(q) { return 3.6 - 0.12 * q + 0.006 * q * q; }
+function atc(q) { return 48 / q + avc(q); }
+function tc(q) { return 48 + 3.6 * q - 0.12 * q * q + 0.006 * q * q * q; }
+function profitAt(P, q) { return (q <= 0) ? -48 : (P * q - tc(q)); }
+function qstar(P) {
+  if (P < 3) { return 0; }
+  var d = 0.072 * P - 0.2016;
+  return (0.24 + Math.sqrt(d)) / 0.036;
+}
+function maxProfit(P) { return profitAt(P, qstar(P)); }
+
+function pts(fn, a, b, step) {
+  var r = [], q;
+  for (q = a; q <= b + 0.0001; q += step) { r.push({ x: q, y: Math.round(fn(q) * 100) / 100 }); }
+  return r;
+}
+function fmt2(x) { return "$" + x.toFixed(2); }
+function seg(x1, y1, x2, y2) { return [ { x: x1, y: y1 }, { x: x2, y: y2 } ]; }
+
+function firmDatasets() {
+  return [
+    { label: "MC", data: pts(mc, 5, 30, 1), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 0, borderWidth: 2, tension: 0.3 },
+    { label: "ATC", data: pts(atc, 5, 30, 1), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2, tension: 0.3 },
+    { label: "AVC", data: pts(avc, 5, 30, 1), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+    { label: "Price", data: [], showLine: true, borderColor: "#166534", backgroundColor: "#166534", borderDash: [7, 5], pointRadius: 0, borderWidth: 2, tension: 0 },
+    { label: "Your output", data: [], borderColor: "#64748b", backgroundColor: "#64748b", pointRadius: 7 }
+  ];
+}
+function firmOptions() {
+  return {
+    responsive: true, maintainAspectRatio: false, clip: false,
+    plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+    scales: {
+      x: { title: { display: true, text: "Output (cups/day)", font: { family: "Inter" } }, min: 0, max: 32, grid: { color: "#e2e8f0" } },
+      y: { title: { display: true, text: "$ per cup", font: { family: "Inter" } }, min: 0, max: 12, grid: { color: "#e2e8f0" } }
+    }
+  };
+}
+
+/* ══════════ STATION 1 — profit hill ══════════ */
+var phFirm = null, phHill = null;
+var phP = 8, phQ = 12;
+
+function hillPts(P) {
+  var r = [], q;
+  for (q = 0; q <= 30.0001; q += 1) { r.push({ x: q, y: Math.round(profitAt(P, q) * 100) / 100 }); }
+  return r;
+}
+
+function initPh() {
+  var c1 = document.getElementById("ph-firm");
+  var c2 = document.getElementById("ph-hill");
+  if (!c1 || !c2 || typeof Chart === "undefined") { return; }
+  phFirm = new Chart(c1.getContext("2d"), { type: "scatter", data: { datasets: firmDatasets() }, options: firmOptions() });
+  phHill = new Chart(c2.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Profit at each output", data: hillPts(phP), showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 2.5, tension: 0.3 },
+      { label: "_zero", data: seg(0, 0, 30, 0), showLine: true, borderColor: "#94a3b8", borderDash: [4, 4], pointRadius: 0, borderWidth: 1, tension: 0 },
+      { label: "You are here", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 7 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8,
+        filter: function (item) { return item.text.indexOf("_") !== 0; } } } },
+      scales: {
+        x: { title: { display: true, text: "Output (cups/day)", font: { family: "Inter" } }, min: 0, max: 32, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Profit ($/day)", font: { family: "Inter" } }, min: -60, max: 80, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sp = document.getElementById("ph-p");
+  var sq = document.getElementById("ph-q");
+  if (sp) { sp.addEventListener("input", function () { phP = parseFloat(sp.value); updatePh(); }); }
+  if (sq) { sq.addEventListener("input", function () { phQ = parseInt(sq.value, 10); updatePh(); }); }
+  updatePh();
+}
+
+function updatePh() {
+  var prof = profitAt(phP, phQ);
+  var qs = qstar(phP);
+  var best = maxProfit(phP);
+  if (phFirm) {
+    phFirm.data.datasets[3].data = seg(0, phP, 32, phP);
+    phFirm.data.datasets[4].data = phQ > 0 ? [ { x: phQ, y: phP } ] : [];
+    phFirm.update("none");
+  }
+  if (phHill) {
+    phHill.data.datasets[0].data = hillPts(phP);
+    phHill.data.datasets[2].data = [ { x: phQ, y: Math.round(prof * 100) / 100 } ];
+    phHill.update("none");
+  }
+  var pv = document.getElementById("ph-p-val");
+  var qv = document.getElementById("ph-q-val");
+  if (pv) { pv.textContent = fmt2(phP) + " per cup"; }
+  if (qv) { qv.textContent = phQ + " cups"; }
+  var out = document.getElementById("ph-readout");
+  if (!out) { return; }
+  var head = "At " + fmt2(phP) + " and <strong>" + phQ + " cups</strong>, profit is <strong>" + fmt2(prof) + "</strong> per day. ";
+  var note;
+  if (phQ === 0) {
+    note = "Producing nothing still costs the $48 rent. The summit at this price sits at about " + (Math.round(qs * 10) / 10) + " cups.";
+  } else {
+    var m = mc(phQ);
+    if (Math.abs(phQ - qs) <= 0.6) {
+      note = "<strong>You are at the summit.</strong> MC here (" + fmt2(m) + ") equals the price — the next cup would bring in exactly what it costs, so there is nothing left to climb. Best possible: " + fmt2(best) + ".";
+    } else if (phQ < qs) {
+      note = "MC here is only " + fmt2(m) + " while each cup sells for " + fmt2(phP) + " — the next cup <strong>earns more than it costs</strong>. The hill still climbs to your right (summit &asymp; " + (Math.round(qs * 10) / 10) + " cups).";
+    } else {
+      note = "MC here is " + fmt2(m) + ", above the " + fmt2(phP) + " price — the last cups <strong>cost more than they earn</strong>. The hill falls to your right; back off toward &asymp; " + (Math.round(qs * 10) / 10) + " cups.";
+    }
+  }
+  out.innerHTML = head + note;
+}
+
+/* ══════════ STATION 2 — shutdown decider ══════════ */
+var sdP = 4;
+
+function initSd() {
+  var sl = document.getElementById("sd-p");
+  if (sl) { sl.addEventListener("input", function () { sdP = parseFloat(sl.value); updateSd(); }); }
+  updateSd();
+}
+
+function updateSd() {
+  var opProfit = maxProfit(sdP);     /* best the firm can do operating (or 0-output if P<3) */
+  var qs = qstar(sdP);
+  var operate = qs > 0 ? profitAt(sdP, qs) : -48;
+  /* When P < 3 "operating" means the best positive output — show its (worse) loss honestly.
+     Best positive-output profit for P<3: the local max doesn't exist (MC>P everywhere useful),
+     so profit falls with every cup; show q=10 (min-AVC point) as the least-bad positive output. */
+  var opShown, opQ;
+  if (sdP >= 3) { opShown = operate; opQ = qs; }
+  else { opQ = 10; opShown = profitAt(sdP, 10); }
+  var shut = -48;
+
+  var scale = 90; /* $ range for the bars */
+  var barOp = document.getElementById("sd-bar-op");
+  var barSh = document.getElementById("sd-bar-sh");
+  if (barOp) {
+    var wOp = Math.min(100, Math.round(Math.abs(opShown) / scale * 100));
+    barOp.style.width = (opShown >= 0 ? Math.max(10, wOp) : Math.max(12, wOp)) + "%";
+    barOp.style.background = opShown >= 0 ? "#166534" : "#991b1b";
+    barOp.textContent = (opShown >= 0 ? "Profit " : "Loss ") + fmt2(Math.abs(opShown));
+  }
+  if (barSh) {
+    barSh.style.width = Math.round(48 / scale * 100) + "%";
+    barSh.textContent = "Loss $48.00";
+  }
+
+  var pv = document.getElementById("sd-p-val");
+  if (pv) { pv.textContent = fmt2(sdP) + " per cup"; }
+  var out = document.getElementById("sd-readout");
+  if (!out) { return; }
+  if (sdP > 6.001) {
+    out.innerHTML = "At " + fmt2(sdP) + " the best output (&asymp; " + (Math.round(opQ * 10) / 10) + " cups) earns a <strong>profit of " + fmt2(opShown) + "</strong> — no dilemma here. Slide the price below $6 to enter the hard region.";
+  } else if (Math.abs(sdP - 6) < 0.05) {
+    out.innerHTML = "At exactly <strong>$6</strong> — minimum ATC — the firm <strong>breaks even</strong>: zero economic profit at 20 cups. The boundary between comfort and the squeeze.";
+  } else if (sdP >= 3) {
+    out.innerHTML = "At " + fmt2(sdP) + ", operating at the best output (&asymp; " + (Math.round(opQ * 10) / 10) + " cups) loses <strong>" + fmt2(Math.abs(opShown)) + "</strong>, while shutting down loses the full <strong>$48</strong> rent. The revenue covers all variable costs plus <strong>" + fmt2(48 - Math.abs(opShown)) + "</strong> of the rent — so she <strong>operates at a loss</strong>." + (Math.abs(sdP - 3) < 0.05 ? " And note: at exactly $3 the two losses tie at $48 — the shutdown threshold is precisely minimum AVC." : "");
+  } else {
+    out.innerHTML = "At " + fmt2(sdP) + " — below the $3 minimum of AVC — even the least-bad positive output (10 cups, shown) loses <strong>" + fmt2(Math.abs(opShown)) + "</strong>, more than the $48 of shutting down, and every other output does worse. Each cup fails to cover its own ingredients: <strong>shut down</strong>, lose only the rent.";
+  }
+}
+
+/* ══════════ STATION 3 — long-run squeeze ══════════ */
+var lrChart = null;
+var lrP = 9, lrFirms = 20, lrSeason = 0;
+
+function initLr() {
+  var canvas = document.getElementById("lr-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  lrChart = new Chart(canvas.getContext("2d"), { type: "scatter", data: { datasets: firmDatasets() }, options: firmOptions() });
+  lrStart(9);
+}
+
+function lrStart(P) {
+  lrP = P;
+  lrFirms = 20;
+  lrSeason = 0;
+  updateLr("Season 0: the market opens at " + fmt2(P) + " with 20 carts. Press <strong>Advance one season</strong>.");
+}
+
+function lrStep() {
+  if (Math.abs(lrP - 6) < 0.01) {
+    updateLr("The market is at rest: <strong>$6.00</strong>, zero economic profit. Nobody enters, nobody leaves. Restart in a boom or a slump to run it again.");
+    return false;
+  }
+  lrSeason += 1;
+  var story;
+  if (lrP > 6) {
+    lrP = Math.max(6, Math.round((lrP - 0.5) * 100) / 100);
+    lrFirms += 1;
+    story = "Season " + lrSeason + ": profits attract a new cart (now " + lrFirms + "). The added supply pushes the price down to " + fmt2(lrP) + ".";
+  } else {
+    lrP = Math.min(6, Math.round((lrP + 0.5) * 100) / 100);
+    lrFirms = lrFirms > 1 ? lrFirms - 1 : 1;
+    story = "Season " + lrSeason + ": losses drive a cart out (now " + lrFirms + "). The reduced supply lifts the price to " + fmt2(lrP) + ".";
+  }
+  if (Math.abs(lrP - 6) < 0.01) {
+    story += " <strong>The squeeze is complete:</strong> at $6 every cart breaks even, and the churning stops.";
+  }
+  updateLr(story);
+  return Math.abs(lrP - 6) >= 0.01;
+}
+
+function updateLr(story) {
+  var qs = qstar(lrP);
+  var prof = qs > 0 ? profitAt(lrP, qs) : -48;
+  if (lrChart) {
+    lrChart.data.datasets[3].data = seg(0, lrP, 32, lrP);
+    lrChart.data.datasets[4].data = qs > 0 ? [ { x: qs, y: lrP } ] : [];
+    lrChart.update("none");
+  }
+  var pEl = document.getElementById("lr-p");
+  var fEl = document.getElementById("lr-firms");
+  var prEl = document.getElementById("lr-profit");
+  var prCard = document.getElementById("lr-profit-card");
+  if (pEl) { pEl.textContent = fmt2(lrP); }
+  if (fEl) { fEl.textContent = String(lrFirms); }
+  if (prEl) { prEl.textContent = (prof >= 0 ? "+" : "\u2212") + "$" + Math.abs(prof).toFixed(2); }
+  if (prCard) { prCard.className = "sb-mini " + (prof > 0.01 ? "pos" : (prof < -0.01 ? "neg" : "")); }
+  var out = document.getElementById("lr-readout");
+  if (out) { out.innerHTML = story; }
+}
+
+/* ══════════ STATION 4 — the manager's round ══════════ */
+var MG_PRICES = [2.5, 2.8, 3.5, 4, 4.5, 5, 6, 7, 8, 9];
+var mgChart = null;
+var mgP = null, mgQ = 15, mgCommitted = true;
+var MG = { attempted: 0, correct: 0, streak: 0, best: 0 };
+
+function loadMg() {
+  try {
+    var raw = localStorage.getItem("profitArena.manager");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { MG.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { MG.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { MG.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { MG.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveMg() {
+  try {
+    localStorage.setItem("profitArena.manager", JSON.stringify(MG));
+  } catch (e) { /* ignore */ }
+}
+
+function renderMgStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(MG.attempted); }
+  if (cor) { cor.textContent = String(MG.correct); }
+  if (acc) { acc.innerHTML = MG.attempted > 0 ? Math.round((MG.correct / MG.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(MG.best); }
+}
+
+function initMg() {
+  var canvas = document.getElementById("mg-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  mgChart = new Chart(canvas.getContext("2d"), { type: "scatter", data: { datasets: firmDatasets() }, options: firmOptions() });
+  var sq = document.getElementById("mg-q");
+  if (sq) { sq.addEventListener("input", function () { mgQ = parseInt(sq.value, 10); updateMgChart(); }); }
+  updateMgChart();
+}
+
+function updateMgChart() {
+  if (!mgChart) { return; }
+  if (mgP !== null) {
+    mgChart.data.datasets[3].data = seg(0, mgP, 32, mgP);
+    mgChart.data.datasets[4].data = mgQ > 0 ? [ { x: mgQ, y: mgP } ] : [];
+  } else {
+    mgChart.data.datasets[3].data = [];
+    mgChart.data.datasets[4].data = [];
+  }
+  mgChart.update("none");
+  var qv = document.getElementById("mg-q-val");
+  if (qv) { qv.textContent = mgQ + " cups" + (mgQ === 0 ? " (shut down)" : ""); }
+}
+
+function mgNewRound() {
+  mgP = MG_PRICES[Math.floor(Math.random() * MG_PRICES.length)];
+  mgCommitted = false;
+  var btn = document.getElementById("mg-commit-btn");
+  if (btn) { btn.disabled = false; }
+  var story = document.getElementById("mg-story");
+  if (story) {
+    story.innerHTML = "<strong>This morning's market price: " + fmt2(mgP) +
+      " per cup.</strong> Read the diagram, set your output — zero is a legal answer — and commit.";
+  }
+  var out = document.getElementById("mg-readout");
+  if (out) { out.innerHTML = "The ledger stays closed until you commit."; }
+  updateMgChart();
+}
+
+function mgCommit() {
+  if (mgP === null || mgCommitted) { return; }
+  mgCommitted = true;
+  var btn = document.getElementById("mg-commit-btn");
+  if (btn) { btn.disabled = true; }
+
+  var yours = profitAt(mgP, mgQ);
+  var qs = qstar(mgP);
+  var best = maxProfit(mgP);
+  var gap = best - yours;
+  var optimal = gap <= 2.0001;
+
+  MG.attempted += 1;
+  if (optimal) {
+    MG.correct += 1;
+    MG.streak += 1;
+    if (MG.streak > MG.best) { MG.best = MG.streak; }
+  } else {
+    MG.streak = 0;
+  }
+  saveMg();
+  renderMgStats();
+
+  var out = document.getElementById("mg-readout");
+  if (!out) { return; }
+  var bestDesc = qs > 0
+    ? "produce &asymp; <strong>" + (Math.round(qs * 10) / 10) + " cups</strong> (where MC meets the " + fmt2(mgP) + " price), earning " + fmt2(best)
+    : "<strong>shut down</strong> — the price sits below the $3 AVC floor, so zero output, losing only the $48 rent";
+  var head = "The ledger opens: your " + mgQ + " cups made <strong>" + fmt2(yours) + "</strong>. The best play was to " + bestDesc + ". ";
+  if (optimal) {
+    out.innerHTML = head + "<strong>Optimal call</strong> — you left only " + fmt2(Math.max(0, gap)) +
+      " on the table. Streak: <strong>" + MG.streak + "</strong>. Deal the next round.";
+  } else {
+    out.innerHTML = head + "<strong>" + fmt2(gap) + " left on the table.</strong> " +
+      (qs === 0 && mgQ > 0
+        ? "The trap round: below the $3 floor, every cup deepens the loss past the $48 of closing."
+        : (mgQ < qs - 0.6
+          ? "You stopped while the next cup still earned more than its marginal cost — the hill kept climbing to your right."
+          : "You pushed past the crossing — those last cups cost more than the price they fetched.")) +
+      " Take another round.";
+  }
+}
+
+function resetMgScore() {
+  MG.attempted = 0;
+  MG.correct = 0;
+  MG.streak = 0;
+  MG.best = 0;
+  saveMg();
+  renderMgStats();
+  var out = document.getElementById("mg-readout");
+  if (out) { out.innerHTML = "Record cleared. Deal a new round when ready."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  loadMg();
+  renderMgStats();
+  initPh();
+  initSd();
+  initLr();
+  initMg();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>

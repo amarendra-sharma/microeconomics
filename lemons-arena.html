@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lemons Market Arena — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --ink: #0f172a; --ink-light: #334155; --ink-muted: #64748b; --ink-faint: #94a3b8;
+  --bg: #fafaf9; --bg-warm: #f5f0e8; --bg-card: #ffffff; --rule: #e2e8f0;
+  --accent: #0f3d9e; --accent-mid: #1e56c0; --accent-lt: #dbeafe;
+  --gold: #b87408; --gold-lt: #fef3c7; --green: #166534; --green-lt: #dcfce7;
+  --red: #991b1b; --red-lt: #fee2e2;
+  --serif: 'Lora', Georgia, serif; --sans: 'Inter', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+#sb-header { position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200; background: var(--ink); color: #fff; display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 290px; }
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-primary:disabled { background: var(--ink-faint); cursor: default; }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sb-ghost.active { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 100px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+.sb-mini.bad .sb-mini-num { color: var(--red); }
+.sb-mini.good .sb-mini-num { color: var(--green); }
+.sb-log { background: var(--bg-warm); border-radius: var(--radius); padding: 0.75rem 1rem; margin: 0.75rem 0; font-family: var(--mono); font-size: 0.78rem; color: var(--ink-light); max-height: 200px; overflow-y: auto; }
+.sb-log div { padding: 1px 0; }
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Lemons Market Arena</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 16: Information Economics</div>
+<h1 class="sb-title">Lemons Market Arena</h1>
+<p class="sb-subtitle">Watch a market where nobody lies destroy itself anyway: slide the share of hidden lemons past the tipping point and see the good cars flee; run an insurance pool through its death spiral round by round; then install the fixes real markets invented &mdash; and learn to spot all four information diseases in the wild.</p>
+<hr class="sb-divider">
+
+<p>Chapter 16's markets fail for a new reason: <strong>one side knows something the other cannot see</strong>. This arena runs the chapter's used-car market. Sellers know their car; buyers know only the odds. A <em>peach</em> is worth <strong>$8</strong> to a buyer and <strong>$7</strong> to its owner; a <em>lemon</em> is worth <strong>$3</strong> to a buyer and <strong>$2</strong> to its owner &mdash; so every car, honestly traded at the right price, creates value. Whether those trades survive depends on one number: &lambda;, the share of lemons hiding in the pool. The Info Detective record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: THE UNRAVELING SLIDER ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>The unraveling slider</h2>
+<p>Buyers can't tell peach from lemon, so they will pay only the <em>average</em>: <code>price = 8(1&minus;&lambda;) + 3&lambda; = 8 &minus; 5&lambda;</code>. But peach owners won't part with a $7 car for less than $7 &mdash; and there is the trap. Slide &lambda; and watch for the exact moment the market snaps.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Akerlof's machine</div>
+  <h4>How many lemons can a market survive?</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="lm-l">Share of lemons in the pool (&lambda;) &mdash; <span id="lm-l-val"></span></label>
+      <input type="range" id="lm-l" min="0" max="60" step="5" value="10">
+    </div>
+  </div>
+  <div class="sb-chart-box"><canvas id="lm-canvas" height="260"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="lm-price">&mdash;</div><div class="sb-mini-label">what buyers will pay (pooled)</div></div>
+    <div class="sb-mini" id="lm-mkt-card"><div class="sb-mini-num" id="lm-mkt">&mdash;</div><div class="sb-mini-label">who trades</div></div>
+  </div>
+  <div class="sb-readout" id="lm-readout"></div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; Nobody lied</div>
+  <p>Read the wreckage carefully: no seller misrepresented anything, no buyer was cheated, every actor priced rationally &mdash; and the peaches vanished anyway, taking their $1-per-car gains from trade with them. Adverse selection is not fraud; it is the <em>anticipation</em> of hidden quality poisoning honest trades. That is why disclosure laws alone can't fix it and why Station 3's mechanisms had to be invented.</p>
+</div>
+
+<!-- ═══ STATION 2: THE DEATH SPIRAL ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>The insurance death spiral</h2>
+<p>Now the same disease in its most consequential host. Five residents want health coverage; each knows their own expected claims, the insurer knows only the pool's average. Each round, the insurer prices at the current pool's average cost &mdash; and everyone who values coverage less than the price walks. Press the button and watch selection do its work.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; One pool, priced on averages</div>
+  <h4>Five residents: expected claims $2, $4, $6, $8, $10 &mdash; each values coverage at claims + $1 of peace of mind</h4>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="ds-round">0</div><div class="sb-mini-label">round</div></div>
+    <div class="sb-mini"><div class="sb-mini-num" id="ds-price">&mdash;</div><div class="sb-mini-label">premium (pool average)</div></div>
+    <div class="sb-mini" id="ds-pool-card"><div class="sb-mini-num" id="ds-pool">5</div><div class="sb-mini-label">still in the pool</div></div>
+  </div>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-primary" id="ds-step-btn" onclick="dsStep()">Price the pool &rarr; see who stays</button>
+    <button class="btn-sb btn-sb-ghost" onclick="dsReset()">Restart with all five</button>
+  </div>
+  <div class="sb-log" id="ds-log"><div>Five residents at the counter. The insurer sharpens its pencil.</div></div>
+  <div class="sb-readout" id="ds-readout">Press the button to run the first pricing round.</div>
+</div>
+
+<p>The spiral stopped &mdash; but count the wreckage: only the <strong>two costliest residents</strong> hold coverage, at a premium near the top of the range, while three people who each valued insurance <em>above its true cost to provide</em> went bare. Every exit made the pool sicker and the price higher, chasing out the next-healthiest &mdash; selection eating the market from the bottom up. This is why real systems fight the spiral with mandates, open-enrollment windows, employer pools, and subsidies: not to help insurers, but to hold the healthy in the pool so the market can exist at all.</p>
+
+<!-- ═══ STATION 3: THE FIX-IT BENCH ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>The fix-it bench</h2>
+<p>Markets did not surrender to Akerlof's logic; they engineered around it. Return to the broken car lot of Station 1 (&lambda; = 0.4, peaches gone) and install each fix. Notice <em>who acts</em> in each one &mdash; that is the classification that Station 4 will grade you on.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Three repairs for one broken market</div>
+  <h4>Install a mechanism; read why it works</h4>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-ghost active" id="fx-btn-war" onclick="fxSet('war')">Warranty (the informed side signals)</button>
+    <button class="btn-sb btn-sb-ghost" id="fx-btn-insp" onclick="fxSet('insp')">Inspection (the uninformed side screens)</button>
+    <button class="btn-sb btn-sb-ghost" id="fx-btn-rep" onclick="fxSet('rep')">Reputation (repetition raises the stakes)</button>
+  </div>
+  <div class="sb-readout" id="fx-readout"></div>
+</div>
+
+<!-- ═══ STATION 4: INFO DETECTIVE ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Info Detective</h2>
+<p>The graded round. Each case is an information problem at work. Diagnose it: hidden <em>type</em> before the deal (adverse selection), hidden <em>action</em> after it (moral hazard), the informed side proving itself (signaling), or the uninformed side building a sorting device (screening).</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Name the mechanism</div>
+  <h4>Four diagnoses, one verdict</h4>
+  <div class="sb-case" id="id-story">Press <strong>New case</strong> to open the first file.</div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="id-ADV" onclick="idVerdict('ADV')">Adverse selection &mdash; hidden type, before the deal</button>
+    <button class="sb-diag-btn" id="id-MH" onclick="idVerdict('MH')">Moral hazard &mdash; hidden action, after the deal</button>
+    <button class="sb-diag-btn" id="id-SIG" onclick="idVerdict('SIG')">Signaling &mdash; the informed side proves itself, costly-to-fake</button>
+    <button class="sb-diag-btn" id="id-SCR" onclick="idVerdict('SCR')">Screening &mdash; the uninformed side designs a sorting device</button>
+  </div>
+  <div class="sb-readout" id="id-readout">The case file awaits your diagnosis.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newIdCase()">New case</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetIdScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
+<p>Your Info Detective record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, re-run the cases with the two sorting questions: is the hidden thing a <em>type</em> or an <em>action</em>? and which side of the deal is doing something about it?</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases diagnosed</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">diagnosed correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; half the institutions around you are Akerlof repairs</div>
+  <p>Once you have watched the peaches flee, you cannot unsee the machinery civilization built to bring them back. Warranties, professional licenses, brand names, dealer certifications, credit scores, references, probation periods, diplomas, deductibles, wedding rings &mdash; each one is an answer to the question this arena kept asking: <em>how do you trade with someone who knows more than you?</em> The deep move in every fix is the same, and it is worth stating once cleanly: <strong>make honesty cheaper than deception</strong>. A warranty is cheap for a peach owner and ruinous for a lemon's; a deductible is tolerable for the careful and expensive for the reckless; four years of a demanding degree is a bearable cost precisely for the people it certifies. The signal works because faking it costs the faker more.</p>
+  <p>And the death spiral deserves permanent shelf space in your mind, because it is the rare piece of microeconomics that decides elections. Whenever you hear "mandate," "open enrollment," "pre-existing condition," or "community rating," you are hearing policymakers wrestle with Station 2 &mdash; trying to keep the $3-value resident in the same pool as the $11 one so that a market in promises can exist. Information problems are not a footnote to supply and demand; for insurance, credit, labor, and used anything, they <em>are</em> the market design problem.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Keep going</h3>
+  <p>This arena pairs with Chapter 16 of <em>Introduction to Microeconomics</em>. One assumption remains standing &mdash; that the chooser is coldly rational. The final chapter, and the final arena, test that one on <em>you</em>.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Lemons Market Arena &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Lemons Market Arena — companion arena to Chapter 16.
+   Station 1 (Akerlof): buyers value peach $8 / lemon $3;
+   owners value peach $7 / lemon $2. Pooled offer 8 − 5λ;
+   peaches stay only while 8 − 5λ ≥ 7 ⇒ λ ≤ 0.2 = λ*.
+   Past λ*, peaches exit; buyers, knowing it, pay lemon value
+   $3, and only lemons trade.
+   Station 2 (death spiral): claims [2,4,6,8,10], each values
+   coverage at claims + 1. Price = pool average of claims;
+   stay iff value ≥ price. Rounds: 5 → 3 → 2 → stable at
+   {8,10}, premium $9.
+   Station 3: warranty / inspection / reputation fixes.
+   Station 4: info-diagnosis game, saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+function seg(x1, y1, x2, y2) { return [ { x: x1, y: y1 }, { x: x2, y: y2 } ]; }
+
+/* ══════════ STATION 1 — the unraveling slider ══════════ */
+function pooled(lam) { return 8 - 5 * lam; }
+
+var lmChart = null;
+var lmL = 0.10;   /* λ as a fraction */
+
+function lmCurvePts() {
+  var r = [], x;
+  for (x = 0; x <= 0.6001; x += 0.05) { r.push({ x: Math.round(x * 100), y: pooled(x) }); }
+  return r;
+}
+
+function initLm() {
+  var canvas = document.getElementById("lm-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  lmChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Pooled offer: 8 \u2212 5\u03BB", data: lmCurvePts(), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "Peach owners' floor ($7)", data: seg(0, 7, 60, 7), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", borderDash: [7, 5], pointRadius: 0, borderWidth: 2, tension: 0 },
+      { label: "The tipping point (\u03BB* = 20%)", data: [ { x: 20, y: 7 } ], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 6, pointStyle: "rectRot" },
+      { label: "Your market", data: [], borderColor: "#166534", backgroundColor: "#166534", pointRadius: 8 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Share of lemons \u03BB (%)", font: { family: "Inter" } }, min: 0, max: 60, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "$ per car", font: { family: "Inter" } }, min: 0, max: 9, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sl = document.getElementById("lm-l");
+  if (sl) { sl.addEventListener("input", function () { lmL = parseInt(sl.value, 10) / 100; updateLm(); }); }
+  updateLm();
+}
+
+function updateLm() {
+  var lam = lmL;
+  var p = pooled(lam);
+  var alive = p >= 7;
+  if (lmChart) {
+    lmChart.data.datasets[3].data = [ { x: Math.round(lam * 100), y: alive ? p : 3 } ];
+    lmChart.update("none");
+  }
+  var lv = document.getElementById("lm-l-val");
+  if (lv) { lv.textContent = Math.round(lam * 100) + "% lemons"; }
+  var pEl = document.getElementById("lm-price");
+  var mEl = document.getElementById("lm-mkt");
+  if (pEl) { pEl.textContent = alive ? "$" + p.toFixed(2) : "$3.00"; }
+  if (mEl) { mEl.textContent = alive ? "everyone" : "lemons only"; }
+  var out = document.getElementById("lm-readout");
+  if (!out) { return; }
+  if (lam === 0.2) {
+    out.innerHTML = "<strong>The knife's edge: \u03BB* = 20%.</strong> The pooled offer is exactly <strong>$7.00</strong> — the last penny a peach owner will accept. One more lemon in the pool and the price dips below $7, the peaches walk, and the pool they leave behind is purer lemon still. The threshold is where the whole market balances.";
+  } else if (alive) {
+    out.innerHTML = "At <strong>" + Math.round(lam * 100) + "% lemons</strong>, buyers offer the average, <strong>$" + p.toFixed(2) + "</strong> — still at or above the peach owners' $7 floor, so <strong>everyone trades</strong>. Buyers overpay for lemons and underpay for peaches, but on average they break even, and every car still moves to someone who values it more. The market holds — for now.";
+  } else {
+    out.innerHTML = "At <strong>" + Math.round(lam * 100) + "% lemons</strong>, the pooled offer of $" + p.toFixed(2) + " falls below the peach owners' $7 floor — <strong>and they withdraw</strong>. Buyers, reasoning one step ahead, know anything still for sale must be a lemon, so the price collapses to the lemon value, <strong>$3.00</strong>. Lemons still trade (worth $3 to buyers, $2 to owners), but every peach trade — a dollar of value each — is <strong>gone</strong>. The bad drove out the good.";
+  }
+}
+
+/* ══════════ STATION 2 — the death spiral ══════════ */
+var DS_CLAIMS = [2, 4, 6, 8, 10];       /* each values coverage at claims + 1 */
+var dsPool = [2, 4, 6, 8, 10];
+var dsRound = 0;
+var dsDone = false;
+
+function dsAvg(pool) {
+  var s = 0, i;
+  for (i = 0; i < pool.length; i++) { s += pool[i]; }
+  return s / pool.length;
+}
+
+function dsLog(line) {
+  var log = document.getElementById("ds-log");
+  if (log) {
+    var d = document.createElement("div");
+    d.innerHTML = line;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+function dsRender(price) {
+  var r = document.getElementById("ds-round");
+  var p = document.getElementById("ds-price");
+  var n = document.getElementById("ds-pool");
+  if (r) { r.textContent = String(dsRound); }
+  if (p) { p.textContent = price === null ? "\u2014" : "$" + price.toFixed(2); }
+  if (n) { n.textContent = String(dsPool.length); }
+  var btn = document.getElementById("ds-step-btn");
+  if (btn) { btn.disabled = dsDone; }
+}
+
+function dsStep() {
+  if (dsDone) { return false; }
+  dsRound += 1;
+  var price = dsAvg(dsPool);
+  var stay = [], leave = [], i;
+  for (i = 0; i < dsPool.length; i++) {
+    if (dsPool[i] + 1 >= price) { stay.push(dsPool[i]); } else { leave.push(dsPool[i]); }
+  }
+  var out = document.getElementById("ds-readout");
+  if (leave.length === 0) {
+    dsDone = true;
+    dsLog("Round " + dsRound + ": premium $" + price.toFixed(2) + " — everyone left in the pool stays. <strong>Stable.</strong>");
+    dsRender(price);
+    if (out) {
+      out.innerHTML = "<strong>The spiral has stopped</strong> — at a pool of <strong>" + dsPool.length + "</strong> (expected claims $" + dsPool.join(" and $") +
+        ") and a premium of <strong>$" + price.toFixed(2) + "</strong>. The three healthiest residents, each of whom valued coverage a full dollar above its true cost to insure them, are uninsured. Selection didn't kill the market outright — it amputated it. Restart and watch each exit raise the price that expels the next.";
+    }
+    return false;
+  }
+  dsPool = stay;
+  var names = [], j;
+  for (j = 0; j < leave.length; j++) { names.push("$" + leave[j] + "-claims (values $" + (leave[j] + 1) + ")"); }
+  dsLog("Round " + dsRound + ": premium $" + price.toFixed(2) + " &rarr; " + names.join(", ") + " walk" + (leave.length === 1 ? "s" : "") + ". Pool: " + dsPool.length + " left.");
+  dsRender(price);
+  if (out) {
+    out.innerHTML = "Round " + dsRound + ": priced at the pool's average, <strong>$" + price.toFixed(2) + "</strong>, and the healthiest " + (leave.length === 1 ? "member" : leave.length + " members") +
+      " found it a bad deal and left. The pool that remains is <strong>sicker on average</strong> — so the next price must be higher. Press again.";
+  }
+  return true;
+}
+
+function dsReset() {
+  dsPool = DS_CLAIMS.slice();
+  dsRound = 0;
+  dsDone = false;
+  var log = document.getElementById("ds-log");
+  if (log) { log.innerHTML = "<div>Five residents at the counter. The insurer sharpens its pencil.</div>"; }
+  var out = document.getElementById("ds-readout");
+  if (out) { out.innerHTML = "Press the button to run the first pricing round."; }
+  dsRender(null);
+}
+
+/* ══════════ STATION 3 — the fix-it bench ══════════ */
+var FX_TEXT = {
+  war: "<strong>Warranty installed.</strong> A peach owner can promise \u201Cany repair in the first year is on me\u201D almost for free — peaches rarely break. A lemon owner making the same promise signs up to buy back their own hidden defects, dollar for dollar. Because the promise costs the lemon far more than the peach, only peaches offer it — and buyers can once again pay $8 for a warranted car with confidence. The <em>informed</em> side moved first: this is <strong>signaling</strong>, and it works precisely because it is costly to fake.",
+  insp: "<strong>Inspection installed.</strong> Buyers stop guessing and start testing: a $50 mechanic's check before purchase, or a certification program the lot must pass. Quality becomes observable, the pool splits into labeled peaches ($8) and labeled lemons ($3), and both trade at honest prices. The <em>uninformed</em> side moved first, building a device that sorts what it cannot see: this is <strong>screening</strong>.",
+  rep: "<strong>Reputation installed.</strong> Make the game repeated — a dealer who plans to sell here for twenty years, review sites that remember, a brand painted on the sign. One lemon passed off as a peach now costs a stream of future sales worth far more than today's $5 markup. Chapter 13's shadow of the future crosses into Chapter 16: repetition converts a one-shot temptation into a losing strategy, and honest quality becomes self-enforcing."
+};
+var fxMode = "war";
+
+function fxSet(mode) {
+  fxMode = mode;
+  var names = ["war", "insp", "rep"], i, btn;
+  for (i = 0; i < names.length; i++) {
+    btn = document.getElementById("fx-btn-" + names[i]);
+    if (btn) { if (names[i] === mode) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
+  }
+  var out = document.getElementById("fx-readout");
+  if (out) { out.innerHTML = FX_TEXT[mode]; }
+}
+
+/* ══════════ STATION 4 — info detective ══════════ */
+var ID_CASES = [
+  { story: "A company offers generous early-retirement buyouts to anyone who volunteers — and discovers that the workers who take it are disproportionately the ones who already knew they were about to quit anyway.", key: "ADV",
+    why: "The hidden thing is a pre-existing type (who was leaving regardless), and it selects into the deal before it's struck — adverse selection eating the buyout's budget." },
+  { story: "An all-you-can-eat buffet finds that its clientele skews heavily toward the hungriest eaters in town, while light eaters go elsewhere.", key: "ADV",
+    why: "Appetite is a hidden type known before the purchase; the flat price attracts exactly the customers costliest to serve — Akerlof at the salad bar." },
+  { story: "A lender offering one interest rate to all comers notices its applicant pool fills with the riskiest borrowers, since safe borrowers can get better terms elsewhere.", key: "ADV",
+    why: "Riskiness is hidden type, sorted before the loan is made: the uniform rate is a bargain only for the risky, and the pool curdles — classic credit-market adverse selection." },
+  { story: "After buying full-coverage bicycle-theft insurance, a commuter starts leaving the bike with the cheap lock, parked overnight on the street.", key: "MH",
+    why: "The information problem arises after the contract: a hidden action (careless locking) that the insurer can't observe but now partly pays for — moral hazard." },
+  { story: "Once a restaurant's kitchen passes its annual inspection, standards quietly slip for the other eleven months when no one is watching.", key: "MH",
+    why: "The hidden thing is behavior after the certification, unobservable between inspections — effort responding to not being watched is moral hazard." },
+  { story: "A fully insured shipping firm begins routing cargo through the cheaper, stormier sea lane it used to avoid.", key: "MH",
+    why: "Coverage in hand, the firm's unobserved action shifts risk onto the insurer — the post-contract behavioral change that defines moral hazard." },
+  { story: "A used-car seller offers, unprompted, a six-month money-back guarantee — something the sellers of the shabbier cars on the same street conspicuously never match.", key: "SIG",
+    why: "The informed side (the seller who knows the car) takes a costly action that only a good type can afford — the warranty as signal, straight from the fix-it bench." },
+  { story: "A startup founder pours personal savings into her own company before asking outside investors for a cent.", key: "SIG",
+    why: "Skin in the game is costly precisely for a founder who privately doubts the venture; investing her own money credibly communicates the type she knows and they don't." },
+  { story: "A student completes a famously grueling four-year degree whose specific coursework her employer will never directly use.", key: "SIG",
+    why: "Spence's classic: the degree's content matters less than its cost structure — bearable for the able, crushing for others — so completing it transmits hidden ability." },
+  { story: "An insurer offers a menu: a cheap policy with a high deductible and a pricey one with none — and lets each customer pick.", key: "SCR",
+    why: "The uninformed insurer designs the menu so customers sort themselves: the careful take the deductible, the risky pay up for full cover — self-selection engineered by the uninformed side: screening." },
+  { story: "An employer swamped with identical-looking r\u00E9sum\u00E9s adds a demanding unpaid work-sample task to the application, expecting only serious, capable candidates to complete it.", key: "SCR",
+    why: "The uninformed employer builds a costly hurdle that filters types it cannot observe directly — a screening device, initiated by the side lacking the information." },
+  { story: "A car insurer prices by a telemetry device: install the tracker and braking-behavior discount follows; decline it and pay the higher default rate.", key: "SCR",
+    why: "The insurer constructs a choice whose terms sort drivers — the safe accept monitoring, the risky reveal themselves by refusing. Designed by the uninformed party: screening." }
+];
+
+var ID = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentId = null;
+var idAnswered = true;
+
+function loadId() {
+  try {
+    var raw = localStorage.getItem("lemonsArena.detective");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { ID.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { ID.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { ID.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { ID.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveId() {
+  try {
+    localStorage.setItem("lemonsArena.detective", JSON.stringify(ID));
+  } catch (e) { /* ignore */ }
+}
+
+function renderIdStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(ID.attempted); }
+  if (cor) { cor.textContent = String(ID.correct); }
+  if (acc) { acc.innerHTML = ID.attempted > 0 ? Math.round((ID.correct / ID.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(ID.best); }
+}
+
+var ID_IDS = ["ADV", "MH", "SIG", "SCR"];
+var ID_NAMES = {
+  ADV: "adverse selection (hidden type, before the deal)",
+  MH: "moral hazard (hidden action, after the deal)",
+  SIG: "signaling (the informed side proves itself)",
+  SCR: "screening (the uninformed side sorts)"
+};
+
+function setIdButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < ID_IDS.length; i++) {
+    btn = document.getElementById("id-" + ID_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+function newIdCase() {
+  currentId = ID_CASES[Math.floor(Math.random() * ID_CASES.length)];
+  idAnswered = false;
+  setIdButtons(false);
+  var story = document.getElementById("id-story");
+  if (story) { story.innerHTML = "<strong>The case:</strong> " + currentId.story; }
+  var out = document.getElementById("id-readout");
+  if (out) { out.innerHTML = "The case file awaits your diagnosis."; }
+}
+
+function idVerdict(choice) {
+  if (!currentId || idAnswered) { return; }
+  idAnswered = true;
+  setIdButtons(true);
+  var correct = choice === currentId.key;
+  var btnChosen = document.getElementById("id-" + choice);
+  var btnRight = document.getElementById("id-" + currentId.key);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  ID.attempted += 1;
+  if (correct) {
+    ID.correct += 1;
+    ID.streak += 1;
+    if (ID.streak > ID.best) { ID.best = ID.streak; }
+  } else {
+    ID.streak = 0;
+  }
+  saveId();
+  renderIdStats();
+
+  var out = document.getElementById("id-readout");
+  if (out) {
+    if (correct) {
+      out.innerHTML = "<strong>Correct</strong> — this is " + ID_NAMES[currentId.key] + ". " + currentId.why +
+        " Streak: <strong>" + ID.streak + "</strong>. Press <strong>New case</strong> for another.";
+    } else {
+      out.innerHTML = "<strong>Not this one.</strong> This is " + ID_NAMES[currentId.key] + ". " + currentId.why +
+        " Sort with the two questions: type or action? and which side is acting? Next case when ready.";
+    }
+  }
+}
+
+function resetIdScore() {
+  ID.attempted = 0;
+  ID.correct = 0;
+  ID.streak = 0;
+  ID.best = 0;
+  saveId();
+  renderIdStats();
+  var out = document.getElementById("id-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+function boot() {
+  loadId();
+  renderIdStats();
+  initLm();
+  dsReset();
+  fxSet("war");
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>
