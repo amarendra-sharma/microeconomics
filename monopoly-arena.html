@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monopoly Arena — Introduction to Microeconomics</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
+
+<style>
+:root {
+  --ink:        #0f172a;
+  --ink-light:  #334155;
+  --ink-muted:  #64748b;
+  --ink-faint:  #94a3b8;
+  --bg:         #fafaf9;
+  --bg-warm:    #f5f0e8;
+  --bg-card:    #ffffff;
+  --rule:       #e2e8f0;
+  --accent:     #0f3d9e;
+  --accent-mid: #1e56c0;
+  --accent-lt:  #dbeafe;
+  --gold:       #b87408;
+  --gold-lt:    #fef3c7;
+  --green:      #166534;
+  --green-lt:   #dcfce7;
+  --red:        #991b1b;
+  --red-lt:     #fee2e2;
+  --serif:      'Lora', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+  --radius:     8px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.6; }
+
+#sb-header {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 200;
+  background: var(--ink); color: #fff;
+  display: flex; align-items: center; padding: 0 1.5rem; gap: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#sb-header .sb-logo { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sb-header .sb-logo span { color: #93c5fd; }
+.sb-course-tag { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #93c5fd; background: rgba(147,197,253,0.15); padding: 2px 8px; border-radius: 8px; }
+#sb-header .sb-spacer { flex: 1; }
+.sb-header-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 18px; cursor: pointer; transition: background 0.15s; text-decoration: none; }
+.sb-header-btn:hover { background: var(--accent-mid); }
+
+main { max-width: 900px; margin: 60px auto 0; padding: 3rem 2rem 4rem; }
+
+.sb-eyebrow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.75rem; }
+h1.sb-title { font-family: var(--serif); font-size: 2.75rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.75rem; }
+.sb-subtitle { font-size: 1.125rem; color: var(--ink-muted); margin-bottom: 1.5rem; font-weight: 300; }
+h2.sb-section { font-family: var(--serif); font-size: 1.625rem; font-weight: 600; margin: 3rem 0 1rem; }
+h2.sb-section .sb-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: var(--accent); color: #fff; border-radius: 50%; font-family: var(--sans); font-size: 0.875rem; font-weight: 700; margin-right: 0.625rem; vertical-align: 3px; }
+p { margin-bottom: 1rem; color: var(--ink-light); font-size: 0.9375rem; line-height: 1.75; }
+strong { color: var(--ink); font-weight: 600; }
+.sb-divider { border: none; border-top: 2px solid var(--rule); margin: 2rem 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+.sb-panel { background: var(--bg-card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-md); }
+.sb-panel-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.5rem; }
+.sb-panel h4 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.sb-panel .sb-panel-intro { font-size: 0.9rem; color: var(--ink-light); margin-bottom: 1rem; }
+.sb-controls { display: flex; flex-direction: column; gap: 0.875rem; margin: 1rem 0; }
+.sb-controls label { font-size: 0.8125rem; font-weight: 600; color: var(--ink-light); display: block; margin-bottom: 0.25rem; }
+.sb-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.sb-readout { background: var(--bg-warm); border-radius: var(--radius); padding: 0.875rem 1rem; font-size: 0.9rem; color: var(--ink-light); border-left: 3px solid var(--gold); }
+.sb-readout strong { color: var(--accent); }
+.sb-chart-box { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); margin: 1rem 0; }
+.sb-chart-box canvas { max-height: 300px; }
+.sb-chart-title { font-size: 0.8125rem; font-weight: 600; color: var(--ink-muted); margin-bottom: 0.25rem; }
+
+.btn-sb { padding: 0.5rem 1.1rem; border: none; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--sans); }
+.btn-sb-primary { background: var(--accent); color: #fff; }
+.btn-sb-primary:hover { background: var(--accent-mid); }
+.btn-sb-ghost { background: transparent; color: var(--ink-light); border: 1.5px solid var(--rule); }
+.btn-sb-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sb-ghost.active { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-shock-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.sb-shock-row .sb-shock-head { flex-basis: 100%; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom: -0.125rem; }
+
+.sb-mini-row { display: flex; gap: 0.625rem; margin: 0.875rem 0; flex-wrap: wrap; }
+.sb-mini { flex: 1; min-width: 100px; border-radius: var(--radius); padding: 0.625rem 0.875rem; border: 1px solid var(--rule); background: var(--bg-card); }
+.sb-mini-num { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.sb-mini-label { font-size: 0.6875rem; color: var(--ink-muted); }
+.sb-mini.cs .sb-mini-num { color: var(--accent); }
+.sb-mini.pf .sb-mini-num { color: var(--green); }
+.sb-mini.dwl .sb-mini-num { color: var(--red); }
+
+table.sb-table { width: 100%; border-collapse: collapse; margin: 0.875rem 0; font-size: 0.84rem; }
+.sb-table th { background: var(--bg-warm); text-align: left; padding: 0.5rem 0.75rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); border-bottom: 2px solid var(--rule); }
+.sb-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--rule); color: var(--ink-light); }
+.sb-table tr.visited td { color: var(--ink); font-weight: 600; }
+
+.sb-case { background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 0.9375rem; color: var(--ink); border-left: 3px solid var(--accent); }
+.sb-diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.875rem 0; }
+.sb-diag-btn { padding: 0.75rem 0.875rem; border: 1.5px solid var(--rule); border-radius: var(--radius); background: var(--bg-card); cursor: pointer; font-size: 0.8438rem; font-weight: 600; color: var(--ink-light); transition: all 0.15s; text-align: left; font-family: var(--sans); }
+.sb-diag-btn:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.sb-diag-btn.correct { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+.sb-diag-btn.wrong { border-color: var(--red); background: var(--red-lt); color: var(--red); }
+.sb-diag-btn:disabled { cursor: default; }
+
+.sb-stat-row { display: flex; gap: 1rem; margin: 1.25rem 0; flex-wrap: wrap; }
+.sb-stat { flex: 1; min-width: 120px; background: var(--bg-warm); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.sb-stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--serif); }
+.sb-stat-label { font-size: 0.75rem; color: var(--ink-muted); }
+
+.sb-insight { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.75rem 0; }
+.sb-insight-label { font-family: var(--serif); font-style: italic; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 0.5rem; }
+.sb-insight p { color: #44351e; font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.625rem; }
+.sb-insight p:last-child { margin-bottom: 0; }
+.sb-insight-attribution { font-style: italic; color: var(--ink-muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #d4a84b88; }
+
+.sb-pitfall { background: var(--red-lt); border: 1px solid #fecaca; border-left: 4px solid var(--red); border-radius: 0 var(--radius) var(--radius) 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+.sb-pitfall-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--red); margin-bottom: 0.625rem; }
+.sb-pitfall p { color: #5c1a1a; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.sb-pitfall p:last-child { margin-bottom: 0; }
+
+.sb-cta { text-align: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin: 2rem 0 0; }
+.sb-cta h3 { font-family: var(--serif); font-size: 1.375rem; margin-bottom: 0.5rem; }
+.sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
+
+footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  main { padding: 2rem 1.1rem 3rem; }
+  h1.sb-title { font-size: 2rem; }
+  .sb-diag-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header id="sb-header">
+  <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Monopoly Arena</div>
+  <span class="sb-course-tag">Course Arena</span>
+  <div class="sb-spacer"></div>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+</header>
+
+<!-- Intro Micro auth bar (added for Phase 3 backend). Degrades gracefully:
+     if the backend module isn't present, this stays hidden and the arena
+     runs offline exactly as before. -->
+<div id="im-authbar" style="display:none;position:fixed;top:60px;left:0;right:0;z-index:150;background:#f5f0e8;border-bottom:1px solid #e2e8f0;padding:0.5rem 1.5rem;font-family:'Inter',system-ui,sans-serif;font-size:0.8125rem;color:#334155;">
+  <div id="im-auth-signedout" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-weight:600;">Intro Micro account:</span>
+    <input id="im-email" type="email" placeholder="email" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <input id="im-pass" type="password" placeholder="password" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <button id="im-signin-btn" onclick="imDoSignIn()" style="padding:0.35rem 0.8rem;border:none;border-radius:6px;background:#0f3d9e;color:#fff;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign in</button>
+    <button id="im-signup-btn" onclick="imDoSignUp()" style="padding:0.35rem 0.8rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Create account</button>
+    <span id="im-auth-msg" style="color:#991b1b;"></span>
+  </div>
+  <div id="im-auth-signedin" style="display:none;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span id="im-who" style="font-weight:600;"></span>
+    <span id="im-access-badge"></span>
+    <button id="im-signout-btn" onclick="imDoSignOut()" style="padding:0.3rem 0.7rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign out</button>
+  </div>
+</div>
+
+<main>
+
+<div class="sb-eyebrow">MacroNations &middot; Companion Arena &middot; Chapter 11: Monopoly</div>
+<h1 class="sb-title">Monopoly Arena</h1>
+<p class="sb-subtitle">Take the only seat in town: run the ferry monopoly with your own output dial and feel MR = MC pull against P = MC; sit in the regulator's chair and discover why every fix bleeds somewhere; then watch price discrimination do something no one expects &mdash; make the monopoly <em>less</em> wasteful.</p>
+<hr class="sb-divider">
+
+<p>Chapter 11 hands one firm the whole market and asks what changes. This arena runs the chapter's exact town: demand <code>P = 12 &minus; 0.2Q</code>, marginal revenue <code>MR = 12 &minus; 0.4Q</code>, a constant <strong>$4</strong> marginal cost, and a <strong>$60</strong> fixed cost that makes average cost fall forever &mdash; a natural monopoly. The landmarks you will keep hitting: the monopolist's choice <strong>(Q = 20, P = $8, profit $20, deadweight loss $40)</strong> and the efficient outcome the market never reaches <strong>(Q = 40, P = $4)</strong>. The Market Detective record saves for reporting back.</p>
+
+<!-- ═══ STATION 1: THE MONOPOLIST'S DIAL ═══ -->
+<h2 class="sb-section"><span class="sb-step">1</span>The monopolist's dial</h2>
+<p>In Chapter 10 the price was handed to you; now you <em>set</em> it &mdash; indirectly. A monopolist chooses the quantity, and the demand curve dictates what price clears it: fewer ferry crossings, higher fare. The catch is the gold MR curve below demand: to sell one more crossing you must cut the fare on <em>every</em> crossing, so the extra revenue is always less than the price. Climb the profit hill and see where the summit actually sits.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; You are the ferry company</div>
+  <h4>Choose crossings; the fare follows; find the summit</h4>
+  <div class="sb-controls">
+    <div>
+      <label for="mn-q">Crossings per day &mdash; <span id="mn-q-val"></span></label>
+      <input type="range" id="mn-q" min="5" max="40" step="1" value="12">
+    </div>
+  </div>
+  <div class="sb-chart-title">The monopoly diagram: demand, MR, MC &mdash; and your position</div>
+  <div class="sb-chart-box"><canvas id="mn-canvas" height="280"></canvas></div>
+  <div class="sb-chart-title">The profit hill: profit at every quantity</div>
+  <div class="sb-chart-box"><canvas id="mn-hill" height="240"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="mn-p">&mdash;</div><div class="sb-mini-label">fare (from demand)</div></div>
+    <div class="sb-mini pf"><div class="sb-mini-num" id="mn-profit">&mdash;</div><div class="sb-mini-label">profit</div></div>
+    <div class="sb-mini cs"><div class="sb-mini-num" id="mn-cs">&mdash;</div><div class="sb-mini-label">consumer surplus</div></div>
+    <div class="sb-mini dwl"><div class="sb-mini-num" id="mn-dwl">&mdash;</div><div class="sb-mini-label">deadweight loss</div></div>
+  </div>
+  <div class="sb-readout" id="mn-readout"></div>
+</div>
+
+<div class="sb-pitfall">
+  <div class="sb-pitfall-label">&#9888; The summit is at MR = MC &mdash; and that is the whole indictment</div>
+  <p>Your hill peaks at <strong>20 crossings</strong>, where MR meets the $4 marginal cost &mdash; but at that quantity riders still value a crossing at <strong>$8</strong>, twice what one costs to provide. Every crossing from 20 to 40 is worth more to somebody than it costs, and none of them happens: that unbuilt value is the $40 deadweight loss on your cards. The monopolist is not being wicked; it is maximizing exactly as Chapter 10 taught. The waste comes from <em>whose</em> marginal revenue counts &mdash; the firm's, not society's.</p>
+</div>
+
+<!-- ═══ STATION 2: THE REGULATOR'S CHAIR ═══ -->
+<h2 class="sb-section"><span class="sb-step">2</span>The regulator's chair</h2>
+<p>The ferry is also a <strong>natural monopoly</strong>: its $60 of fixed cost (the boat) spreads over every crossing, so average cost falls forever and one firm is always the cheapest way to serve the town. Splitting it up would raise costs &mdash; so the town regulates instead. You hold the rate-setting pen. Try each rule and watch the comparison table fill in; every entry buys something and bleeds somewhere.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Set the rate rule</div>
+  <h4>Three regimes, no free lunch</h4>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-ghost active" id="rg-btn-un" onclick="setRegime('un')">Leave it unregulated</button>
+    <button class="btn-sb btn-sb-ghost" id="rg-btn-mc" onclick="setRegime('mc')">Force P = MC ($4)</button>
+    <button class="btn-sb btn-sb-ghost" id="rg-btn-ac" onclick="setRegime('ac')">Force P = ATC (break even)</button>
+  </div>
+  <div class="sb-chart-box"><canvas id="rg-canvas" height="290"></canvas></div>
+  <table class="sb-table">
+    <thead><tr><th>Regime</th><th>Q</th><th>Fare</th><th>Firm profit</th><th>Deadweight loss</th></tr></thead>
+    <tbody>
+      <tr id="rg-row-un"><td>Unregulated</td><td id="rg-un-q">?</td><td id="rg-un-p">?</td><td id="rg-un-pf">?</td><td id="rg-un-dwl">?</td></tr>
+      <tr id="rg-row-mc"><td>P = MC</td><td id="rg-mc-q">?</td><td id="rg-mc-p">?</td><td id="rg-mc-pf">?</td><td id="rg-mc-dwl">?</td></tr>
+      <tr id="rg-row-ac"><td>P = ATC</td><td id="rg-ac-q">?</td><td id="rg-ac-p">?</td><td id="rg-ac-pf">?</td><td id="rg-ac-dwl">?</td></tr>
+    </tbody>
+  </table>
+  <div class="sb-readout" id="rg-readout"></div>
+</div>
+
+<p>Read your finished table like a menu of imperfections. Marginal-cost pricing delivers full efficiency and bankrupts the ferry ($60 a day) unless taxpayers cover the boat. Average-cost pricing keeps the firm alive without profit, at the price of a small $10 residual loss &mdash; and, the chapter warns, it dulls every incentive to cut costs, since costs are simply passed through. Leaving it alone wastes the most. Regulators do not choose between good and bad; they choose <em>which</em> imperfection the town can live with.</p>
+
+<!-- ═══ STATION 3: THE DISCRIMINATION LAB ═══ -->
+<h2 class="sb-section"><span class="sb-step">3</span>The price-discrimination lab</h2>
+<p>Now hand the ferry a superpower: the ability to tell riders apart and charge them differently. Step through the three levels &mdash; one fare for all, two fares for two groups, and the perfect version where every rider pays exactly their willingness to pay. Watch all four numbers at once, because the pattern they trace is the chapter's most counterintuitive result.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; How well can the ferry read its riders?</div>
+  <h4>One fare &rarr; two fares &rarr; a fare for every rider</h4>
+  <div class="sb-shock-row">
+    <button class="btn-sb btn-sb-ghost active" id="pd-btn-single" onclick="setPdMode('single')">Single price ($8)</button>
+    <button class="btn-sb btn-sb-ghost" id="pd-btn-two" onclick="setPdMode('two')">Two groups ($8 and $6)</button>
+    <button class="btn-sb btn-sb-ghost" id="pd-btn-perfect" onclick="setPdMode('perfect')">Perfect discrimination</button>
+  </div>
+  <div class="sb-chart-box"><canvas id="pd-canvas" height="290"></canvas></div>
+  <div class="sb-mini-row">
+    <div class="sb-mini"><div class="sb-mini-num" id="pd-q">&mdash;</div><div class="sb-mini-label">crossings served</div></div>
+    <div class="sb-mini pf"><div class="sb-mini-num" id="pd-profit">&mdash;</div><div class="sb-mini-label">firm profit</div></div>
+    <div class="sb-mini cs"><div class="sb-mini-num" id="pd-cs">&mdash;</div><div class="sb-mini-label">consumer surplus</div></div>
+    <div class="sb-mini dwl"><div class="sb-mini-num" id="pd-dwl">&mdash;</div><div class="sb-mini-label">deadweight loss</div></div>
+  </div>
+  <div class="sb-readout" id="pd-readout"></div>
+</div>
+
+<p>Track the deadweight-loss card across the three clicks: <strong>$40 &rarr; $10 &rarr; $0</strong>. Discrimination lets the ferry serve riders it used to price out, so output climbs toward the efficient 40 and the waste shrinks &mdash; at the perfect limit, the monopoly is fully efficient. What changes is not the size of the pie but who eats it: consumer surplus goes <strong>$40 &rarr; $50 &rarr; $0</strong>. Student fares, senior discounts, and airline fare classes are real markets walking the same path &mdash; more people served, more surplus captured by the seller.</p>
+
+<!-- ═══ STATION 4: MARKET DETECTIVE ═══ -->
+<h2 class="sb-section"><span class="sb-step">4</span>Market Detective</h2>
+<p>The graded round. Each case describes a real-style market by its observable behavior &mdash; prices, costs, who sells, who is turned away. Classify the structure. The tells are everything this arena drilled: the P-versus-MC gap, different prices for identical costs, and the falling average cost that makes one firm the cheapest answer.</p>
+
+<div class="sb-panel">
+  <div class="sb-panel-label">&#9881; Classify the market</div>
+  <h4>Four structures, one verdict</h4>
+  <div class="sb-case" id="mk-story">Press <strong>New case</strong> to open the first file.</div>
+  <div class="sb-diag-grid">
+    <button class="sb-diag-btn" id="mk-PC" onclick="marketVerdict('PC')">Perfectly competitive (P = MC, many sellers)</button>
+    <button class="sb-diag-btn" id="mk-SP" onclick="marketVerdict('SP')">Single-price monopoly (P &gt; MC, buyers priced out)</button>
+    <button class="sb-diag-btn" id="mk-PD" onclick="marketVerdict('PD')">Price-discriminating monopoly (different prices, same cost)</button>
+    <button class="sb-diag-btn" id="mk-NM" onclick="marketVerdict('NM')">Natural monopoly (falling ATC; one firm is cheapest)</button>
+  </div>
+  <div class="sb-readout" id="mk-readout">The case file awaits your classification.</div>
+  <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <button class="btn-sb btn-sb-primary" onclick="newMarketCase()">New case</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetMarketScore()">Reset my record</button>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
+<p>Your Market Detective record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, re-run Stations 1&ndash;3 and watch for each structure's fingerprint: the markup, the menu of prices, the ever-falling average cost.</p>
+
+<div class="sb-stat-row">
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases classified</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-correct">0</div><div class="sb-stat-label">classified correctly</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-acc">&mdash;</div><div class="sb-stat-label">accuracy</div></div>
+  <div class="sb-stat"><div class="sb-stat-num" id="stat-best">0</div><div class="sb-stat-label">best streak</div></div>
+</div>
+
+<div class="sb-insight">
+  <div class="sb-insight-label">&#10022; Sharma's Take &mdash; the crime is the gap, and the gap is measurable</div>
+  <p>Popular complaints about monopoly usually aim at the wrong target: the profit. But look back at your Station 1 cards &mdash; the profit was a modest $20 while the deadweight loss was $40, twice as large. Profit is a <em>transfer</em>: dollars that moved from riders to the ferry, painful to riders but not destroyed. The economic crime is the <strong>gap between price and marginal cost</strong>, because every unit inside that gap is a trade worth making that never happens. That is why Station 3 startles people: price discrimination, which sounds predatory, shrinks the crime &mdash; it serves the priced-out &mdash; even as it confiscates the surplus. Efficiency and fairness ride separate rails here, and the chapter's discipline is refusing to let one masquerade as the other.</p>
+  <p>And from the regulator's chair, take the honest lesson: there was no button that produced "efficient, solvent, and incentive-compatible" at once. Real utility regulation is the art of choosing which failure to tolerate &mdash; subsidize and tax the town, break even and dull the incentives, or leave the markup and eat the waste. When you hear a debate about regulating a platform, a pipeline, or a power grid, you now own the whole menu, prices included.</p>
+  <div class="sb-insight-attribution">&mdash; A.S.</div>
+</div>
+
+<div class="sb-cta">
+  <h3>Keep going</h3>
+  <p>This arena pairs with Chapter 11 of <em>Introduction to Microeconomics</em>. Next the market fills back up &mdash; but with rivals few enough to watch each other, and Chapter 13's games begin.</p>
+  <div style="margin-top:1rem;"><a class="btn-sb btn-sb-primary" href="intro-micro-textbook.html" style="display:inline-block;text-decoration:none;">Open the textbook</a></div>
+</div>
+
+</main>
+
+<footer>Monopoly Arena &middot; a companion arena to <em>Introduction to Microeconomics</em> by Amarendra Sharma, PhD &middot; MacroNations Press &middot; &copy; 2026</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   Monopoly Arena — companion arena to Chapter 11.
+   The town ferry: demand P = 12 − 0.2Q, MR = 12 − 0.4Q,
+   MC = $4 constant, FC = $60 → ATC = 60/Q + 4 (natural monopoly).
+   Profit(Q) = (12 − 0.2Q)Q − 4Q − 60 = 8Q − 0.2Q² − 60 (max $20 at Q = 20).
+   CS(Q) = 0.1Q²;  DWL(Q) = 0.1(40 − Q)².
+   Regimes: unregulated (20, $8, +$20, DWL 40);
+            P = MC (40, $4, −$60, DWL 0);
+            P = ATC (30, $6, $0, DWL 10).
+   Discrimination: single (20, +$20, CS 40, DWL 40);
+            two-tier $8/$6 (30, +$40, CS 50, DWL 10);
+            perfect (40, +$100, CS 0, DWL 0).
+   Market Detective record saved to localStorage.
+   Safari-safe JS: no optional chaining, no nullish coalescing,
+   no template literals.
+   ══════════════════════════════════════════════════════════ */
+
+function dP(Q) { return 12 - 0.2 * Q; }
+function dMR(Q) { return 12 - 0.4 * Q; }
+function dATC(Q) { return 60 / Q + 4; }
+function mProfit(Q) { return 8 * Q - 0.2 * Q * Q - 60; }
+function mCS(Q) { return 0.1 * Q * Q; }
+function mDWL(Q) { return 0.1 * (40 - Q) * (40 - Q); }
+
+function pts(fn, a, b, step) {
+  var r = [], q;
+  for (q = a; q <= b + 0.0001; q += step) { r.push({ x: q, y: Math.round(fn(q) * 100) / 100 }); }
+  return r;
+}
+function seg(x1, y1, x2, y2) { return [ { x: x1, y: y1 }, { x: x2, y: y2 } ]; }
+function fmt2(x) { return "$" + x.toFixed(2); }
+function fmt0(x) { return "$" + Math.round(x); }
+
+/* ══════════ STATION 1 — the dial ══════════ */
+var mnChart = null, mnHill = null;
+var mnQ = 12;
+
+function initMn() {
+  var c1 = document.getElementById("mn-canvas");
+  var c2 = document.getElementById("mn-hill");
+  if (!c1 || !c2 || typeof Chart === "undefined") { return; }
+  mnChart = new Chart(c1.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Demand", data: seg(0, 12, 60, 0), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "MR", data: seg(0, 12, 30, 0), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 2, tension: 0 },
+      { label: "MC ($4)", data: seg(0, 4, 60, 4), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 0, borderWidth: 2, tension: 0 },
+      { label: "Your fare (on demand)", data: [], borderColor: "#166534", backgroundColor: "#166534", pointRadius: 7 },
+      { label: "MR at your Q", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 6, pointStyle: "rectRot" },
+      { label: "_qline", data: [], showLine: true, borderColor: "#94a3b8", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: 0 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8,
+        filter: function (item) { return item.text.indexOf("_") !== 0; } } } },
+      scales: {
+        x: { title: { display: true, text: "Crossings per day", font: { family: "Inter" } }, min: 0, max: 60, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "$ per crossing", font: { family: "Inter" } }, min: 0, max: 13, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  mnHill = new Chart(c2.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Profit at each quantity", data: pts(mProfit, 0, 40, 1), showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 2.5, tension: 0.3 },
+      { label: "_zero", data: seg(0, 0, 40, 0), showLine: true, borderColor: "#94a3b8", borderDash: [4, 4], pointRadius: 0, borderWidth: 1, tension: 0 },
+      { label: "You are here", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 7 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8,
+        filter: function (item) { return item.text.indexOf("_") !== 0; } } } },
+      scales: {
+        x: { title: { display: true, text: "Crossings per day", font: { family: "Inter" } }, min: 0, max: 42, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "Profit ($/day)", font: { family: "Inter" } }, min: -70, max: 30, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  var sq = document.getElementById("mn-q");
+  if (sq) { sq.addEventListener("input", function () { mnQ = parseInt(sq.value, 10); updateMn(); }); }
+  updateMn();
+}
+
+function updateMn() {
+  var Q = mnQ;
+  var P = dP(Q), mr = dMR(Q), prof = mProfit(Q), cs = mCS(Q), dwl = mDWL(Q);
+  if (mnChart) {
+    mnChart.data.datasets[3].data = [ { x: Q, y: P } ];
+    mnChart.data.datasets[4].data = mr >= 0 ? [ { x: Q, y: mr } ] : [];
+    mnChart.data.datasets[5].data = seg(Q, 0, Q, P);
+    mnChart.update("none");
+  }
+  if (mnHill) {
+    mnHill.data.datasets[2].data = [ { x: Q, y: Math.round(prof * 100) / 100 } ];
+    mnHill.update("none");
+  }
+  var qv = document.getElementById("mn-q-val");
+  if (qv) { qv.textContent = Q + " crossings"; }
+  var cards = { "mn-p": fmt2(P), "mn-profit": fmt2(prof), "mn-cs": fmt0(cs), "mn-dwl": fmt0(dwl) };
+  var k;
+  for (k in cards) {
+    if (cards.hasOwnProperty(k)) {
+      var el = document.getElementById(k);
+      if (el) { el.textContent = cards[k]; }
+    }
+  }
+  var out = document.getElementById("mn-readout");
+  if (!out) { return; }
+  var head = "At <strong>" + Q + " crossings</strong> the demand curve sets the fare at <strong>" + fmt2(P) + "</strong>; profit is <strong>" + fmt2(prof) + "</strong>. ";
+  var note;
+  if (Q === 20) {
+    note = "<strong>The summit.</strong> MR here equals the $4 marginal cost — yet riders still value a crossing at $8. The $40 of deadweight loss on the card is the crossings 20&ndash;40 that are worth more than they cost and will never sail.";
+  } else if (Q < 20) {
+    note = "MR here is " + fmt2(mr) + ", above the $4 cost — the next crossing <strong>adds more revenue than cost</strong>, so the hill climbs to your right (summit at 20).";
+  } else {
+    note = "MR here is " + fmt2(mr) + (mr < 0 ? " — negative: selling more now <em>reduces</em> revenue outright" : ", below the $4 cost") + ". Those extra crossings shrink profit — but notice the deadweight-loss card falling as you push toward 40: <strong>what is bad for the ferry is good for the town</strong>.";
+  }
+  out.innerHTML = head + note;
+}
+
+/* ══════════ STATION 2 — regulator ══════════ */
+var REGIMES = {
+  un: { q: 20, p: 8, pf: 20, dwl: 40 },
+  mc: { q: 40, p: 4, pf: -60, dwl: 0 },
+  ac: { q: 30, p: 6, pf: 0, dwl: 10 }
+};
+var rgChart = null;
+var rgMode = "un";
+var rgVisited = {};
+
+function initRg() {
+  var canvas = document.getElementById("rg-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  rgChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Demand", data: seg(0, 12, 60, 0), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "MR", data: seg(0, 12, 30, 0), showLine: true, borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 5], tension: 0 },
+      { label: "MC ($4)", data: seg(0, 4, 60, 4), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 0, borderWidth: 2, tension: 0 },
+      { label: "ATC (falls forever)", data: pts(dATC, 8, 60, 1), showLine: true, borderColor: "#64748b", backgroundColor: "#64748b", pointRadius: 0, borderWidth: 2, tension: 0.3 },
+      { label: "This regime's outcome", data: [], borderColor: "#166534", backgroundColor: "#166534", pointRadius: 8 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Crossings per day", font: { family: "Inter" } }, min: 0, max: 60, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "$ per crossing", font: { family: "Inter" } }, min: 0, max: 13, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  setRegime("un");
+}
+
+function setRegime(mode) {
+  rgMode = mode;
+  rgVisited[mode] = true;
+  var names = ["un", "mc", "ac"], i, btn;
+  for (i = 0; i < names.length; i++) {
+    btn = document.getElementById("rg-btn-" + names[i]);
+    if (btn) { if (names[i] === mode) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
+  }
+  var r = REGIMES[mode];
+  if (rgChart) {
+    rgChart.data.datasets[4].data = [ { x: r.q, y: r.p } ];
+    rgChart.update("none");
+  }
+  /* fill this regime's table row and mark visited */
+  var row = document.getElementById("rg-row-" + mode);
+  if (row) { row.classList.add("visited"); }
+  var cells = { q: String(r.q), p: fmt2(r.p), pf: (r.pf >= 0 ? "+" : "\u2212") + "$" + Math.abs(r.pf), dwl: "$" + r.dwl };
+  var k;
+  for (k in cells) {
+    if (cells.hasOwnProperty(k)) {
+      var el = document.getElementById("rg-" + mode + "-" + k);
+      if (el) { el.textContent = cells[k]; }
+    }
+  }
+  var out = document.getElementById("rg-readout");
+  if (!out) { return; }
+  if (mode === "un") {
+    out.innerHTML = "<strong>Unregulated:</strong> the ferry runs its Station 1 optimum — 20 crossings at $8, pocketing $20 while $40 of value goes unbuilt. The town eats the largest waste on the menu.";
+  } else if (mode === "mc") {
+    out.innerHTML = "<strong>P = MC:</strong> the fare drops to $4 and all 40 efficient crossings sail — deadweight loss $0. But at $4 a crossing the fare never touches the $60 boat cost: the ferry <strong>loses $60 a day</strong> and survives only on a taxpayer subsidy. Efficient, and not free.";
+  } else {
+    out.innerHTML = "<strong>P = ATC:</strong> at $6 the fare exactly covers all costs — 30 crossings, zero profit, firm solvent — leaving a residual $10 of deadweight loss. And a quieter cost: with every expense passed through to the fare, the ferry has little reason to trim any of them.";
+  }
+}
+
+/* ══════════ STATION 3 — discrimination lab ══════════ */
+var PD_MODES = {
+  single:  { q: 20, pf: 20,  cs: 40, dwl: 40 },
+  two:     { q: 30, pf: 40,  cs: 50, dwl: 10 },
+  perfect: { q: 40, pf: 100, cs: 0,  dwl: 0 }
+};
+var pdChart = null;
+var pdMode = "single";
+
+function initPd() {
+  var canvas = document.getElementById("pd-canvas");
+  if (!canvas || typeof Chart === "undefined") { return; }
+  pdChart = new Chart(canvas.getContext("2d"), {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Demand (riders' values)", data: seg(0, 12, 60, 0), showLine: true, borderColor: "#0f3d9e", backgroundColor: "#0f3d9e", pointRadius: 0, borderWidth: 2.5, tension: 0 },
+      { label: "MC ($4)", data: seg(0, 4, 60, 4), showLine: true, borderColor: "#991b1b", backgroundColor: "#991b1b", pointRadius: 0, borderWidth: 2, tension: 0 },
+      { label: "What riders pay", data: [], showLine: true, borderColor: "#166534", backgroundColor: "#166534", pointRadius: 0, borderWidth: 3, tension: 0, stepped: true },
+      { label: "Last rider served", data: [], borderColor: "#b87408", backgroundColor: "#b87408", pointRadius: 7 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, clip: false,
+      plugins: { legend: { labels: { font: { family: "Inter" }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { title: { display: true, text: "Crossings per day", font: { family: "Inter" } }, min: 0, max: 60, grid: { color: "#e2e8f0" } },
+        y: { title: { display: true, text: "$ per crossing", font: { family: "Inter" } }, min: 0, max: 13, grid: { color: "#e2e8f0" } }
+      }
+    }
+  });
+  setPdMode("single");
+}
+
+function setPdMode(mode) {
+  pdMode = mode;
+  var names = ["single", "two", "perfect"], i, btn;
+  for (i = 0; i < names.length; i++) {
+    btn = document.getElementById("pd-btn-" + names[i]);
+    if (btn) { if (names[i] === mode) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
+  }
+  var m = PD_MODES[mode];
+  if (pdChart) {
+    var payLine, lastDot;
+    if (mode === "single") {
+      payLine = [ { x: 0, y: 8 }, { x: 20, y: 8 } ];
+      lastDot = [ { x: 20, y: 8 } ];
+    } else if (mode === "two") {
+      payLine = [ { x: 0, y: 8 }, { x: 20, y: 8 }, { x: 20, y: 6 }, { x: 30, y: 6 } ];
+      lastDot = [ { x: 30, y: 6 } ];
+    } else {
+      payLine = pts(dP, 0, 40, 2);   /* everyone pays their own value: the demand curve itself */
+      lastDot = [ { x: 40, y: 4 } ];
+    }
+    pdChart.data.datasets[2].data = payLine;
+    pdChart.data.datasets[3].data = lastDot;
+    pdChart.update("none");
+  }
+  var cards = { "pd-q": String(m.q), "pd-profit": fmt0(m.pf), "pd-cs": fmt0(m.cs), "pd-dwl": fmt0(m.dwl) };
+  var k;
+  for (k in cards) {
+    if (cards.hasOwnProperty(k)) {
+      var el = document.getElementById(k);
+      if (el) { el.textContent = cards[k]; }
+    }
+  }
+  var out = document.getElementById("pd-readout");
+  if (!out) { return; }
+  if (mode === "single") {
+    out.innerHTML = "<strong>One fare for everyone:</strong> $8, and only the 20 highest-value riders board. Riders keep $40 of surplus; $40 of worthwhile crossings never happen. The baseline monopoly you built in Station 1.";
+  } else if (mode === "two") {
+    out.innerHTML = "<strong>Two fares:</strong> the ferry keeps $8 for its committed commuters and offers an off-peak $6 that brings <strong>10 previously priced-out riders</strong> aboard. Profit doubles to $40 — and look at the other cards: consumer surplus <em>rose</em> to $50 and deadweight loss collapsed to $10. Nobody lost; the waste paid for the gains.";
+  } else {
+    out.innerHTML = "<strong>Perfect discrimination:</strong> every rider pays exactly their own value — the green line <em>is</em> the demand curve — so all 40 efficient crossings sail and deadweight loss hits <strong>$0</strong>. The monopoly is fully efficient&hellip; and riders keep nothing: the entire $160 of surplus, minus the $60 boat, lands in the ferry's ledger as $100 profit.";
+  }
+}
+
+/* ══════════ STATION 4 — market detective ══════════ */
+var MK_CASES = [
+  { story: "Hundreds of stalls in the grain bazaar sell identical rice at the going price; any stall asking a copper more sells nothing, and price hovers at each stall's marginal cost.", key: "PC",
+    why: "Many sellers, identical product, no pricing power, P = MC — the perfect-competition fingerprint." },
+  { story: "The only licensed ferry sets one fare for all, well above the trivial cost of one more passenger; every week, would-be riders who value the trip more than it costs stay ashore.", key: "SP",
+    why: "One seller, a single price above marginal cost, and willing buyers priced out — the single-price monopoly and its deadweight loss." },
+  { story: "An airline sells the same seat, with the same cost to fly, at triple price to Friday business travelers and cheap to Saturday-stayers.", key: "PD",
+    why: "Identical cost, systematically different prices keyed to willingness to pay — price discrimination by segmenting travelers." },
+  { story: "The city's water utility laid enormous pipes decades ago; the cost per liter is tiny and average cost keeps falling as the city grows. Nobody proposes a second set of pipes.", key: "NM",
+    why: "Huge fixed cost, negligible marginal cost, ATC declining over the whole market — one firm is cheapest: a natural monopoly." },
+  { story: "Verenia's wheat farmers each sell a crop indistinguishable from their neighbors'; none can budge the market price by an ear, and profits attract new planting until they vanish.", key: "PC",
+    why: "Price-taking sellers of a homogeneous good, with free entry grinding profit to zero — competition's long-run signature." },
+  { story: "The sole patent-holder of a new medicine charges one high price everywhere; patients who would pay more than the pill's production cost, but less than the list price, go untreated.", key: "SP",
+    why: "A legal barrier creates one seller charging a uniform markup; the untreated patients are the deadweight loss of single-price monopoly." },
+  { story: "The cinema charges students half price on the same showing of the same film, checking ID at the door.", key: "PD",
+    why: "Same product and cost, different prices by identifiable group, with the ID check preventing resale — textbook group price discrimination." },
+  { story: "One high-voltage grid carries all the region's power; building a rival grid would double society's cost, and the incumbent's average cost still falls with every added customer.", key: "NM",
+    why: "Duplication would raise total cost and ATC falls throughout demand — the defining test of natural monopoly." },
+  { story: "A software firm sells the identical download at a 'home' price, a discounted 'student' price with enrollment proof, and a premium 'enterprise' price.", key: "PD",
+    why: "One product with near-zero marginal cost sold on a menu of prices sorted by willingness to pay — a discrimination scheme, complete with screening." },
+  { story: "Food trucks crowd the festival: menus nearly identical, prices identical, and any truck raising its price watches the queue walk ten meters to the next window.", key: "PC",
+    why: "Many sellers, easy substitution, zero pricing power — competition holding price to cost." },
+  { story: "The only bridge operator sets a single toll far above the near-zero cost of one more car crossing, and traffic that would gladly pay something smaller reroutes the long way around.", key: "SP",
+    why: "One seller, one toll above marginal cost, and diverted drivers whose crossings were worth more than they cost — single-price monopoly waste in motion." },
+  { story: "A mountain village is reached by one rail line; laying a second track would cost more than all the traffic is worth, and the line's cost per passenger falls the busier it gets.", key: "NM",
+    why: "The market is too small to cover a second fixed cost and ATC declines throughout — natural monopoly by geography." }
+];
+
+var MK = { attempted: 0, correct: 0, streak: 0, best: 0 };
+var currentMk = null;
+var mkAnswered = true;
+
+function loadMk() {
+  try {
+    var raw = localStorage.getItem("monopolyArena.detective");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.attempted === "number") { MK.attempted = parsed.attempted; }
+        if (typeof parsed.correct === "number") { MK.correct = parsed.correct; }
+        if (typeof parsed.streak === "number") { MK.streak = parsed.streak; }
+        if (typeof parsed.best === "number") { MK.best = parsed.best; }
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveMk() {
+  try {
+    localStorage.setItem("monopolyArena.detective", JSON.stringify(MK));
+  } catch (e) { /* ignore */ }
+}
+
+function renderMkStats() {
+  var att = document.getElementById("stat-attempted");
+  var cor = document.getElementById("stat-correct");
+  var acc = document.getElementById("stat-acc");
+  var best = document.getElementById("stat-best");
+  if (att) { att.textContent = String(MK.attempted); }
+  if (cor) { cor.textContent = String(MK.correct); }
+  if (acc) { acc.innerHTML = MK.attempted > 0 ? Math.round((MK.correct / MK.attempted) * 100) + "%" : "&mdash;"; }
+  if (best) { best.textContent = String(MK.best); }
+}
+
+var MK_IDS = ["PC", "SP", "PD", "NM"];
+var MK_NAMES = {
+  PC: "perfectly competitive",
+  SP: "a single-price monopoly",
+  PD: "a price-discriminating monopoly",
+  NM: "a natural monopoly"
+};
+
+function setMkButtons(disabled) {
+  var i, btn;
+  for (i = 0; i < MK_IDS.length; i++) {
+    btn = document.getElementById("mk-" + MK_IDS[i]);
+    if (btn) {
+      btn.disabled = disabled;
+      btn.classList.remove("correct");
+      btn.classList.remove("wrong");
+    }
+  }
+}
+
+var currentMkIndex = -1;
+function newMarketCase() {
+  currentMkIndex = Math.floor(Math.random() * MK_CASES.length);
+  currentMk = MK_CASES[currentMkIndex];
+  mkAnswered = false;
+  setMkButtons(false);
+  var story = document.getElementById("mk-story");
+  if (story) { story.innerHTML = "<strong>The case:</strong> " + currentMk.story; }
+  var out = document.getElementById("mk-readout");
+  if (out) { out.innerHTML = "The case file awaits your classification."; }
+}
+
+/* Retrofit: grading now goes through the vault when a backend is present.
+   currentMk.key is used ONLY as the offline fallback (professor previewing the
+   raw file with no login). Online, the correct code comes from the Edge
+   Function, and MK counters are replaced by the server's authoritative score. */
+function mkApplyVerdict(choice, correctCode, serverScore) {
+  var correct = choice === correctCode;
+  var btnChosen = document.getElementById("mk-" + choice);
+  var btnRight = document.getElementById("mk-" + correctCode);
+  if (btnRight) { btnRight.classList.add("correct"); }
+  if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
+
+  if (serverScore) {
+    MK.attempted = serverScore.attempted;
+    MK.correct = serverScore.correct;
+    MK.streak = serverScore.streak;
+    MK.best = serverScore.bestStreak;
+  } else {
+    MK.attempted += 1;
+    if (correct) { MK.correct += 1; MK.streak += 1; if (MK.streak > MK.best) { MK.best = MK.streak; } }
+    else { MK.streak = 0; }
+    saveMk();
+  }
+  renderMkStats();
+
+  var out = document.getElementById("mk-readout");
+  if (out) {
+    var whyText = currentMk && currentMk.why ? currentMk.why : "";
+    if (correct) {
+      out.innerHTML = "<strong>Correct</strong> — this market is " + MK_NAMES[correctCode] + ". " + whyText +
+        " Streak: <strong>" + MK.streak + "</strong>. Press <strong>New case</strong> for another.";
+    } else {
+      out.innerHTML = "<strong>Not this one.</strong> The market is " + MK_NAMES[correctCode] + ". " + whyText +
+        " Check the fingerprints in order: how many sellers, price versus marginal cost, one price or a menu, and whether ATC ever stops falling. Next case when ready.";
+    }
+  }
+}
+
+function marketVerdict(choice) {
+  if (!currentMk || mkAnswered) { return; }
+  mkAnswered = true;
+  setMkButtons(true);
+
+  /* Online: grade against the vault via the Edge Function; the correct code and
+     the authoritative score come back from the server. Offline (no backend, e.g.
+     a raw-file preview): fall back to the case's local key so the arena still runs. */
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("monopoly-arena", currentMkIndex, choice, function (res) {
+      if (res && res.needEnroll) {
+        mkAnswered = false; setMkButtons(false);
+        var o = document.getElementById("mk-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> This graded arena needs an active Intro Micro enrollment. <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        mkApplyVerdict(choice, res.correctCode, res.score);
+      } else {
+        /* transient failure: fall back to local key so the student isn't blocked */
+        mkApplyVerdict(choice, currentMk.key, null);
+      }
+    });
+  } else {
+    mkApplyVerdict(choice, currentMk.key, null);
+  }
+}
+
+function resetMarketScore() {
+  MK.attempted = 0;
+  MK.correct = 0;
+  MK.streak = 0;
+  MK.best = 0;
+  saveMk();
+  renderMkStats();
+  var out = document.getElementById("mk-readout");
+  if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
+}
+
+/* ══════════ Boot ══════════ */
+/* ══════════ Intro Micro auth bar (Phase 3) ══════════ */
+function imShowMsg(t) {
+  var m = document.getElementById("im-auth-msg");
+  if (m) { m.textContent = t || ""; }
+}
+function imRenderAuth() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) { return; }
+  var bar = document.getElementById("im-authbar");
+  if (bar) {
+    bar.style.display = "block";
+    /* push page content down so the fixed bar doesn't cover the title */
+    var mains = document.getElementsByTagName("main");
+    if (mains && mains[0]) { mains[0].style.marginTop = "112px"; }
+  }
+  IMBackend.getSession(function (session) {
+    var out = document.getElementById("im-auth-signedout");
+    var inn = document.getElementById("im-auth-signedin");
+    if (session && session.user) {
+      if (out) { out.style.display = "none"; }
+      if (inn) { inn.style.display = "flex"; }
+      var who = document.getElementById("im-who");
+      if (who) { who.textContent = session.user.email || "signed in"; }
+      IMBackend.checkAccess(function (ok) {
+        var b = document.getElementById("im-access-badge");
+        if (b) {
+          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
+          else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
+        }
+      });
+    } else {
+      if (out) { out.style.display = "flex"; }
+      if (inn) { inn.style.display = "none"; }
+    }
+  });
+}
+function imDoSignIn() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signIn(e.value, p.value, function (res) {
+    if (res && res.ok) { imRenderAuth(); }
+    else { imShowMsg(res && res.error ? res.error : "Sign-in failed."); }
+  });
+}
+function imDoSignUp() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signUp(e.value, p.value, null, function (res) {
+    if (res && res.ok) {
+      imShowMsg(res.needsConfirm ? "Account created — check your email to confirm, then sign in." : "Account created — you can sign in now.");
+    } else { imShowMsg(res && res.error ? res.error : "Sign-up failed."); }
+  });
+}
+function imDoSignOut() {
+  IMBackend.signOut(function () { imRenderAuth(); });
+}
+
+function boot() {
+  loadMk();
+  renderMkStats();
+  initMn();
+  initRg();
+  initPd();
+  imRenderAuth();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
+</script>
+
+</body>
+</html>
