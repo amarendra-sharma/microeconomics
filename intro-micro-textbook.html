@@ -215,6 +215,9 @@ em { font-style: italic; }
 .tb-chapter-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; border-top: 1px solid var(--rule); margin-top: 3rem; gap: 1rem; flex-wrap: wrap; }
 .tb-chapter-nav-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1.25rem; background: var(--bg-card); border: 1.5px solid var(--rule); border-radius: var(--radius); cursor: pointer; font-size: 0.875rem; font-weight: 500; color: var(--ink-light); transition: all 0.15s; }
 .tb-chapter-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tb-arena-cta { margin: 2.5rem 0 0; text-align: center; }
+.tb-arena-link { display: inline-block; padding: 0.875rem 1.75rem; background: var(--accent); color: #fff; border-radius: var(--radius); font-size: 0.95rem; font-weight: 600; text-decoration: none; box-shadow: 0 4px 6px rgba(15,61,158,0.18); transition: all 0.15s; border: 2px solid var(--accent); }
+.tb-arena-link:hover { background: #fff; color: var(--accent); box-shadow: 0 6px 10px rgba(15,61,158,0.22); }
 .tb-mark-complete { padding: 0.625rem 1.5rem; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
 .tb-mark-complete:hover { background: var(--accent-mid); }
 .tb-mark-complete.done { background: var(--green); }
@@ -5969,11 +5972,63 @@ function toggleSidebar() {
   if (sb) { sb.classList.toggle("open"); }
 }
 
+/* ══════════ Companion-arena links (added post-arena-build) ══════════
+   Each chapter with a companion arena gets a "Launch the companion arena"
+   button injected into its nav row. Driven by the map below so it stays in
+   sync with the deployed arena filenames. Runs once on boot. */
+var CHAPTER_ARENAS = {
+  "ch4":  { file: "market-sandbox.html",     label: "Market Sandbox" },
+  "ch5":  { file: "elasticity-explorer.html", label: "Elasticity Explorer" },
+  "ch6":  { file: "policy-lab.html",          label: "Policy Lab" },
+  "ch7":  { file: "policy-lab.html",          label: "Policy Lab" },
+  "ch8":  { file: "choice-sandbox.html",      label: "Choice Sandbox" },
+  "ch9":  { file: "cost-lab.html",            label: "Cost Lab" },
+  "ch10": { file: "profit-arena.html",        label: "Profit Arena" },
+  "ch11": { file: "monopoly-arena.html",      label: "Monopoly Arena" },
+  "ch13": { file: "oligopoly-arena.html",     label: "Oligopoly Arena" },
+  "ch14": { file: "labor-lab.html",           label: "Labor Market Lab" },
+  "ch15": { file: "externality-arena.html",   label: "Externality Arena" },
+  "ch16": { file: "lemons-arena.html",        label: "Lemons Market Arena" },
+  "ch17": { file: "bias-lab.html",            label: "Bias Lab" }
+};
+
+function injectArenaLinks() {
+  var chId;
+  for (chId in CHAPTER_ARENAS) {
+    if (!CHAPTER_ARENAS.hasOwnProperty(chId)) { continue; }
+    var page = document.getElementById("page-" + chId);
+    if (!page) { continue; }
+    /* avoid double-injection if boot runs twice */
+    if (page.getElementsByClassName("tb-arena-cta").length > 0) { continue; }
+    var navs = page.getElementsByClassName("tb-chapter-nav");
+    var arena = CHAPTER_ARENAS[chId];
+    var a = document.createElement("a");
+    a.className = "tb-arena-link";
+    a.setAttribute("href", arena.file);
+    a.innerHTML = "&#9881; Launch the " + arena.label + " &rarr;";
+    if (navs && navs.length > 0) {
+      /* place the arena button just before the chapter nav row */
+      var nav = navs[0];
+      var wrap = document.createElement("div");
+      wrap.className = "tb-arena-cta";
+      wrap.appendChild(a);
+      nav.parentNode.insertBefore(wrap, nav);
+    } else {
+      /* stub/preview chapter with no nav: append at end of page */
+      var wrap2 = document.createElement("div");
+      wrap2.className = "tb-arena-cta";
+      wrap2.appendChild(a);
+      page.appendChild(wrap2);
+    }
+  }
+}
+
 function boot() {
   loadProgress();
   renderSidebar();
   renderTOC();
   updateProgressBar();
+  injectArenaLinks();
   showChapter("cover");
   renderMath(document.body);
 }
