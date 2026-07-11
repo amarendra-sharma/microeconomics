@@ -104,11 +104,17 @@
 
   function goToCheckout() {
     /* send the user to Stripe with their user_id as client_reference_id so the
-       webhook can match the payment back to this account */
+       webhook can match the payment back to this account. Prefer the admin-
+       configured link from pricing settings; fall back to the default. */
     var ref = session && session.user ? session.user.id : "";
-    var url = CHECKOUT_URL + (CHECKOUT_URL.indexOf("?") >= 0 ? "&" : "?") +
-      "client_reference_id=" + encodeURIComponent(ref);
-    global.location.href = url;
+    function go(base) {
+      var url = base + (base.indexOf("?") >= 0 ? "&" : "?") +
+        "client_reference_id=" + encodeURIComponent(ref);
+      global.location.href = url;
+    }
+    getPricing(function (p) {
+      go(p && p.stripeLink ? p.stripeLink : CHECKOUT_URL);
+    });
   }
 
   /* ---- VAULTED GRADING ----------------------------------------------------- */
@@ -174,7 +180,7 @@
         "<div id='im-gate-msg' style='color:#991b1b;font-size:0.8rem;margin-top:0.5rem;min-height:1em;'></div>" +
       "</div>";
     var unlockBlock =
-      "<button id='im-gate-unlock' style='margin-top:1.25rem;width:100%;padding:0.7rem;border:none;border-radius:8px;background:#b87408;color:#fff;font-weight:700;font-size:0.95rem;cursor:pointer;'>Unlock the full course &mdash; $25</button>" +
+      "<button id='im-gate-unlock' style='margin-top:1.25rem;width:100%;padding:0.7rem;border:none;border-radius:8px;background:#b87408;color:#fff;font-weight:700;font-size:0.95rem;cursor:pointer;'>Unlock the full course</button>" +
       "<button id='im-gate-signout' style='margin-top:0.5rem;width:100%;padding:0.55rem;border:1px solid #cbd5e1;border-radius:8px;background:transparent;color:#334155;font-weight:600;font-size:0.85rem;cursor:pointer;'>Sign out</button>";
     var body = mode === "unlock"
       ? "<p style='color:#475569;font-size:0.95rem;line-height:1.6;margin-top:0.5rem;'>You're signed in, but this chapter is part of the full course. Chapters 1&ndash;3 and the Market Sandbox are free; unlocking gives you all 17 chapters, all 12 arenas, exams, and your gradebook.</p>" + unlockBlock
@@ -207,7 +213,17 @@
       });
     }
     var un = global.document.getElementById("im-gate-unlock");
-    if (un) { un.addEventListener("click", function () { goToCheckout(); }); }
+    if (un) {
+      un.addEventListener("click", function () { goToCheckout(); });
+      /* fill in the admin-controlled price */
+      getPricing(function (p) {
+        if (p && typeof p.priceCents === "number") {
+          un.innerHTML = "Unlock the full course &mdash; " + formatPrice(p.priceCents, p.currency);
+        } else {
+          un.innerHTML = "Unlock the full course";
+        }
+      });
+    }
     var so = global.document.getElementById("im-gate-signout");
     if (so) { so.addEventListener("click", function () { signOut(function () { buildOverlay("signin"); }); }); }
   }
@@ -228,6 +244,36 @@
     });
   }
 
+  /* ---- PRICING (public, from im_public_pricing view) ---------------------
+     Reads the admin-controlled price + Stripe link so display text has a single
+     source of truth. Cached after first fetch. cb receives
+     { priceCents, currency, stripeLink } or null on failure/offline. */
+  var pricingCache = null;
+  function getPricing(cb) {
+    if (pricingCache) { cb(pricingCache); return; }
+    if (!init()) { cb(null); return; }
+    sb.from("im_public_pricing").select("price_cents,currency,stripe_link").maybeSingle()
+      .then(function (res) {
+        if (res && res.data) {
+          pricingCache = {
+            priceCents: res.data.price_cents,
+            currency: res.data.currency ? res.data.currency : "usd",
+            stripeLink: res.data.stripe_link ? res.data.stripe_link : ""
+          };
+          cb(pricingCache);
+        } else { cb(null); }
+      }).catch(function () { cb(null); });
+  }
+
+  /* format cents as a price string, e.g. 2500 -> "$25" ("$25.50" if needed) */
+  function formatPrice(cents, currency) {
+    if (typeof cents !== "number") { return ""; }
+    var dollars = cents / 100;
+    var sym = (currency === "usd" || !currency) ? "$" : "";
+    var str = (dollars === Math.floor(dollars)) ? String(dollars) : dollars.toFixed(2);
+    return sym + str;
+  }
+
   global.IMBackend = {
     init: init,
     getSession: getSession,
@@ -240,6 +286,8 @@
     gradePerformance: gradePerformance,
     getMyScores: getMyScores,
     gateContent: gateContent,
+    getPricing: getPricing,
+    formatPrice: formatPrice,
     isOnline: function () { return hasSDK(); }
   };
 })(this);

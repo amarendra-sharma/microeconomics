@@ -2834,7 +2834,8 @@ var BUILT = { ch1: true, ch2: true, ch3: true, ch4: true, ch5: true, ch6: true, 
 var FREE_CHAPTERS = { ch1: true, ch2: true, ch3: true };
 var currentChapterId = "cover";
 var COURSE_PRICE = 25;
-var SUBSCRIBE_URL = "https://buy.stripe.com/8x2cMYbjfcsk2ON7se5ZC01"; /* MacroNations default payment link; swap if a dedicated Micro link is created */
+var COURSE_PRICE_STR = "$25";
+var SUBSCRIBE_URL = "https://buy.stripe.com/8x2cMYbjfcsk2ON7se5ZC01"; /* fallback; live value comes from admin settings via im-backend getPricing */
 
 /* DEV ONLY — set to false (and rely on hasSubscription/Supabase) before launch.
    While true, every chapter is viewable so the author can review locked content. */
@@ -2861,6 +2862,21 @@ function refreshAccessThenRender() {
     IMBackend.checkAccess(function (ok) {
       IM_ACCESS = !!ok;
       IM_ACCESS_RESOLVED = true;
+      /* pull the admin-controlled price + Stripe link for the paywall */
+      if (typeof IMBackend.getPricing === "function") {
+        IMBackend.getPricing(function (p) {
+          if (p) {
+            if (typeof p.priceCents === "number") {
+              COURSE_PRICE = p.priceCents / 100;
+              COURSE_PRICE_STR = IMBackend.formatPrice(p.priceCents, p.currency);
+            }
+            if (p.stripeLink) { SUBSCRIBE_URL = p.stripeLink; }
+          }
+          if (typeof renderSidebar === "function") { renderSidebar(); }
+          var cur2 = currentChapterId ? currentChapterId : null;
+          if (cur2) { showChapter(cur2); }
+        });
+      }
       /* re-render sidebar + current chapter now that access is known */
       if (typeof renderSidebar === "function") { renderSidebar(); }
       var cur = (typeof currentChapterId !== "undefined" && currentChapterId) ? currentChapterId : null;
@@ -3102,7 +3118,7 @@ function renderPaywall(chId) {
   s += '<div class="tb-paywall-lock">\uD83D\uDD12</div>';
   s += '<h3>Chapter ' + ch.num + ': ' + ch.title + '</h3>';
   s += '<p>This chapter is part of the full course. Chapters 1\u20133 and the Market Sandbox arena are free to preview.</p>';
-  s += '<div class="tb-paywall-price">$' + COURSE_PRICE + ' <span>/ course</span></div>';
+  s += '<div class="tb-paywall-price">' + COURSE_PRICE_STR + ' <span>/ course</span></div>';
   s += '<p style="margin-top:1rem;">Unlock all 17 chapters, every arena, and your graded assessments.</p>';
   s += '<a class="btn-tb btn-tb-primary" href="' + SUBSCRIBE_URL + '" style="display:inline-block;text-decoration:none;">Subscribe to unlock</a>';
   s += '<div style="margin-top:1rem;"><button class="btn-tb btn-tb-ghost" onclick="showChapter(\'ch1\')">Back to the free preview</button></div>';
