@@ -151,6 +151,83 @@
       .catch(function () { cb([]); });
   }
 
+  /* ---- CONTENT GATE (freemium) -------------------------------------------
+     Call IMBackend.gateContent() from a gated chapter/arena. It checks access
+     and, if the visitor is NOT entitled, overlays the page with a sign-in /
+     unlock prompt. Free files simply never call this. Offline (no backend)
+     leaves content open so raw-file previews still work. */
+  function buildOverlay(mode) {
+    var ov = global.document.getElementById("im-gate-overlay");
+    if (ov) { ov.parentNode.removeChild(ov); }
+    ov = global.document.createElement("div");
+    ov.id = "im-gate-overlay";
+    ov.setAttribute("style",
+      "position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,0.86);" +
+      "backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);" +
+      "display:flex;align-items:center;justify-content:center;padding:1.5rem;" +
+      "font-family:'Inter',system-ui,sans-serif;");
+    var signInBlock =
+      "<div style='margin-top:1.25rem;text-align:left;'>" +
+        "<input id='im-gate-email' type='email' placeholder='email' style='width:100%;padding:0.6rem 0.75rem;margin-bottom:0.5rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;'>" +
+        "<input id='im-gate-pass' type='password' placeholder='password' style='width:100%;padding:0.6rem 0.75rem;margin-bottom:0.75rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;'>" +
+        "<button id='im-gate-signin' style='width:100%;padding:0.65rem;border:none;border-radius:8px;background:#0f3d9e;color:#fff;font-weight:600;font-size:0.9rem;cursor:pointer;'>Sign in</button>" +
+        "<div id='im-gate-msg' style='color:#991b1b;font-size:0.8rem;margin-top:0.5rem;min-height:1em;'></div>" +
+      "</div>";
+    var unlockBlock =
+      "<button id='im-gate-unlock' style='margin-top:1.25rem;width:100%;padding:0.7rem;border:none;border-radius:8px;background:#b87408;color:#fff;font-weight:700;font-size:0.95rem;cursor:pointer;'>Unlock the full course &mdash; $25</button>" +
+      "<button id='im-gate-signout' style='margin-top:0.5rem;width:100%;padding:0.55rem;border:1px solid #cbd5e1;border-radius:8px;background:transparent;color:#334155;font-weight:600;font-size:0.85rem;cursor:pointer;'>Sign out</button>";
+    var body = mode === "unlock"
+      ? "<p style='color:#475569;font-size:0.95rem;line-height:1.6;margin-top:0.5rem;'>You're signed in, but this chapter is part of the full course. Chapters 1&ndash;3 and the Market Sandbox are free; unlocking gives you all 17 chapters, all 12 arenas, exams, and your gradebook.</p>" + unlockBlock
+      : "<p style='color:#475569;font-size:0.95rem;line-height:1.6;margin-top:0.5rem;'>This chapter is part of the full course. Sign in to your Intro Micro account to continue, or head back to the free preview.</p>" + signInBlock;
+    ov.innerHTML =
+      "<div style='background:#fff;border-radius:16px;max-width:400px;width:100%;padding:2rem;box-shadow:0 20px 50px rgba(0,0,0,0.35);text-align:center;'>" +
+        "<div style='font-size:1.75rem;'>&#128274;</div>" +
+        "<h2 style='font-family:Georgia,serif;font-size:1.35rem;margin:0.5rem 0 0;color:#0f172a;'>Full course content</h2>" +
+        body +
+        "<div style='margin-top:1rem;'><a href='index.html' style='color:#64748b;font-size:0.85rem;text-decoration:underline;'>&larr; Back to the portal</a></div>" +
+      "</div>";
+    global.document.body.appendChild(ov);
+
+    var si = global.document.getElementById("im-gate-signin");
+    if (si) {
+      si.addEventListener("click", function () {
+        var e = global.document.getElementById("im-gate-email");
+        var p = global.document.getElementById("im-gate-pass");
+        var m = global.document.getElementById("im-gate-msg");
+        if (!e || !p || !e.value || !p.value) { if (m) { m.textContent = "Enter email and password."; } return; }
+        signIn(e.value, p.value, function (res) {
+          if (res && res.ok) {
+            accessCache = null;
+            checkAccess(function (ok2) {
+              if (ok2) { removeOverlay(); }
+              else { buildOverlay("unlock"); }
+            });
+          } else if (m) { m.textContent = res && res.error ? res.error : "Sign-in failed."; }
+        });
+      });
+    }
+    var un = global.document.getElementById("im-gate-unlock");
+    if (un) { un.addEventListener("click", function () { goToCheckout(); }); }
+    var so = global.document.getElementById("im-gate-signout");
+    if (so) { so.addEventListener("click", function () { signOut(function () { buildOverlay("signin"); }); }); }
+  }
+
+  function removeOverlay() {
+    var ov = global.document.getElementById("im-gate-overlay");
+    if (ov) { ov.parentNode.removeChild(ov); }
+  }
+
+  function gateContent() {
+    /* offline / no backend: leave content open (preview mode) */
+    if (!hasSDK()) { return; }
+    getSession(function (sessionNow) {
+      checkAccess(function (ok) {
+        if (ok) { removeOverlay(); return; }
+        buildOverlay(sessionNow && sessionNow.user ? "unlock" : "signin");
+      });
+    });
+  }
+
   global.IMBackend = {
     init: init,
     getSession: getSession,
@@ -162,6 +239,7 @@
     gradeCase: gradeCase,
     gradePerformance: gradePerformance,
     getMyScores: getMyScores,
+    gateContent: gateContent,
     isOnline: function () { return hasSDK(); }
   };
 })(this);

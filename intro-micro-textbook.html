@@ -11,6 +11,8 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
 
 <style>
 :root {
@@ -2829,21 +2831,42 @@ var BUILT = { ch1: true, ch2: true, ch3: true, ch4: true, ch5: true, ch6: true, 
    Gating must be decided here, server-confirmed — never by the
    launch link alone.
    ════════════════════════════════════════════════════════════ */
-var FREE_CHAPTERS = { ch1: true, ch2: true };
+var FREE_CHAPTERS = { ch1: true, ch2: true, ch3: true };
+var currentChapterId = "cover";
 var COURSE_PRICE = 25;
 var SUBSCRIBE_URL = "https://buy.stripe.com/8x2cMYbjfcsk2ON7se5ZC01"; /* MacroNations default payment link; swap if a dedicated Micro link is created */
 
 /* DEV ONLY — set to false (and rely on hasSubscription/Supabase) before launch.
    While true, every chapter is viewable so the author can review locked content. */
-var DEV_PREVIEW = true;
+var DEV_PREVIEW = false;
+
+/* Access state, resolved asynchronously at boot from the Intro Micro backend
+   (im_has_access) and cached here so the synchronous isUnlocked() can read it.
+   Falls back to false (locked) until resolved; boot re-renders once known. */
+var IM_ACCESS = false;
+var IM_ACCESS_RESOLVED = false;
 
 function hasSubscription() {
-  /* Stub. Replace with a Supabase subscription lookup. */
-  try {
-    return localStorage.getItem("introMicro.subscribed") === "true";
-  } catch (e) {
-    return false;
+  return IM_ACCESS === true;
+}
+
+function refreshAccessThenRender() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) {
+    /* offline / no backend: leave locked chapters locked but allow free ones.
+       (Raw-file preview still shows ch1-3 + cover.) */
+    IM_ACCESS_RESOLVED = true;
+    return;
   }
+  IMBackend.getSession(function () {
+    IMBackend.checkAccess(function (ok) {
+      IM_ACCESS = !!ok;
+      IM_ACCESS_RESOLVED = true;
+      /* re-render sidebar + current chapter now that access is known */
+      if (typeof renderSidebar === "function") { renderSidebar(); }
+      var cur = (typeof currentChapterId !== "undefined" && currentChapterId) ? currentChapterId : null;
+      if (cur) { showChapter(cur); }
+    });
+  });
 }
 
 function isUnlocked(chId) {
@@ -2986,6 +3009,7 @@ function hideAllPages() {
 }
 
 function showChapter(id) {
+  currentChapterId = id;
   hideAllPages();
   setActiveNav(id);
 
@@ -3077,7 +3101,7 @@ function renderPaywall(chId) {
   s += '<div class="tb-paywall">';
   s += '<div class="tb-paywall-lock">\uD83D\uDD12</div>';
   s += '<h3>Chapter ' + ch.num + ': ' + ch.title + '</h3>';
-  s += '<p>This chapter is part of the full course. Chapters 1\u20132 and the Market Sandbox arena are free to preview.</p>';
+  s += '<p>This chapter is part of the full course. Chapters 1\u20133 and the Market Sandbox arena are free to preview.</p>';
   s += '<div class="tb-paywall-price">$' + COURSE_PRICE + ' <span>/ course</span></div>';
   s += '<p style="margin-top:1rem;">Unlock all 17 chapters, every arena, and your graded assessments.</p>';
   s += '<a class="btn-tb btn-tb-primary" href="' + SUBSCRIBE_URL + '" style="display:inline-block;text-decoration:none;">Subscribe to unlock</a>';
@@ -6032,6 +6056,7 @@ function boot() {
   injectArenaLinks();
   showChapter("cover");
   renderMath(document.body);
+  refreshAccessThenRender();
 }
 
 if (document.readyState === "loading") {

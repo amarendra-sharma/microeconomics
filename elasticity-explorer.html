@@ -7,6 +7,8 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
 
 <style>
 :root {
@@ -139,7 +141,8 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Elasticity Explorer</div>
   <span class="sb-course-tag">Course Arena</span>
   <div class="sb-spacer"></div>
-  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+  <a class="sb-header-btn" href="index.html" style="margin-right:0.4rem;">&larr; Portal</a>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">Textbook</a>
 </header>
 
 <main>
@@ -596,6 +599,9 @@ function resetEstScore() {
 
 /* ══════════ Boot ══════════ */
 function boot() {
+  /* freemium gate: this is a paid chapter arena; free preview only for the
+     Market Sandbox. Overlays a sign-in/unlock prompt if not entitled. */
+  if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadEst();
   renderEstStats();
   initEE();
