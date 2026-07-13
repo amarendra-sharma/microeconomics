@@ -29,6 +29,7 @@
   var SUPABASE_URL = "https://rtaiivegcqqmdchpguzn.supabase.co";
   var SUPABASE_ANON_KEY = "sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm";
   var GRADE_FN_URL = SUPABASE_URL + "/functions/v1/im-grade";
+  var GRADE_QUIZ_FN_URL = SUPABASE_URL + "/functions/v1/im-grade-quiz";
   var CHECKOUT_URL = "https://buy.stripe.com/8x2cMYbjfcsk2ON7se5ZC01"; /* MacroNations DEFAULT_PAYMENT_LINK */
 
   var sb = null;          /* supabase client, if the SDK loaded */
@@ -148,6 +149,34 @@
       if (data) { cb(data); }
     }).catch(function () { cb({ offline: true }); });
   }
+
+  /* ---- QUIZ GRADING (randomized items, server regenerates from seed) ------
+     payload items: [{ generator_id, seed, submitted }]. The Edge Function
+     grades MC/numeric deterministically and written answers via AI, writing
+     an im_exam_attempt row per item. cb receives
+     { ok, score, total, pending } or { offline:true } / { needEnroll:true }. */
+  function gradeQuiz(chapter, items, cb) {
+    if (!session || !session.access_token) { cb({ offline: true }); return; }
+    global.fetch(GRADE_QUIZ_FN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": "Bearer " + session.access_token
+      },
+      body: JSON.stringify({ chapter: chapter, items: items })
+    }).then(function (r) {
+      if (r.status === 403) { cb({ ok: false, needEnroll: true }); return null; }
+      if (!r.ok) { cb({ ok: false, offline: true }); return null; }
+      return r.json();
+    }).then(function (data) {
+      if (data) { cb(data); }
+    }).catch(function () { cb({ ok: false, offline: true }); });
+  }
+
+  /* expose the supabase client for modules that need direct reads (e.g. the
+     quiz engine's best-effort practice log). Returns null if not initialized. */
+  function _sb() { return init() ? sb : null; }
 
   /* ---- SCORES / GRADES (student's own) ------------------------------------- */
   function getMyScores(cb) {
@@ -284,10 +313,12 @@
     goToCheckout: goToCheckout,
     gradeCase: gradeCase,
     gradePerformance: gradePerformance,
+    gradeQuiz: gradeQuiz,
     getMyScores: getMyScores,
     gateContent: gateContent,
     getPricing: getPricing,
     formatPrice: formatPrice,
+    _sb: _sb,
     isOnline: function () { return hasSDK(); }
   };
 })(this);
