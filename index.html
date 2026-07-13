@@ -630,8 +630,14 @@ function enterApp(user){
   }
 }
 function loadPlatformSettings(){
-  return sb.from('im_platform_setting').select('*').eq('id',1).maybeSingle().then(function(res){
-    State.settings = res.data ? res.data : null;
+  // Read the settings row the admin panel writes. Use limit(1) + order rather
+  // than maybeSingle so a stray duplicate row never throws. Prefer id='1'.
+  return sb.from('im_platform_setting').select('*').order('id',{ascending:true}).limit(5).then(function(res){
+    var rows = res.data ? res.data : [];
+    var chosen = null;
+    for (var i=0;i<rows.length;i++){ if (String(rows[i].id)==='1'){ chosen = rows[i]; break; } }
+    if (!chosen && rows.length){ chosen = rows[0]; }
+    State.settings = chosen;
   });
 }
 function loadCourses(){
@@ -2588,6 +2594,16 @@ function resolveAccess() {
 function chapterLocked(n) { if (State.hasAccess) { return false; } return !FREE_CHAPTERS[n]; }
 function arenaLocked(slug) { if (State.hasAccess) { return false; } return !FREE_ARENAS[slug]; }
 function openSubscribePrompt(whatLabel) {
+  // Ensure platform settings (price + stripe link) are loaded before we decide
+  // whether to show the link or the "not configured" message. Without this, a
+  // slow/never-run settings load makes every Subscribe click say "not configured".
+  if (!State.settings || !State.settings.stripe_link) {
+    loadPlatformSettings().then(function () { renderSubscribePrompt(whatLabel); });
+    return;
+  }
+  renderSubscribePrompt(whatLabel);
+}
+function renderSubscribePrompt(whatLabel) {
   var baseLink = State.settings ? State.settings.stripe_link : '';
   var price = State.settings ? State.settings.price_cents : 0;
   var cur = State.settings ? State.settings.currency : 'usd';
