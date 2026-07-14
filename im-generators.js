@@ -362,6 +362,170 @@
     }
   };
 
+  /* ===================== CHAPTER 1 — Ten Principles ===================== */
+
+  /* ---- opportunity cost, simple numeric (Ch1) --------------------------- */
+  GEN["opp_cost_basic"] = {
+    id: "opp_cost_basic", chapter: 1, kind: "numeric", render: "text",
+    difficulty: "easy", concept: "opportunity cost", points: 1,
+    build: function (rng) {
+      var wage = rng_int(rng, 12, 25);
+      var hours = rng_int(rng, 2, 5);
+      var ticket = rng_int(rng, 20, 60);
+      /* opportunity cost of going to an event = ticket price + forgone wages */
+      var oc = ticket + wage * hours;
+      return {
+        prompt: "You could work for $" + wage + " per hour. Instead you spend " + hours +
+          " hours at a concert whose ticket costs $" + ticket +
+          ". What is the total opportunity cost of attending the concert?",
+        answer: oc, tolerance: 0.01,
+        rationale: "Opportunity cost = explicit cost ($" + ticket + " ticket) + forgone wages ($" +
+          wage + " \u00d7 " + hours + " = $" + (wage * hours) + ") = $" + oc + "."
+      };
+    }
+  };
+
+  /* ---- marginal thinking (Ch1, MC) -------------------------------------- */
+  GEN["marginal_decision"] = {
+    id: "marginal_decision", chapter: 1, kind: "mc", render: "text",
+    difficulty: "med", concept: "marginal thinking", points: 1,
+    build: function (rng) {
+      var mb = rng_int(rng, 8, 20);
+      var mc = rng_int(rng, 8, 20);
+      while (mc === mb) { mc = rng_int(rng, 8, 20); }
+      var opts = ["Yes \u2014 produce the extra unit", "No \u2014 do not produce the extra unit",
+        "It doesn't matter either way", "There isn't enough information"];
+      var correct = (mb > mc) ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "A rational firm is deciding whether to produce one more unit. The marginal benefit of that unit is $" +
+          mb + " and its marginal cost is $" + mc + ". Should the firm produce it?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Produce when marginal benefit \u2265 marginal cost. Here MB = $" + mb + ", MC = $" + mc +
+          ", so " + (mb > mc ? "produce it." : "do not.")
+      };
+    }
+  };
+
+  /* ===================== CHAPTER 2 — Thinking Like an Economist ========= */
+
+  /* ---- PPF: opportunity cost along the frontier (Ch2, graphical numeric) -- */
+  GEN["ppf_opportunity_cost"] = {
+    id: "ppf_opportunity_cost", chapter: 2, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "PPF and opportunity cost", points: 2,
+    build: function (rng) {
+      /* two points on a (linear-ish) frontier; opp cost of moving = dY/dX */
+      var xmax = rng_int(rng, 8, 12), ymax = rng_int(rng, 8, 12);
+      /* choose two integer points that lie roughly on the straight frontier */
+      var x1 = rng_int(rng, 1, 3), x2 = rng_int(rng, 5, 7);
+      /* on the straight frontier y = ymax*(1 - x/xmax) */
+      var y1 = Math.round(ymax * (1 - x1 / xmax));
+      var y2 = Math.round(ymax * (1 - x2 / xmax));
+      var giveUp = y1 - y2;         /* units of Y given up */
+      var gain = x2 - x1;           /* units of X gained */
+      var oc = round2(giveUp / gain);
+      return {
+        prompt: "The graph shows a country's production possibilities. Moving from point A (" + x1 + " units of X, " +
+          y1 + " of Y) to point B (" + x2 + " of X, " + y2 + " of Y), what is the opportunity cost of ONE additional unit of good X (in units of Y)?",
+        diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y",
+          bow: 0, points: [{ x: x1, y: y1, label: "A", state: "on" }, { x: x2, y: y2, label: "B", state: "on" }] },
+        answer: oc, tolerance: 0.05,
+        rationale: "Opp cost of X = (Y given up)/(X gained) = " + giveUp + "/" + gain + " = " + oc + " units of Y."
+      };
+    }
+  };
+
+  /* ---- positive vs normative (Ch2, MC) ---------------------------------- */
+  GEN["positive_normative"] = {
+    id: "positive_normative", chapter: 2, kind: "mc", render: "text",
+    difficulty: "easy", concept: "positive vs normative", points: 1,
+    build: function (rng) {
+      var statements = [
+        { t: "A higher minimum wage raises unemployment among young workers.", kind: "positive" },
+        { t: "The government should raise the minimum wage.", kind: "normative" },
+        { t: "Rent control leads to housing shortages.", kind: "positive" },
+        { t: "Society ought to reduce income inequality.", kind: "normative" },
+        { t: "Cutting the tax rate would increase consumer spending.", kind: "positive" },
+        { t: "The rich should pay a larger share of taxes.", kind: "normative" }
+      ];
+      var s = rng_pick(rng, statements);
+      var opts = ["A positive statement (a claim about what IS)",
+        "A normative statement (a claim about what OUGHT to be)"];
+      var correct = s.kind === "positive" ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "Classify this statement: \u201c" + s.t + "\u201d",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Positive = descriptive/testable (what is); normative = value judgment (what ought to be). This one is " + s.kind + "."
+      };
+    }
+  };
+
+  /* ===================== CHAPTER 3 — Gains from Trade =================== */
+
+  /* ---- comparative advantage (Ch3, numeric) ----------------------------
+     Two producers, two goods, output-per-hour (or per-day) table. Compute
+     opportunity costs and determine who has comparative advantage in a good. */
+  GEN["comparative_advantage"] = {
+    id: "comparative_advantage", chapter: 3, kind: "mc", render: "text",
+    difficulty: "hard", concept: "comparative advantage", points: 2,
+    build: function (rng) {
+      var pplA = rng_pick(rng, ["Alia", "Farmer", "Country A", "Nadia"]);
+      var pplB = rng_pick(rng, ["Ben", "Rancher", "Country B", "Omar"]);
+      while (pplB === pplA) { pplB = rng_pick(rng, ["Ben", "Rancher", "Country B", "Omar"]); }
+      var goods = rng_pick(rng, [["wheat", "cloth"], ["corn", "beef"], ["cars", "grain"], ["fish", "rice"]]);
+      var g1 = goods[0], g2 = goods[1];
+      /* outputs per day; ensure comparative advantage is well-defined & not identical */
+      var a1 = rng_int(rng, 4, 10), a2 = rng_int(rng, 4, 10);
+      var b1 = rng_int(rng, 4, 10), b2 = rng_int(rng, 4, 10);
+      /* opp cost of one unit g1 (in g2) = (g2 output)/(g1 output) */
+      var ocA = a2 / a1;   /* A's opp cost of g1 */
+      var ocB = b2 / b1;   /* B's opp cost of g1 */
+      /* regenerate if tie */
+      var guard = 0;
+      while (Math.abs(ocA - ocB) < 1e-9 && guard < 20) {
+        a1 = rng_int(rng, 4, 10); a2 = rng_int(rng, 4, 10);
+        ocA = a2 / a1; ocB = b2 / b1; guard++;
+      }
+      /* whoever has LOWER opp cost of g1 has comparative advantage in g1 */
+      var caG1 = ocA < ocB ? pplA : pplB;
+      var opts = [pplA + " has comparative advantage in " + g1,
+        pplB + " has comparative advantage in " + g1,
+        "Neither has a comparative advantage",
+        "Both have comparative advantage in " + g1];
+      var correct = (caG1 === pplA) ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "In one day, " + pplA + " can produce " + a1 + " " + g1 + " or " + a2 + " " + g2 + ". " +
+          pplB + " can produce " + b1 + " " + g1 + " or " + b2 + " " + g2 +
+          ". Who has the comparative advantage in producing " + g1 + "?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: pplA + "'s opportunity cost of 1 " + g1 + " = " + round2(ocA) + " " + g2 + "; " +
+          pplB + "'s = " + round2(ocB) + " " + g2 + ". Lower opp cost \u2192 comparative advantage, so " + caG1 + "."
+      };
+    }
+  };
+
+  /* ---- opportunity cost from a production table (Ch3, numeric) ---------- */
+  GEN["opp_cost_table"] = {
+    id: "opp_cost_table", chapter: 3, kind: "numeric", render: "text",
+    difficulty: "med", concept: "opportunity cost of trade", points: 2,
+    build: function (rng) {
+      var who = rng_pick(rng, ["A worker", "A factory", "Maria", "A farm"]);
+      var g1 = rng_pick(rng, ["shirts", "tables", "phones", "loaves"]);
+      var g2 = rng_pick(rng, ["shoes", "chairs", "cases", "cakes"]);
+      var out1 = rng_int(rng, 6, 12), out2 = rng_int(rng, 3, 10);
+      var oc = round2(out2 / out1);
+      return {
+        prompt: who + " can make " + out1 + " " + g1 + " or " + out2 + " " + g2 +
+          " in a day. What is the opportunity cost of making ONE " + g1 + " (in " + g2 + ")?",
+        answer: oc, tolerance: 0.05,
+        rationale: "Opp cost of 1 " + g1 + " = " + g2 + " forgone / " + g1 + " made = " +
+          out2 + "/" + out1 + " = " + oc + " " + g2 + "."
+      };
+    }
+  };
+
   /* ---- S1..S3: STATIC conceptual / written (no randomization) -----------
      These carry their own fixed content; the engine returns them as-is. */
   var STATIC = [
@@ -422,6 +586,72 @@
       answer: null,
       rubric: "Full credit: (1) identifies the error \u2014 a price change does NOT shift demand; (2) correct term: it causes a decrease in QUANTITY DEMANDED, a movement ALONG the demand curve; (3) 'demand' (the whole curve) shifts only due to non-price determinants (income, tastes, related-goods prices, expectations, number of buyers). Partial credit per element.",
       rationale: "Key distinction: movement along vs shift of the demand curve."
+    },
+    /* ---- Chapter 1 ---- */
+    {
+      id: "ch1_opportunity_cost_def", chapter: 1, kind: "mc", render: "text",
+      difficulty: "easy", concept: "opportunity cost", points: 1,
+      prompt: "The opportunity cost of an item is best described as:",
+      options: ["whatever you give up to get it", "the dollar price printed on it",
+        "the time it takes to obtain it", "the marginal benefit it provides"],
+      answer: 0,
+      rationale: "Opportunity cost is what you must give up (the next-best alternative) to obtain something \u2014 not just its money price."
+    },
+    {
+      id: "ch1_incentives", chapter: 1, kind: "mc", render: "text",
+      difficulty: "med", concept: "people respond to incentives", points: 1,
+      prompt: "A city introduces a $0.10 tax on each plastic bag. Shoppers begin bringing reusable bags. This best illustrates the principle that:",
+      options: ["people respond to incentives", "trade can make everyone better off",
+        "markets are usually a good way to organize activity", "the cost of something is what you give up"],
+      answer: 0,
+      rationale: "A change in the cost/benefit at the margin (the small tax) changed behavior \u2014 people respond to incentives."
+    },
+    {
+      id: "ch1_written_tradeoff", chapter: 1, kind: "short", render: "text",
+      difficulty: "med", concept: "tradeoffs", points: 3,
+      prompt: "Explain what economists mean by \u201cthere is no such thing as a free lunch,\u201d and give one concrete example of a tradeoff a college student faces.",
+      answer: null,
+      rubric: "Full credit: (1) getting one thing usually requires giving up another (scarcity forces tradeoffs); (2) resources (time, money) are limited; (3) a concrete, valid student example (e.g., time studying vs. working vs. socializing). Partial credit per element.",
+      rationale: "Looking for the scarcity/tradeoff idea plus a valid concrete example."
+    },
+    /* ---- Chapter 2 ---- */
+    {
+      id: "ch2_ppf_concept", chapter: 2, kind: "mc", render: "text",
+      difficulty: "med", concept: "production possibilities frontier", points: 1,
+      prompt: "A point INSIDE (below) a production possibilities frontier represents production that is:",
+      options: ["inefficient \u2014 more of both goods could be produced", "efficient and on the frontier",
+        "unattainable with current resources", "impossible under any circumstances"],
+      answer: 0,
+      rationale: "Inside the PPF means resources are idle or misallocated \u2014 more of both goods is possible, so it's inefficient."
+    },
+    {
+      id: "ch2_micro_macro", chapter: 2, kind: "mc", render: "text",
+      difficulty: "easy", concept: "micro vs macro", points: 1,
+      prompt: "Which question is a MICROeconomic question rather than a macroeconomic one?",
+      options: ["How does a tax on sugary drinks affect soda consumption?",
+        "What causes national unemployment to rise?",
+        "Why does the overall price level increase over time?",
+        "What determines a country's rate of economic growth?"],
+      answer: 0,
+      rationale: "Microeconomics studies individual markets/agents (the soda market); the others are economy-wide (macro)."
+    },
+    /* ---- Chapter 3 ---- */
+    {
+      id: "ch3_absolute_vs_comparative", chapter: 3, kind: "mc", render: "text",
+      difficulty: "med", concept: "absolute vs comparative advantage", points: 1,
+      prompt: "The gains from trade between two people are based on:",
+      options: ["comparative advantage (lower opportunity cost)", "absolute advantage (higher total output)",
+        "who works more hours", "who has more resources"],
+      answer: 0,
+      rationale: "Specialization and trade are driven by comparative advantage \u2014 lower opportunity cost \u2014 not absolute advantage."
+    },
+    {
+      id: "ch3_written_gains_trade", chapter: 3, kind: "short", render: "text",
+      difficulty: "hard", concept: "gains from trade", points: 3,
+      prompt: "Even if one country can produce EVERYTHING more efficiently than another (has absolute advantage in all goods), trade can still benefit both. Explain why, using the idea of comparative advantage.",
+      answer: null,
+      rubric: "Full credit: (1) absolute advantage in all goods does not eliminate gains from trade; (2) comparative advantage = lower opportunity cost; (3) each country specializes where its opportunity cost is lowest; (4) specialization + trade expands total output so both can consume beyond their own PPF. Partial credit per element.",
+      rationale: "Key idea: comparative advantage, not absolute, drives mutually beneficial trade."
     }
   ];
 

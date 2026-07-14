@@ -41,6 +41,9 @@
      In production this comes from im_bank_items; we keep a local fallback map
      so practice works even before the DB bank is populated. */
   var CH_BANK = {
+    1: ['opp_cost_basic', 'marginal_decision', 'ch1_opportunity_cost_def', 'ch1_incentives', 'ch1_written_tradeoff'],
+    2: ['ppf_opportunity_cost', 'positive_normative', 'ch2_ppf_concept', 'ch2_micro_macro'],
+    3: ['comparative_advantage', 'opp_cost_table', 'ch3_absolute_vs_comparative', 'ch3_written_gains_trade'],
     4: ['sd_equilibrium', 'sd_equilibrium_graph', 'sd_shift_effect', 'sd_qd_at_price', 'sd_surplus_shortage', 'sd_determinant', 'sd_double_shift', 'sd_equilibrium_price_graph', 'ch4_law_demand_mc', 'ch4_change_qd_vs_d', 'ch4_written_shortage', 'ch4_ceteris_paribus', 'ch4_normal_inferior', 'ch4_written_shift_vs_move'],
     7: ['sd_consumer_surplus', 'sd_producer_surplus', 'sd_total_surplus']
   };

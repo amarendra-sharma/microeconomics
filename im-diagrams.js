@@ -296,6 +296,47 @@
     return svgWrap(P, s, "curve");
   }
 
+  /* production possibilities frontier. spec:{ xmax, ymax, xlab, ylab,
+     bow (0=linear, 0.3 typical concave), points:[{x,y,label,state}] }
+     A concave (bowed-out) frontier via a quadratic-ish arc between the two
+     axis intercepts (xmax on x-axis, ymax on y-axis). points can be marked
+     'inside'(inefficient), 'on'(efficient), 'outside'(unattainable). */
+  function ppf(spec) {
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.xmax || 10, pmax: spec.ymax || 10 });
+    var s = axes(P, spec.xlab || "Good X", spec.ylab || "Good Y");
+    var bow = (spec.bow != null) ? spec.bow : 0.28;   /* 0 = straight line */
+    /* build the frontier as a polyline from (0,ymax) to (xmax,0), bowed out.
+       param t in [0,1]: x = t*xmax ; straight y = (1-t)*ymax ; add outward bulge. */
+    var xmax = spec.xmax || 10, ymax = spec.ymax || 10;
+    var pts = [];
+    var N = 40;
+    for (var i = 0; i <= N; i++) {
+      var t = i / N;
+      var x = t * xmax;
+      var yStraight = (1 - t) * ymax;
+      /* outward bulge peaks at the middle, zero at endpoints */
+      var bulge = bow * ymax * Math.sin(Math.PI * t) * 0.9;
+      var y = yStraight + bulge;
+      if (y > ymax) { y = ymax; }
+      pts.push(P.X(x) + "," + P.Y(y));
+    }
+    s += "<polyline points='" + pts.join(" ") + "' fill='none' stroke='" + C.demand +
+      "' stroke-width='2.5' />";
+    s += txt(P.X(xmax * 0.62), P.Y(ymax * 0.62), spec.frontierLabel || "PPF",
+      { fill: C.demand, weight: 700, size: 13 });
+    /* mark points */
+    if (spec.points) {
+      spec.points.forEach(function (pt) {
+        var col = pt.state === "outside" ? C.dwlStroke : pt.state === "inside" ? C.muted : C.supply;
+        s += "<circle cx='" + P.X(pt.x) + "' cy='" + P.Y(pt.y) + "' r='4' fill='" + col + "'/>";
+        if (pt.label) {
+          s += txt(P.X(pt.x) + 7, P.Y(pt.y) - 5, pt.label, { fill: col, weight: 700, size: 12 });
+        }
+      });
+    }
+    return svgWrap(P, s, "production possibilities frontier");
+  }
+
   function renderDiagram(spec) {
     if (!spec || !spec.type) { return ""; }
     switch (spec.type) {
@@ -305,6 +346,7 @@
       case "tax":           return taxDiagram(spec);
       case "elasticity":    return elasticity(spec);
       case "curve":         return curve(spec);
+      case "ppf":           return ppf(spec);
       default: return "";
     }
   }
