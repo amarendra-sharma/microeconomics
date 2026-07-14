@@ -405,6 +405,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="mn-proctor.js"></script>
+<script src="im-diagrams.js"></script>
+<script src="im-generators.js"></script>
+<script src="im-quiz.js"></script>
+<script src="im-backend.js"></script>
 <script>
 /* ====================================================================
    CONFIG
@@ -3007,6 +3011,29 @@ function startGradedQuiz(chapter) {
   if (!chapter) { return; }
   var area = $('practiceArea');
   var uid = State.user ? State.user.id : null;
+  if (!uid) { area.innerHTML = errCard('Please sign in to take a graded quiz.'); return; }
+  if (typeof IMQuiz === 'undefined' || !IMQuiz.quiz) {
+    area.innerHTML = errCard('Quiz engine is not loaded. Please hard-refresh the page.');
+    return;
+  }
+  // Soft-proctoring notice (chapter quizzes are lightly proctored, no webcam).
+  var ready = window.confirm('This is a graded quiz for Chapter ' + chapter + '.\n\n\u2022 It runs in fullscreen; leaving the tab or exiting fullscreen is recorded.\n\u2022 No webcam is used.\n\u2022 Answers are graded after you submit and are not shown during the quiz.\n\nStart now?');
+  if (!ready) { return; }
+  area.innerHTML = '';
+  // Engage soft proctoring if available (fullscreen + tab-switch flags, no webcam).
+  if (typeof MNProctor !== 'undefined' && MNProctor.start) {
+    try { MNProctor.start({ mode: 'soft', noPersist: true }); } catch (e) {}
+  }
+  // The quiz engine draws items from the chapter bank (each with a per-student
+  // seed), collects answers, and submits once to the im-grade-quiz Edge Function,
+  // which regenerates each question from its seed and grades server-side.
+  IMQuiz.quiz({ chapter: chapter, count: QUIZ_LEN }, area);
+}
+
+function startGradedQuiz_LEGACY(chapter) {
+  if (!chapter) { return; }
+  var area = $('practiceArea');
+  var uid = State.user ? State.user.id : null;
   var courseId = State.payCourseId || State.selfCourseId;
   if (!uid || !courseId) { area.innerHTML = errCard('Please sign in to take a graded quiz.'); return; }
   // Heads-up: this graded quiz is proctored (lightweight). Tell the student before
@@ -3205,28 +3232,15 @@ function submitGradedQuiz() {
 function loadNewQuestion() {
   var chapter = parseInt($('practiceChapter').value, 10);
   var area = $('practiceArea');
-  area.innerHTML = '<div class="q-card"><span class="spinner"></span> &nbsp;Finding a question…</div>';
-  State.currentItem = null; State.selectedOption = null;
-
-  // 1) pick a random active item in this chapter (items carry NO answers)
-  sb.from('im_assessment_item')
-    .select('id, item_type, points')
-    .eq('chapter', chapter).eq('is_active', true)
-    .then(function(res) {
-      if (res.error) { area.innerHTML = errCard(res.error.message); return; }
-      if (!res.data || res.data.length === 0) { area.innerHTML = errCard('No items found for this chapter.'); return; }
-      var pick = res.data[Math.floor(Math.random() * res.data.length)];
-      // 2) ask the Edge Function to ISSUE a per-student instance
-      sb.functions.invoke('grade-attempt', {
-        body: { action: 'issue', item_id: pick.id, course_id: State.selfCourseId }
-      }).then(function(fn) {
-        if (fn.error) { area.innerHTML = errCard('issue failed: ' + fn.error.message); return; }
-        var data = fn.data;
-        if (!data || data.error) { area.innerHTML = errCard('issue: ' + (data ? data.error : 'no data')); return; }
-        State.currentItem = data;
-        renderQuestion(data);
-      });
-    });
+  // Use the client-side practice engine (im-quiz.js): it generates a randomized
+  // question locally, renders it (with diagrams for graphical items), grades it
+  // immediately for self-study, and logs an ungraded practice attempt. Practice
+  // is ungraded, so local grading is fine; graded quizzes go server-side.
+  if (typeof IMQuiz === 'undefined' || !IMQuiz.practice) {
+    area.innerHTML = errCard('Practice engine is not loaded. Please hard-refresh the page.');
+    return;
+  }
+  IMQuiz.practice(chapter, area);
 }
 
 function renderFigure(fig) {
