@@ -733,6 +733,302 @@
     }
   };
 
+  /* ---- consumer surplus from willingness-to-pay (numeric) --------------- */
+  GEN["cs_from_wtp"] = {
+    id: "cs_from_wtp", chapter: 7, kind: "numeric", render: "text",
+    difficulty: "med", concept: "consumer surplus", points: 2,
+    build: function (rng) {
+      var price = rng_int(rng, 8, 15);
+      /* a few buyers with willingness-to-pay at or above/below price */
+      var wtps = [];
+      var n = rng_int(rng, 4, 5);
+      for (var i = 0; i < n; i++) { wtps.push(price + rng_int(rng, -4, 8)); }
+      /* CS = sum over buyers who buy (wtp >= price) of (wtp - price) */
+      var cs = 0;
+      wtps.forEach(function (w) { if (w >= price) { cs += (w - price); } });
+      return {
+        prompt: "The market price is $" + price + ". Five consumers have willingness-to-pay values of $" +
+          wtps.join(", $") + ". What is the total consumer surplus? (Only those who buy \u2014 WTP at least the price \u2014 contribute.)",
+        answer: cs, tolerance: 0.01,
+        rationale: "Each buyer with WTP \u2265 $" + price + " contributes (WTP \u2212 price). Summing those gives $" + cs + "."
+      };
+    }
+  };
+
+  /* ---- producer surplus from seller costs (numeric) --------------------- */
+  GEN["ps_from_cost"] = {
+    id: "ps_from_cost", chapter: 7, kind: "numeric", render: "text",
+    difficulty: "med", concept: "producer surplus", points: 2,
+    build: function (rng) {
+      var price = rng_int(rng, 8, 15);
+      var costs = [];
+      var n = rng_int(rng, 4, 5);
+      for (var i = 0; i < n; i++) { costs.push(price + rng_int(rng, -8, 4)); }
+      /* PS = sum over sellers who sell (cost <= price) of (price - cost) */
+      var ps = 0;
+      costs.forEach(function (c) { if (c <= price) { ps += (price - c); } });
+      return {
+        prompt: "The market price is $" + price + ". Five sellers have costs of $" + costs.join(", $") +
+          ". What is the total producer surplus? (Only sellers whose cost is at most the price sell.)",
+        answer: ps, tolerance: 0.01,
+        rationale: "Each seller with cost \u2264 $" + price + " contributes (price \u2212 cost). Summing gives $" + ps + "."
+      };
+    }
+  };
+
+  /* ---- deadweight loss reasoning below efficient quantity (MC) ---------- */
+  GEN["dwl_underproduction"] = {
+    id: "dwl_underproduction", chapter: 7, kind: "mc", render: "text",
+    difficulty: "hard", concept: "efficiency and lost surplus", points: 2,
+    build: function (rng) {
+      var below = rng() < 0.5;
+      var opts = [
+        "Some units whose value to buyers exceeds their cost go unproduced \u2014 surplus is lost",
+        "Some units are produced whose cost exceeds their value to buyers \u2014 surplus is lost",
+        "Total surplus is unaffected", "Consumer surplus rises but producer surplus falls by the same amount"];
+      var correct = below ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "Suppose a market produces a quantity " + (below ? "BELOW" : "ABOVE") +
+          " the competitive equilibrium. Why is total surplus lower than at equilibrium?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: below ?
+          "Below equilibrium, mutually beneficial trades (value > cost) don't happen \u2014 that foregone surplus is the loss." :
+          "Above equilibrium, units are made whose cost exceeds buyers' value \u2014 producing them destroys surplus."
+      };
+    }
+  };
+
+  /* ---- willingness to pay concept (MC) ---------------------------------- */
+  GEN["wtp_concept"] = {
+    id: "wtp_concept", chapter: 7, kind: "mc", render: "text",
+    difficulty: "easy", concept: "willingness to pay", points: 1,
+    build: function (rng) {
+      var opts = ["the maximum a buyer will pay for a good",
+        "the price the buyer actually pays",
+        "the seller's cost of production",
+        "the quantity the buyer demands"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "A buyer's \u201cwillingness to pay\u201d is:",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Willingness to pay is the maximum price a buyer would accept \u2014 the height of the demand curve for that unit."
+      };
+    }
+  };
+
+  /* ===================== CHAPTER 8 — Costs of Taxation ================= */
+
+  /* ---- deadweight loss of a tax (graphical numeric) --------------------- */
+  GEN["tax_dwl"] = {
+    id: "tax_dwl", chapter: 8, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "deadweight loss", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8); var c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      var tax = rng_int(rng, 2, 5);
+      var qt = (a - c - tax) / (b + d);         /* quantity with tax */
+      var dwl = 0.5 * tax * (qStar - qt);        /* DWL triangle area */
+      return {
+        prompt: "Demand is P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply is P = " + c + " + " + fmtCoef(d) +
+          "Q. A per-unit tax of $" + tax + " is imposed. What is the deadweight loss? (Round to 2 decimals.)",
+        diagramSpec: { type: "tax", dA: a, dB: -b, sA: c, sB: d, tax: tax,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + tax + 1) },
+        answer: round2(dwl), tolerance: 0.2,
+        rationale: "DWL = \u00bd \u00d7 tax \u00d7 (Q* \u2212 Q_tax) = \u00bd \u00d7 " + tax + " \u00d7 (" + qStar + " \u2212 " +
+          round2(qt) + ") = " + round2(dwl) + "."
+      };
+    }
+  };
+
+  /* ---- tax revenue (graphical numeric) ---------------------------------- */
+  GEN["tax_revenue"] = {
+    id: "tax_revenue", chapter: 8, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "tax revenue", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8); var c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      var tax = rng_int(rng, 2, 5);
+      var qt = (a - c - tax) / (b + d);
+      var rev = tax * qt;
+      return {
+        prompt: "Demand is P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply is P = " + c + " + " + fmtCoef(d) +
+          "Q. A per-unit tax of $" + tax + " is imposed. How much tax revenue does the government collect? (Round to 2 decimals.)",
+        diagramSpec: { type: "tax", dA: a, dB: -b, sA: c, sB: d, tax: tax, showRevenue: true,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + tax + 1) },
+        answer: round2(rev), tolerance: 0.2,
+        rationale: "Tax revenue = tax \u00d7 quantity traded = " + tax + " \u00d7 " + round2(qt) + " = " + round2(rev) + "."
+      };
+    }
+  };
+
+  /* ---- DWL grows with tax size (MC conceptual) -------------------------- */
+  GEN["dwl_tax_size"] = {
+    id: "dwl_tax_size", chapter: 8, kind: "mc", render: "text",
+    difficulty: "hard", concept: "how DWL scales", points: 2,
+    build: function (rng) {
+      var factor = rng_pick(rng, [2, 3]);
+      var opts = ["by a factor of " + (factor * factor) + " (proportional to the square of the tax)",
+        "by a factor of " + factor + " (proportional to the tax)",
+        "it stays the same", "by a factor of " + (factor + 1)];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "If a per-unit tax is " + factor + "\u00d7 larger (holding the demand and supply curves fixed), the deadweight loss roughly increases:",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "DWL \u2248 \u00bd \u00d7 tax \u00d7 \u0394Q, and \u0394Q itself grows with the tax, so DWL grows with the SQUARE of the tax. A " +
+          factor + "\u00d7 tax \u2192 about " + (factor * factor) + "\u00d7 the DWL."
+      };
+    }
+  };
+
+  /* ===================== CHAPTER 9 — Costs of Production =============== */
+
+  /* ---- marginal cost from a total-cost table (numeric) ------------------ */
+  GEN["marginal_cost_calc"] = {
+    id: "marginal_cost_calc", chapter: 9, kind: "numeric", render: "text",
+    difficulty: "med", concept: "marginal cost", points: 1,
+    build: function (rng) {
+      var q1 = rng_int(rng, 3, 6);
+      var tc1 = rng_int(rng, 40, 80);
+      var mc = rng_int(rng, 6, 18);
+      var tc2 = tc1 + mc;   /* producing one more unit adds mc */
+      return {
+        prompt: "A firm's total cost of producing " + q1 + " units is $" + tc1 + ", and its total cost of producing " +
+          (q1 + 1) + " units is $" + tc2 + ". What is the marginal cost of the " + (q1 + 1) + "th unit?",
+        answer: mc, tolerance: 0.01,
+        rationale: "Marginal cost = \u0394TC / \u0394Q = ($" + tc2 + " \u2212 $" + tc1 + ") / 1 = $" + mc + "."
+      };
+    }
+  };
+
+  /* ---- average total cost (numeric) ------------------------------------- */
+  GEN["average_total_cost"] = {
+    id: "average_total_cost", chapter: 9, kind: "numeric", render: "text",
+    difficulty: "easy", concept: "average total cost", points: 1,
+    build: function (rng) {
+      var q = rng_int(rng, 4, 10);
+      var atc = rng_int(rng, 5, 15);
+      var tc = q * atc;   /* clean division */
+      return {
+        prompt: "A firm produces " + q + " units at a total cost of $" + tc +
+          ". What is its average total cost per unit?",
+        answer: atc, tolerance: 0.01,
+        rationale: "ATC = total cost / quantity = $" + tc + " / " + q + " = $" + atc + "."
+      };
+    }
+  };
+
+  /* ---- fixed vs variable cost (MC) -------------------------------------- */
+  GEN["fixed_variable_cost"] = {
+    id: "fixed_variable_cost", chapter: 9, kind: "mc", render: "text",
+    difficulty: "easy", concept: "fixed vs variable costs", points: 1,
+    build: function (rng) {
+      var items = [
+        { t: "monthly rent on the factory building", fixed: true },
+        { t: "raw materials used in each unit", fixed: false },
+        { t: "hourly wages of assembly-line workers", fixed: false },
+        { t: "the annual insurance premium", fixed: true },
+        { t: "electricity that runs the machines during production", fixed: false },
+        { t: "a one-time patent license fee", fixed: true }
+      ];
+      var it = rng_pick(rng, items);
+      var opts = ["A fixed cost", "A variable cost"];
+      var correct = it.fixed ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "For a manufacturing firm, which best describes " + it.t + "?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: (it.fixed ? "Fixed costs don't vary with output in the short run." :
+          "Variable costs rise and fall with the quantity produced.") + " This is a " + (it.fixed ? "fixed" : "variable") + " cost."
+      };
+    }
+  };
+
+  /* ---- MC and ATC relationship (graphical MC) --------------------------- */
+  GEN["mc_atc_relationship"] = {
+    id: "mc_atc_relationship", chapter: 9, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "MC crosses ATC at minimum", points: 2,
+    build: function (rng) {
+      var fc = rng_pick(rng, [16, 18, 20, 24]);
+      var a = rng_pick(rng, [2, 3]);
+      var b = rng_pick(rng, [1, 1.1, 1.2]);
+      var opts = ["at the minimum of ATC", "at the maximum of ATC",
+        "to the left of ATC's minimum", "MC never crosses ATC"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "The diagram shows a firm's cost curves. The marginal-cost curve crosses the average-total-cost curve:",
+        diagramSpec: { type: "cost_curves", qmax: 10, cmax: 20, fc: fc, a: a, b: b, showATC: true, showAVC: true },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "MC intersects ATC exactly at ATC's minimum: when MC < ATC it pulls the average down; when MC > ATC it pushes it up."
+      };
+    }
+  };
+
+  /* ===================== CHAPTER 10 — Competitive Firms =============== */
+
+  /* ---- profit-maximizing quantity: P = MC (numeric) --------------------- */
+  GEN["profit_max_pmc"] = {
+    id: "profit_max_pmc", chapter: 10, kind: "numeric", render: "text",
+    difficulty: "med", concept: "profit maximization P=MC", points: 2,
+    build: function (rng) {
+      /* MC = a + b*q ; competitive firm sets P = MC -> q = (P-a)/b */
+      var a = rng_int(rng, 2, 5);
+      var b = rng_pick(rng, [1, 2]);
+      var q = rng_int(rng, 3, 8);
+      var price = a + b * q;   /* choose price so q is integer */
+      return {
+        prompt: "A competitive firm has marginal cost MC = " + a + " + " + fmtCoef(b) + "Q. The market price is $" +
+          price + ". What quantity maximizes the firm's profit?",
+        answer: q, tolerance: 0.01,
+        rationale: "A competitive firm produces where P = MC: " + price + " = " + a + " + " + fmtCoef(b) +
+          "Q \u2192 Q = " + q + "."
+      };
+    }
+  };
+
+  /* ---- shutdown decision (MC) ------------------------------------------- */
+  GEN["shutdown_decision"] = {
+    id: "shutdown_decision", chapter: 10, kind: "mc", render: "text",
+    difficulty: "hard", concept: "shutdown rule", points: 2,
+    build: function (rng) {
+      var price = rng_int(rng, 6, 14);
+      var avc = rng_int(rng, 4, 16);
+      while (avc === price) { avc = rng_int(rng, 4, 16); }
+      var produce = price >= avc;   /* operate if P >= AVC in the short run */
+      var opts = ["Keep producing in the short run", "Shut down in the short run"];
+      var correct = produce ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "In the short run, a competitive firm faces a price of $" + price +
+          " and its average variable cost at the profit-maximizing quantity is $" + avc +
+          ". What should the firm do?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Short-run shutdown rule: operate if P \u2265 AVC, shut down if P < AVC. Here P = $" + price +
+          " and AVC = $" + avc + ", so " + (produce ? "keep producing." : "shut down.")
+      };
+    }
+  };
+
+  /* ---- profit or loss at P=MC (numeric) --------------------------------- */
+  GEN["firm_profit_calc"] = {
+    id: "firm_profit_calc", chapter: 10, kind: "numeric", render: "text",
+    difficulty: "hard", concept: "firm profit", points: 2,
+    build: function (rng) {
+      var q = rng_int(rng, 4, 9);
+      var price = rng_int(rng, 8, 16);
+      var atc = rng_int(rng, 5, 15);
+      var profit = (price - atc) * q;   /* can be negative (loss) */
+      return {
+        prompt: "A competitive firm produces " + q + " units, sells each at the market price of $" + price +
+          ", and has an average total cost of $" + atc + " per unit. What is its total profit? (A loss is negative.)",
+        answer: profit, tolerance: 0.01,
+        rationale: "Profit = (P \u2212 ATC) \u00d7 Q = ($" + price + " \u2212 $" + atc + ") \u00d7 " + q + " = $" + profit + "."
+      };
+    }
+  };
+
   /* ---- S1..S3: STATIC conceptual / written (no randomization) -----------
      These carry their own fixed content; the engine returns them as-is. */
   var STATIC = [
@@ -916,6 +1212,69 @@
       answer: null,
       rubric: "Full credit: (1) at equilibrium, marginal buyer's value = marginal seller's cost; (2) below equilibrium, some mutually beneficial trades don't happen (value > cost) \u2014 lost surplus; (3) above equilibrium, units are produced whose cost exceeds buyers' value \u2014 negative net value; (4) equilibrium therefore maximizes total (consumer + producer) surplus. Partial credit per element.",
       rationale: "Efficiency: equilibrium exhausts all gains from trade; deviating either way destroys surplus."
+    },
+    {
+      id: "ch7_written_surplus_meaning", chapter: 7, kind: "short", render: "text",
+      difficulty: "med", concept: "consumer and producer surplus", points: 3,
+      prompt: "Define consumer surplus and producer surplus, and explain how each is shown on a supply-and-demand diagram. Why do economists treat their sum as a measure of the market's benefit to society?",
+      answer: null,
+      rubric: "Full credit: (1) consumer surplus = willingness to pay \u2212 price paid (area below demand, above price); (2) producer surplus = price received \u2212 cost (area above supply, below price); (3) total surplus = CS + PS measures the total net gain to buyers and sellers; (4) it captures the overall value the market creates, which is why it's used to judge efficiency. Partial credit per element.",
+      rationale: "Looking for correct definitions, the diagram areas, and why total surplus measures social benefit."
+    },
+    /* ---- Chapter 8 ---- */
+    {
+      id: "ch8_dwl_concept", chapter: 8, kind: "mc", render: "text",
+      difficulty: "med", concept: "deadweight loss", points: 1,
+      prompt: "The deadweight loss of a tax represents:",
+      options: ["the value of mutually beneficial trades that no longer happen because of the tax",
+        "the total revenue the government collects",
+        "the amount buyers pay in tax", "the profit sellers lose to competitors"],
+      answer: 0,
+      rationale: "Deadweight loss is the lost total surplus from trades that don't occur once the tax drives a wedge between buyers and sellers."
+    },
+    {
+      id: "ch8_written_tax_tradeoff", chapter: 8, kind: "short", render: "text",
+      difficulty: "hard", concept: "taxes and efficiency", points: 3,
+      prompt: "A senator proposes doubling a per-unit tax to raise more revenue. Explain, using deadweight loss, why revenue may not double and why the efficiency cost rises faster than the tax rate.",
+      answer: null,
+      rubric: "Full credit: (1) a higher tax reduces the quantity traded, so revenue = tax \u00d7 (smaller Q) may less than double; (2) at high enough taxes revenue can even fall (Laffer idea); (3) DWL grows with the SQUARE of the tax because both the wedge and the quantity reduction grow; (4) so efficiency cost rises faster than the rate. Partial credit per element.",
+      rationale: "Looking for the revenue = tax \u00d7 Q tradeoff and DWL scaling with the square of the tax."
+    },
+    /* ---- Chapter 9 ---- */
+    {
+      id: "ch9_economies_scale", chapter: 9, kind: "mc", render: "text",
+      difficulty: "med", concept: "economies of scale", points: 1,
+      prompt: "When a firm's average total cost falls as output rises, the firm is experiencing:",
+      options: ["economies of scale", "diseconomies of scale",
+        "constant returns to scale", "diminishing marginal utility"],
+      answer: 0,
+      rationale: "Falling ATC as output increases is the definition of economies of scale (often over the downward-sloping part of the ATC curve)."
+    },
+    {
+      id: "ch9_written_mc_atc", chapter: 9, kind: "short", render: "text",
+      difficulty: "hard", concept: "MC and ATC", points: 3,
+      prompt: "Explain why the marginal-cost curve always crosses the average-total-cost curve at the ATC's minimum point. Use the analogy of how a new value affects an average.",
+      answer: null,
+      rubric: "Full credit: (1) when MC is below ATC, producing another unit pulls the average DOWN; (2) when MC is above ATC, it pulls the average UP; (3) therefore ATC is falling when MC<ATC and rising when MC>ATC; (4) so they must intersect exactly at ATC's minimum. A correct averaging analogy (e.g., a test score below your average lowers it) earns the analogy element. Partial credit per element.",
+      rationale: "Looking for the below-pulls-down / above-pulls-up logic and the resulting minimum."
+    },
+    /* ---- Chapter 10 ---- */
+    {
+      id: "ch10_pmc_rule", chapter: 10, kind: "mc", render: "text",
+      difficulty: "easy", concept: "profit maximization", points: 1,
+      prompt: "A competitive (price-taking) firm maximizes profit by producing the quantity where:",
+      options: ["price equals marginal cost", "price equals average total cost",
+        "marginal cost is at its minimum", "total revenue is at its maximum"],
+      answer: 0,
+      rationale: "A competitive firm takes price as given and produces where P = MC (on the upward-sloping part of MC)."
+    },
+    {
+      id: "ch10_written_shutdown", chapter: 10, kind: "short", render: "text",
+      difficulty: "hard", concept: "shutdown vs exit", points: 3,
+      prompt: "Distinguish between a firm's SHORT-RUN decision to shut down and its LONG-RUN decision to exit the market. What cost does each compare price to, and why are they different?",
+      answer: null,
+      rubric: "Full credit: (1) short-run shutdown: produce if P \u2265 AVC (fixed costs are sunk in the short run, so only variable costs matter); (2) long-run exit: leave if P < ATC (all costs are avoidable in the long run); (3) the difference is that fixed costs are unavoidable short-run but avoidable long-run; (4) hence the comparison uses AVC short-run and ATC long-run. Partial credit per element.",
+      rationale: "Key distinction: AVC for short-run shutdown vs ATC for long-run exit, because of sunk fixed costs."
     }
   ];
 

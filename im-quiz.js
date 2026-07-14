@@ -47,7 +47,10 @@
     4: ['sd_equilibrium', 'sd_equilibrium_graph', 'sd_shift_effect', 'sd_qd_at_price', 'sd_surplus_shortage', 'sd_determinant', 'sd_double_shift', 'sd_equilibrium_price_graph', 'ch4_law_demand_mc', 'ch4_change_qd_vs_d', 'ch4_written_shortage', 'ch4_ceteris_paribus', 'ch4_normal_inferior', 'ch4_written_shift_vs_move'],
     5: ['elasticity_midpoint', 'elasticity_classify', 'elasticity_revenue', 'income_elasticity', 'ch5_elastic_determinants', 'ch5_written_revenue'],
     6: ['ceiling_shortage', 'floor_surplus', 'tax_quantity', 'tax_incidence', 'ch6_ceiling_concept', 'ch6_tax_wedge'],
-    7: ['sd_consumer_surplus', 'sd_producer_surplus', 'sd_total_surplus', 'welfare_efficiency', 'ch7_consumer_surplus_def', 'ch7_written_efficiency']
+    7: ['sd_consumer_surplus', 'sd_producer_surplus', 'sd_total_surplus', 'welfare_efficiency', 'cs_from_wtp', 'ps_from_cost', 'dwl_underproduction', 'wtp_concept', 'ch7_consumer_surplus_def', 'ch7_written_efficiency', 'ch7_written_surplus_meaning'],
+    8: ['tax_dwl', 'tax_revenue', 'dwl_tax_size', 'ch8_dwl_concept', 'ch8_written_tax_tradeoff'],
+    9: ['marginal_cost_calc', 'average_total_cost', 'fixed_variable_cost', 'mc_atc_relationship', 'ch9_economies_scale', 'ch9_written_mc_atc'],
+    10: ['profit_max_pmc', 'shutdown_decision', 'firm_profit_calc', 'ch10_pmc_rule', 'ch10_written_shutdown']
   };
 
   /* ---- render a single question into a container -------------------------

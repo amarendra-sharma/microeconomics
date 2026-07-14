@@ -337,6 +337,56 @@
     return svgWrap(P, s, "production possibilities frontier");
   }
 
+  /* cost curves: U-shaped ATC/AVC and rising MC that crosses each at its min.
+     spec:{ qmax, cmax, mc:{a,b} (MC = a + b*q linear rising), showATC, showAVC,
+     price (optional horizontal line), markMin } . We derive ATC from a simple
+     convex cost model so MC intersects ATC at ATC's minimum (a known result). */
+  function costCurves(spec) {
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax || 10, pmax: spec.cmax || 20 });
+    var s = axes(P, spec.xlab || "Quantity", spec.ylab || "Cost / Price");
+    /* Cost model: TC(q) = FC + a*q + (b/2)*q^2  ->
+       MC = a + b*q ; AVC = a + (b/2)*q ; ATC = FC/q + a + (b/2)*q */
+    var FC = (spec.fc != null) ? spec.fc : 18;
+    var a = (spec.a != null) ? spec.a : 2;
+    var b = (spec.b != null) ? spec.b : 1.1;
+    function MC(q) { return a + b * q; }
+    function AVC(q) { return a + (b / 2) * q; }
+    function ATC(q) { return FC / q + a + (b / 2) * q; }
+    function plot(fn, stroke, label, qStart) {
+      var pts = [];
+      var q0 = qStart || 0.4;
+      for (var q = q0; q <= P.qmax; q += P.qmax / 80) {
+        var v = fn(q);
+        if (v <= P.pmax && v >= 0) { pts.push(P.X(q) + "," + P.Y(v)); }
+      }
+      if (pts.length < 2) { return ""; }
+      var out = "<polyline points='" + pts.join(" ") + "' fill='none' stroke='" + stroke + "' stroke-width='2.5' />";
+      /* label near the right end */
+      var lastq = P.qmax * 0.9, lv = fn(lastq);
+      if (lv <= P.pmax) { out += txt(P.X(lastq) + 4, P.Y(lv), label, { fill: stroke, weight: 700, size: 12 }); }
+      return out;
+    }
+    if (spec.showATC !== false) { s += plot(ATC, C.demand, "ATC", 0.6); }
+    if (spec.showAVC) { s += plot(AVC, C.supply, "AVC", 0.4); }
+    s += plot(MC, C.dwlStroke, "MC", 0.2);
+    /* mark ATC minimum where MC crosses it: q* where ATC'(q)=0 -> FC/q^2=b/2 */
+    if (spec.markMin !== false) {
+      var qmin = Math.sqrt(FC / (b / 2));
+      if (qmin > 0 && qmin < P.qmax) {
+        var cmin = ATC(qmin);
+        if (cmin <= P.pmax) {
+          s += "<circle cx='" + P.X(qmin) + "' cy='" + P.Y(cmin) + "' r='3.5' fill='" + C.ink + "'/>";
+        }
+      }
+    }
+    /* optional price line (for competitive-firm questions) */
+    if (spec.price != null) {
+      s += line(P.X(0), P.Y(spec.price), P.X(P.qmax), P.Y(spec.price), C.muted, 1.5, "5 4");
+      s += txt(P.X(P.qmax) - 4, P.Y(spec.price) - 5, "P", { anchor: "end", fill: C.muted, weight: 700, size: 12 });
+    }
+    return svgWrap(P, s, "cost curves");
+  }
+
   function renderDiagram(spec) {
     if (!spec || !spec.type) { return ""; }
     switch (spec.type) {
@@ -347,6 +397,7 @@
       case "elasticity":    return elasticity(spec);
       case "curve":         return curve(spec);
       case "ppf":           return ppf(spec);
+      case "cost_curves":   return costCurves(spec);
       default: return "";
     }
   }
