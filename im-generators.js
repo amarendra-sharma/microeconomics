@@ -176,7 +176,7 @@
   /* ---- G4: consumer surplus at equilibrium (numeric) --------------------
      CS = area of triangle = 0.5 * base(Q*) * height(a - P*). Randomized. */
   GEN["sd_consumer_surplus"] = {
-    id: "sd_consumer_surplus", chapter: 4, kind: "numeric", render: "graphical",
+    id: "sd_consumer_surplus", chapter: 7, kind: "numeric", render: "graphical",
     difficulty: "hard", concept: "consumer surplus", points: 2,
     build: function (rng, cfg) {
       var b = rng_pick(rng, [1, 2]);
@@ -209,7 +209,7 @@
 
   /* ---- G5: producer surplus (numeric, graphical) ------------------------ */
   GEN["sd_producer_surplus"] = {
-    id: "sd_producer_surplus", chapter: 4, kind: "numeric", render: "graphical",
+    id: "sd_producer_surplus", chapter: 7, kind: "numeric", render: "graphical",
     difficulty: "hard", concept: "producer surplus", points: 2,
     build: function (rng) {
       var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
@@ -230,7 +230,7 @@
 
   /* ---- G6: total surplus (numeric) -------------------------------------- */
   GEN["sd_total_surplus"] = {
-    id: "sd_total_surplus", chapter: 4, kind: "numeric", render: "text",
+    id: "sd_total_surplus", chapter: 7, kind: "numeric", render: "text",
     difficulty: "hard", concept: "total surplus", points: 2,
     build: function (rng) {
       var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
