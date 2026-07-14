@@ -342,44 +342,58 @@
      price (optional horizontal line), markMin } . We derive ATC from a simple
      convex cost model so MC intersects ATC at ATC's minimum (a known result). */
   function costCurves(spec) {
-    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax || 10, pmax: spec.cmax || 20 });
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax || 12, pmax: spec.cmax || 24 });
     var s = axes(P, spec.xlab || "Quantity", spec.ylab || "Cost / Price");
-    /* Cost model: TC(q) = FC + a*q + (b/2)*q^2  ->
-       MC = a + b*q ; AVC = a + (b/2)*q ; ATC = FC/q + a + (b/2)*q */
-    var FC = (spec.fc != null) ? spec.fc : 18;
-    var a = (spec.a != null) ? spec.a : 2;
-    var b = (spec.b != null) ? spec.b : 1.1;
-    function MC(q) { return a + b * q; }
-    function AVC(q) { return a + (b / 2) * q; }
-    function ATC(q) { return FC / q + a + (b / 2) * q; }
+    /* Cubic total-cost model gives U-shaped MC, AVC, ATC (textbook shape):
+         VC(q) = a*q - b*q^2 + c*q^3   (variable cost)
+         TC(q) = FC + VC(q)
+         MC(q) = a - 2b*q + 3c*q^2        (U-shaped)
+         AVC(q) = a - b*q + c*q^2         (U-shaped)
+         ATC(q) = FC/q + a - b*q + c*q^2  (U-shaped)
+       Choose a,b,c so the curves dip then rise within the box. */
+    var FC = (spec.fc != null) ? spec.fc : 24;
+    var a = (spec.a != null) ? spec.a : 10;
+    var b = (spec.b != null) ? spec.b : 2.2;
+    var c = (spec.c != null) ? spec.c : 0.18;
+    function MC(q) { return a - 2 * b * q + 3 * c * q * q; }
+    function AVC(q) { return a - b * q + c * q * q; }
+    function ATC(q) { return FC / q + a - b * q + c * q * q; }
     function plot(fn, stroke, label, qStart) {
       var pts = [];
-      var q0 = qStart || 0.4;
-      for (var q = q0; q <= P.qmax; q += P.qmax / 80) {
+      var q0 = qStart || 0.5;
+      var lastInsideQ = null, lastInsideV = null;
+      for (var q = q0; q <= P.qmax + 0.0001; q += P.qmax / 120) {
         var v = fn(q);
-        if (v <= P.pmax && v >= 0) { pts.push(P.X(q) + "," + P.Y(v)); }
+        if (v <= P.pmax && v >= 0) {
+          pts.push(P.X(q) + "," + P.Y(v));
+          lastInsideQ = q; lastInsideV = v;
+        }
       }
       if (pts.length < 2) { return ""; }
       var out = "<polyline points='" + pts.join(" ") + "' fill='none' stroke='" + stroke + "' stroke-width='2.5' />";
-      /* label near the right end */
-      var lastq = P.qmax * 0.9, lv = fn(lastq);
-      if (lv <= P.pmax) { out += txt(P.X(lastq) + 4, P.Y(lv), label, { fill: stroke, weight: 700, size: 12 }); }
+      /* label near a point that's inside the box */
+      if (lastInsideQ != null) {
+        out += txt(P.X(lastInsideQ) + 4, P.Y(lastInsideV) - 2, label, { fill: stroke, weight: 700, size: 12 });
+      }
       return out;
     }
-    if (spec.showATC !== false) { s += plot(ATC, C.demand, "ATC", 0.6); }
-    if (spec.showAVC) { s += plot(AVC, C.supply, "AVC", 0.4); }
-    s += plot(MC, C.dwlStroke, "MC", 0.2);
-    /* mark ATC minimum where MC crosses it: q* where ATC'(q)=0 -> FC/q^2=b/2 */
+    /* draw order: AVC and ATC (blue/gold), then MC (red) on top */
+    if (spec.showAVC) { s += plot(AVC, C.supply, "AVC", 0.5); }
+    if (spec.showATC !== false) { s += plot(ATC, C.demand, "ATC", 0.9); }
+    s += plot(MC, C.dwlStroke, "MC", 0.5);
+
+    /* mark the ATC minimum (where MC crosses ATC) by scanning numerically */
     if (spec.markMin !== false) {
-      var qmin = Math.sqrt(FC / (b / 2));
-      if (qmin > 0 && qmin < P.qmax) {
-        var cmin = ATC(qmin);
-        if (cmin <= P.pmax) {
-          s += "<circle cx='" + P.X(qmin) + "' cy='" + P.Y(cmin) + "' r='3.5' fill='" + C.ink + "'/>";
-        }
+      var qMinAtc = null, best = Infinity;
+      for (var qq = 1; qq <= P.qmax; qq += 0.02) {
+        var val = ATC(qq);
+        if (val < best) { best = val; qMinAtc = qq; }
+      }
+      if (qMinAtc != null && best <= P.pmax) {
+        s += "<circle cx='" + P.X(qMinAtc) + "' cy='" + P.Y(best) + "' r='3.5' fill='" + C.ink + "'/>";
       }
     }
-    /* optional price line (for competitive-firm questions) */
+    /* optional price line (competitive-firm questions) */
     if (spec.price != null) {
       s += line(P.X(0), P.Y(spec.price), P.X(P.qmax), P.Y(spec.price), C.muted, 1.5, "5 4");
       s += txt(P.X(P.qmax) - 4, P.Y(spec.price) - 5, "P", { anchor: "end", fill: C.muted, weight: 700, size: 12 });
