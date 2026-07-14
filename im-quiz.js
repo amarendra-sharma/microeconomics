@@ -88,10 +88,11 @@
       var name = "imq_" + Math.random().toString(36).slice(2);
       q.options.forEach(function (optText, i) {
         var row = el("label", { "style":
-          "display:block;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:14px;" });
-        var radio = el("input", { "type": "radio", "name": name, "value": String(i), "style": "margin-right:10px;" });
+          "display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:14px;color:#0f172a;background:#ffffff;" });
+        var radio = el("input", { "type": "radio", "name": name, "value": String(i), "style": "margin-top:2px;flex-shrink:0;" });
+        var txt = el("span", { "style": "color:#0f172a;line-height:1.5;" }, esc(optText));
         row.appendChild(radio);
-        row.appendChild(doc.createTextNode(optText));
+        row.appendChild(txt);
         ansWrap.appendChild(row);
       });
       getValue = function () {

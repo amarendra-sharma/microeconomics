@@ -90,18 +90,58 @@
 
   /* draw a linear curve p = a + b*q  (b>0 supply, b<0 demand), clipped to box */
   function linearCurve(P, a, b, stroke, labelTxt, labelAtQ) {
-    /* find endpoints within [0,qmax] and [0,pmax] */
-    var q1 = 0, p1 = a + b * 0;
-    var q2 = P.qmax, p2 = a + b * P.qmax;
-    var s = line(P.X(q1), P.Y(clampP(P, p1)), P.X(q2), P.Y(clampP(P, p2)), stroke, 2.5);
+    /* Draw the line p = a + b*q, clipped to the plot box [0,qmax]x[0,pmax]
+       WITHOUT distorting its slope. We find the two points where the line
+       crosses the box boundary and draw between them. Clamping price directly
+       would bend the line and move intersections — that was the old bug. */
+    var pts = clipLineToBox(P, a, b);
+    if (!pts) { return ""; }   /* line doesn't pass through the visible box */
+    var s = line(P.X(pts.q1), P.Y(pts.p1), P.X(pts.q2), P.Y(pts.p2), stroke, 2.5);
     if (labelTxt) {
-      var lq = (labelAtQ != null) ? labelAtQ : P.qmax * 0.82;
+      /* place the label at a q where the line is inside the box */
+      var lq = (labelAtQ != null) ? labelAtQ : (pts.q1 + pts.q2) / 2 + (pts.q2 - pts.q1) * 0.32;
+      if (lq > pts.q2) { lq = pts.q2; } if (lq < pts.q1) { lq = pts.q1; }
       var lp = a + b * lq;
-      s += txt(P.X(lq) + 6, P.Y(clampP(P, lp)) - 4, labelTxt, { fill: stroke, weight: 700, size: 13 });
+      s += txt(P.X(lq) + 6, P.Y(lp) - 4, labelTxt, { fill: stroke, weight: 700, size: 13 });
     }
     return s;
   }
-  function clampP(P, p) { return Math.max(0, Math.min(P.pmax, p)); }
+
+  /* Clip the infinite line p=a+b*q to the box q in [0,qmax], p in [0,pmax].
+     Returns {q1,p1,q2,p2} of the visible segment, or null if none is visible. */
+  function clipLineToBox(P, a, b) {
+    var cand = [];
+    /* intersections with the four edges, keep those within the box */
+    /* left edge q=0 */
+    var pL = a + b * 0;
+    if (pL >= 0 && pL <= P.pmax) { cand.push({ q: 0, p: pL }); }
+    /* right edge q=qmax */
+    var pR = a + b * P.qmax;
+    if (pR >= 0 && pR <= P.pmax) { cand.push({ q: P.qmax, p: pR }); }
+    if (Math.abs(b) > 1e-9) {
+      /* bottom edge p=0 -> q=(0-a)/b */
+      var qB = (0 - a) / b;
+      if (qB >= 0 && qB <= P.qmax) { cand.push({ q: qB, p: 0 }); }
+      /* top edge p=pmax -> q=(pmax-a)/b */
+      var qT = (P.pmax - a) / b;
+      if (qT >= 0 && qT <= P.qmax) { cand.push({ q: qT, p: P.pmax }); }
+    }
+    if (cand.length < 2) { return null; }
+    /* pick the two most separated candidates (handles corner duplicates) */
+    var best = null, bd = -1;
+    for (var i = 0; i < cand.length; i++) {
+      for (var j = i + 1; j < cand.length; j++) {
+        var dq = cand[i].q - cand[j].q, dp = cand[i].p - cand[j].p;
+        var dist = dq * dq + dp * dp;
+        if (dist > bd) { bd = dist; best = [cand[i], cand[j]]; }
+      }
+    }
+    if (!best || bd < 1e-9) { return null; }
+    /* order by q ascending for stable labeling */
+    var A = best[0], B = best[1];
+    if (A.q > B.q) { var t = A; A = B; B = t; }
+    return { q1: A.q, p1: A.p, q2: B.q, p2: B.p };
+  }
 
   /* dashed drop-lines from an (q,p) point to both axes + tick labels */
   function markPoint(P, q, p, opts) {
