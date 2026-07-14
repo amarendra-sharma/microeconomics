@@ -45,7 +45,9 @@
     2: ['ppf_opportunity_cost', 'positive_normative', 'ch2_ppf_concept', 'ch2_micro_macro'],
     3: ['comparative_advantage', 'opp_cost_table', 'ch3_absolute_vs_comparative', 'ch3_written_gains_trade'],
     4: ['sd_equilibrium', 'sd_equilibrium_graph', 'sd_shift_effect', 'sd_qd_at_price', 'sd_surplus_shortage', 'sd_determinant', 'sd_double_shift', 'sd_equilibrium_price_graph', 'ch4_law_demand_mc', 'ch4_change_qd_vs_d', 'ch4_written_shortage', 'ch4_ceteris_paribus', 'ch4_normal_inferior', 'ch4_written_shift_vs_move'],
-    7: ['sd_consumer_surplus', 'sd_producer_surplus', 'sd_total_surplus']
+    5: ['elasticity_midpoint', 'elasticity_classify', 'elasticity_revenue', 'income_elasticity', 'ch5_elastic_determinants', 'ch5_written_revenue'],
+    6: ['ceiling_shortage', 'floor_surplus', 'tax_quantity', 'tax_incidence', 'ch6_ceiling_concept', 'ch6_tax_wedge'],
+    7: ['sd_consumer_surplus', 'sd_producer_surplus', 'sd_total_surplus', 'welfare_efficiency', 'ch7_consumer_surplus_def', 'ch7_written_efficiency']
   };
 
   /* ---- render a single question into a container -------------------------
@@ -139,8 +141,31 @@
 
     var state = { idx: 0, correct: 0, answered: 0 };
 
+    /* Draw generators by cycling through a shuffled order so the student sees
+       every question in the chapter before any repeats (no immediate repeats).
+       Reshuffle when the deck is exhausted; avoid the last-seen id leading the
+       new shuffle so there's no repeat across the seam. */
+    var deck = [];
+    var lastGenId = null;
+    function shuffleDeck() {
+      deck = bank.slice();
+      for (var i = deck.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = deck[i]; deck[i] = deck[j]; deck[j] = t;
+      }
+      if (deck.length > 1 && deck[0] === lastGenId) {
+        deck.push(deck.shift());   /* rotate so we don't repeat across reshuffle */
+      }
+    }
+    function nextGenId() {
+      if (!deck.length) { shuffleDeck(); }
+      var id = deck.shift();
+      lastGenId = id;
+      return id;
+    }
+
     function draw() {
-      var genId = bank[Math.floor(Math.random() * bank.length)];
+      var genId = nextGenId();
       var seed = rand32();
       var q = G.generate(genId, seed);
       if (!q) { return; }

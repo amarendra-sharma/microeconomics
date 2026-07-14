@@ -414,23 +414,28 @@
     id: "ppf_opportunity_cost", chapter: 2, kind: "numeric", render: "graphical",
     difficulty: "med", concept: "PPF and opportunity cost", points: 2,
     build: function (rng) {
-      /* two points on a (linear-ish) frontier; opp cost of moving = dY/dX */
-      var xmax = rng_int(rng, 8, 12), ymax = rng_int(rng, 8, 12);
-      /* choose two integer points that lie roughly on the straight frontier */
-      var x1 = rng_int(rng, 1, 3), x2 = rng_int(rng, 5, 7);
-      /* on the straight frontier y = ymax*(1 - x/xmax) */
-      var y1 = Math.round(ymax * (1 - x1 / xmax));
-      var y2 = Math.round(ymax * (1 - x2 / xmax));
-      var giveUp = y1 - y2;         /* units of Y given up */
-      var gain = x2 - x1;           /* units of X gained */
-      var oc = round2(giveUp / gain);
+      /* Build a STRAIGHT frontier with a clean integer slope so the two marked
+         points lie exactly on the line the renderer draws (which is
+         y = ymax*(1 - x/xmax) = ymax - (ymax/xmax)*x when bow=0).
+         Choose slope = ymax/xmax as an integer k, and integer x's; then the
+         y-values are integers too and sit exactly on the frontier. */
+      var k = rng_pick(rng, [1, 2]);          /* opportunity cost of 1 X = k units of Y */
+      var xmax = rng_int(rng, 8, 11);         /* x-intercept */
+      var ymax = k * xmax;                     /* y-intercept so slope is exactly k */
+      var x1 = rng_int(rng, 1, 3);
+      var x2 = rng_int(rng, 5, 7);
+      var y1 = ymax - k * x1;                  /* exact integer point on frontier */
+      var y2 = ymax - k * x2;
+      var giveUp = y1 - y2;                     /* = k*(x2-x1) */
+      var gain = x2 - x1;
+      var oc = round2(giveUp / gain);           /* = k */
       return {
         prompt: "The graph shows a country's production possibilities. Moving from point A (" + x1 + " units of X, " +
           y1 + " of Y) to point B (" + x2 + " of X, " + y2 + " of Y), what is the opportunity cost of ONE additional unit of good X (in units of Y)?",
         diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y",
           bow: 0, points: [{ x: x1, y: y1, label: "A", state: "on" }, { x: x2, y: y2, label: "B", state: "on" }] },
         answer: oc, tolerance: 0.05,
-        rationale: "Opp cost of X = (Y given up)/(X gained) = " + giveUp + "/" + gain + " = " + oc + " units of Y."
+        rationale: "Opp cost of 1 X = (Y given up)/(X gained) = " + giveUp + "/" + gain + " = " + oc + " units of Y (constant along a straight PPF)."
       };
     }
   };
@@ -522,6 +527,208 @@
         answer: oc, tolerance: 0.05,
         rationale: "Opp cost of 1 " + g1 + " = " + g2 + " forgone / " + g1 + " made = " +
           out2 + "/" + out1 + " = " + oc + " " + g2 + "."
+      };
+    }
+  };
+
+  /* ===================== CHAPTER 5 — Elasticity ======================== */
+
+  /* ---- price elasticity of demand, midpoint method (numeric) ------------ */
+  GEN["elasticity_midpoint"] = {
+    id: "elasticity_midpoint", chapter: 5, kind: "numeric", render: "text",
+    difficulty: "hard", concept: "price elasticity (midpoint)", points: 2,
+    build: function (rng) {
+      /* choose two price/quantity points with clean midpoint arithmetic */
+      var p1 = rng_int(rng, 4, 8), p2 = p1 + rng_int(rng, 2, 4);
+      var q1 = rng_int(rng, 40, 60), q2 = q1 - rng_int(rng, 8, 20);
+      /* midpoint elasticity = (%dQ)/(%dP), using averages; report magnitude */
+      var pctQ = (q2 - q1) / ((q1 + q2) / 2);
+      var pctP = (p2 - p1) / ((p1 + p2) / 2);
+      var e = Math.abs(pctQ / pctP);
+      return {
+        prompt: "When the price rises from $" + p1 + " to $" + p2 + ", quantity demanded falls from " +
+          q1 + " to " + q2 + " units. Using the midpoint method, what is the price elasticity of demand? (Report the absolute value, rounded to 2 decimals.)",
+        answer: round2(e), tolerance: 0.03,
+        rationale: "Midpoint: %\u0394Q = (" + q2 + "\u2212" + q1 + ")/avg = " + round2(pctQ * 100) + "%, %\u0394P = " +
+          round2(pctP * 100) + "%. Elasticity = |" + round2(pctQ * 100) + "/" + round2(pctP * 100) + "| = " + round2(e) + "."
+      };
+    }
+  };
+
+  /* ---- elastic vs inelastic classification (MC) ------------------------- */
+  GEN["elasticity_classify"] = {
+    id: "elasticity_classify", chapter: 5, kind: "mc", render: "text",
+    difficulty: "med", concept: "elastic vs inelastic", points: 1,
+    build: function (rng) {
+      var e = round2(rng_pick(rng, [0.2, 0.4, 0.6, 0.8, 1.2, 1.5, 2.0, 2.5]));
+      var opts = ["Elastic (demand responds a lot to price)",
+        "Inelastic (demand responds little to price)",
+        "Unit elastic", "Perfectly inelastic"];
+      var correct = e > 1 ? 0 : (e < 1 ? 1 : 2);
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "The price elasticity of demand for a good is " + e + ". Demand for this good is:",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "|E| > 1 is elastic, |E| < 1 inelastic, = 1 unit elastic. Here E = " + e + "."
+      };
+    }
+  };
+
+  /* ---- total revenue test (MC) ------------------------------------------ */
+  GEN["elasticity_revenue"] = {
+    id: "elasticity_revenue", chapter: 5, kind: "mc", render: "text",
+    difficulty: "hard", concept: "total revenue test", points: 2,
+    build: function (rng) {
+      var elastic = rng() < 0.5;
+      var raise = rng() < 0.5;
+      /* elastic + price up -> revenue down; inelastic + price up -> revenue up; etc. */
+      var revUp = raise ? !elastic : elastic;
+      var opts = ["Total revenue rises", "Total revenue falls",
+        "Total revenue is unchanged", "Total revenue could go either way"];
+      var correct = revUp ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "Demand for a good is " + (elastic ? "elastic" : "inelastic") + ". If the seller " +
+          (raise ? "raises" : "lowers") + " the price, what happens to total revenue?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "When demand is " + (elastic ? "elastic, price and revenue move in OPPOSITE directions" :
+          "inelastic, price and revenue move in the SAME direction") + "."
+      };
+    }
+  };
+
+  /* ---- income elasticity sign -> normal/inferior (MC) ------------------- */
+  GEN["income_elasticity"] = {
+    id: "income_elasticity", chapter: 5, kind: "mc", render: "text",
+    difficulty: "med", concept: "income elasticity", points: 1,
+    build: function (rng) {
+      var val = round2(rng_pick(rng, [-1.5, -0.8, -0.4, 0.5, 0.9, 1.4, 2.0]));
+      var opts = ["A normal good", "An inferior good", "A luxury (income-elastic normal good)", "A Giffen good"];
+      var correct;
+      if (val < 0) { correct = 1; }
+      else if (val > 1) { correct = 2; }
+      else { correct = 0; }
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "A good has an income elasticity of demand equal to " + val + ". This good is best classified as:",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Income elasticity < 0 \u2192 inferior; 0 to 1 \u2192 normal necessity; > 1 \u2192 normal luxury. Here it is " + val + "."
+      };
+    }
+  };
+
+  /* ===================== CHAPTER 6 — Government Policies ================ */
+
+  /* ---- price ceiling: shortage size (graphical numeric) ----------------- */
+  GEN["ceiling_shortage"] = {
+    id: "ceiling_shortage", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "binding price ceiling", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8); var c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      /* binding ceiling BELOW pStar */
+      var ceil = pStar - rng_int(rng, 1, Math.max(1, Math.floor(pStar - c - 1)));
+      var qd = (a - ceil) / b;       /* quantity demanded at ceiling */
+      var qs = (ceil - c) / d;       /* quantity supplied at ceiling */
+      var shortage = round2(qd - qs);
+      return {
+        prompt: "Demand is P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply is P = " + c + " + " + fmtCoef(d) +
+          "Q. The government sets a price ceiling of $" + ceil + ". What is the resulting shortage (Qd \u2212 Qs)?",
+        diagramSpec: { type: "price_control", dA: a, dB: -b, sA: c, sB: d, control: "ceiling", level: ceil,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + 1) },
+        answer: shortage, tolerance: 0.1,
+        rationale: "At P=" + ceil + ": Qd = (" + a + "\u2212" + ceil + ")/" + b + " = " + round2(qd) +
+          ", Qs = (" + ceil + "\u2212" + c + ")/" + d + " = " + round2(qs) + ". Shortage = " + shortage + "."
+      };
+    }
+  };
+
+  /* ---- price floor: surplus size (graphical numeric) -------------------- */
+  GEN["floor_surplus"] = {
+    id: "floor_surplus", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "binding price floor", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8); var c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      var floor = pStar + rng_int(rng, 1, 3);   /* binding floor ABOVE pStar */
+      var qd = (a - floor) / b;
+      var qs = (floor - c) / d;
+      var surplus = round2(qs - qd);
+      return {
+        prompt: "Demand is P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply is P = " + c + " + " + fmtCoef(d) +
+          "Q. The government sets a price floor of $" + floor + ". What is the resulting surplus (Qs \u2212 Qd)?",
+        diagramSpec: { type: "price_control", dA: a, dB: -b, sA: c, sB: d, control: "floor", level: floor,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + 1) },
+        answer: surplus, tolerance: 0.1,
+        rationale: "At P=" + floor + ": Qs = (" + floor + "\u2212" + c + ")/" + d + " = " + round2(qs) +
+          ", Qd = (" + a + "\u2212" + floor + ")/" + b + " = " + round2(qd) + ". Surplus = " + surplus + "."
+      };
+    }
+  };
+
+  /* ---- tax: new quantity after a per-unit tax (graphical numeric) ------- */
+  GEN["tax_quantity"] = {
+    id: "tax_quantity", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "effect of a tax", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8); var c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      var tax = rng_int(rng, 2, 5);
+      var qt = (a - c - tax) / (b + d);   /* new quantity with tax */
+      return {
+        prompt: "Demand is P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply is P = " + c + " + " + fmtCoef(d) +
+          "Q. A per-unit tax of $" + tax + " is imposed. What is the new quantity traded?",
+        diagramSpec: { type: "tax", dA: a, dB: -b, sA: c, sB: d, tax: tax,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + tax + 1) },
+        answer: round2(qt), tolerance: 0.1,
+        rationale: "With the tax, set " + a + "\u2212" + fmtCoef(b) + "Q = " + (c) + "+" + tax + "+" + fmtCoef(d) +
+          "Q \u2192 Q = " + round2(qt) + "."
+      };
+    }
+  };
+
+  /* ---- tax incidence direction (MC conceptual) -------------------------- */
+  GEN["tax_incidence"] = {
+    id: "tax_incidence", chapter: 6, kind: "mc", render: "text",
+    difficulty: "hard", concept: "tax incidence", points: 2,
+    build: function (rng) {
+      /* the more inelastic side bears more of the tax */
+      var demandInelastic = rng() < 0.5;
+      var opts = ["Buyers bear more of the tax", "Sellers bear more of the tax",
+        "Buyers and sellers bear it equally", "Neither bears any of the tax"];
+      var correct = demandInelastic ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "A per-unit tax is placed on a good. Demand is " + (demandInelastic ? "relatively inelastic" : "relatively elastic") +
+          " and supply is " + (demandInelastic ? "relatively elastic" : "relatively inelastic") +
+          ". Who bears the larger share of the tax burden?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "The more INELASTIC side of the market bears more of the tax. Here that is " +
+          (demandInelastic ? "buyers (demand)" : "sellers (supply)") + "."
+      };
+    }
+  };
+
+  /* ===================== CHAPTER 7 — Welfare / Efficiency ============== */
+  /* (sd_consumer_surplus, sd_producer_surplus, sd_total_surplus already exist) */
+
+  /* ---- change in total surplus from a shift (numeric) ------------------- */
+  GEN["welfare_efficiency"] = {
+    id: "welfare_efficiency", chapter: 7, kind: "mc", render: "text",
+    difficulty: "med", concept: "market efficiency", points: 1,
+    build: function (rng) {
+      var opts = ["at the competitive equilibrium quantity",
+        "at a quantity below the equilibrium",
+        "at a quantity above the equilibrium",
+        "where consumer surplus is zero"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "In a competitive market with no externalities, total surplus (consumer + producer surplus) is maximized:",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Total surplus is maximized at the competitive equilibrium \u2014 the efficient quantity where marginal value equals marginal cost."
       };
     }
   };
@@ -652,6 +859,63 @@
       answer: null,
       rubric: "Full credit: (1) absolute advantage in all goods does not eliminate gains from trade; (2) comparative advantage = lower opportunity cost; (3) each country specializes where its opportunity cost is lowest; (4) specialization + trade expands total output so both can consume beyond their own PPF. Partial credit per element.",
       rationale: "Key idea: comparative advantage, not absolute, drives mutually beneficial trade."
+    },
+    /* ---- Chapter 5 ---- */
+    {
+      id: "ch5_elastic_determinants", chapter: 5, kind: "mc", render: "text",
+      difficulty: "med", concept: "determinants of elasticity", points: 1,
+      prompt: "Which good is likely to have the MOST price-elastic demand?",
+      options: ["A specific brand of soda with many substitutes", "Insulin for a diabetic",
+        "Salt", "Gasoline in the short run"],
+      answer: 0,
+      rationale: "Demand is more elastic when close substitutes exist and the good is a small, postponable, narrowly-defined purchase. A specific soda brand has many substitutes."
+    },
+    {
+      id: "ch5_written_revenue", chapter: 5, kind: "short", render: "text",
+      difficulty: "hard", concept: "elasticity and revenue", points: 3,
+      prompt: "A concert promoter says: \u201cWe should raise ticket prices to increase our revenue.\u201d Under what elasticity condition is this true, and under what condition would it backfire? Explain using the total-revenue test.",
+      answer: null,
+      rubric: "Full credit: (1) if demand is INELASTIC (|E|<1), raising price increases revenue; (2) if demand is ELASTIC (|E|>1), raising price DECREASES revenue (quantity falls proportionally more); (3) correctly connects to the total-revenue test (P and TR move together when inelastic, opposite when elastic). Partial credit per element.",
+      rationale: "Total-revenue test: inelastic \u2192 raise price to raise revenue; elastic \u2192 raising price backfires."
+    },
+    /* ---- Chapter 6 ---- */
+    {
+      id: "ch6_ceiling_concept", chapter: 6, kind: "mc", render: "text",
+      difficulty: "med", concept: "price ceilings", points: 1,
+      prompt: "For a price ceiling to cause a shortage, it must be set:",
+      options: ["below the equilibrium price", "above the equilibrium price",
+        "exactly at the equilibrium price", "at any price \u2014 ceilings always cause shortages"],
+      answer: 0,
+      rationale: "A price ceiling only binds (and causes a shortage) when it is BELOW equilibrium. Above equilibrium it has no effect."
+    },
+    {
+      id: "ch6_tax_wedge", chapter: 6, kind: "mc", render: "text",
+      difficulty: "med", concept: "effect of a tax", points: 1,
+      prompt: "When a per-unit tax is imposed on a good, the price buyers pay and the price sellers receive:",
+      options: ["differ by the amount of the tax", "are equal, as before the tax",
+        "both rise by the full amount of the tax", "both fall by the full amount of the tax"],
+      answer: 0,
+      rationale: "A tax drives a wedge between the buyer's price and the seller's price equal to the per-unit tax."
+    },
+    /* ---- Chapter 7 ---- */
+    {
+      id: "ch7_consumer_surplus_def", chapter: 7, kind: "mc", render: "text",
+      difficulty: "easy", concept: "consumer surplus", points: 1,
+      prompt: "Consumer surplus is best defined as:",
+      options: ["the amount a buyer is willing to pay minus the amount actually paid",
+        "the total amount buyers spend on a good",
+        "the profit a seller earns on a sale",
+        "the area below the supply curve"],
+      answer: 0,
+      rationale: "Consumer surplus = willingness to pay \u2212 price paid, measured as the area below demand and above price."
+    },
+    {
+      id: "ch7_written_efficiency", chapter: 7, kind: "short", render: "text",
+      difficulty: "hard", concept: "market efficiency", points: 3,
+      prompt: "Explain why the competitive market equilibrium maximizes total surplus. In your answer, describe what would be lost if output were pushed above or below the equilibrium quantity.",
+      answer: null,
+      rubric: "Full credit: (1) at equilibrium, marginal buyer's value = marginal seller's cost; (2) below equilibrium, some mutually beneficial trades don't happen (value > cost) \u2014 lost surplus; (3) above equilibrium, units are produced whose cost exceeds buyers' value \u2014 negative net value; (4) equilibrium therefore maximizes total (consumer + producer) surplus. Partial credit per element.",
+      rationale: "Efficiency: equilibrium exhausts all gains from trade; deviating either way destroys surplus."
     }
   ];
 
