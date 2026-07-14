@@ -203,6 +203,165 @@
     }
   };
 
+  /* helper: format a linear demand/supply expression, dropping a coefficient of 1
+     so we get "P = 12 \u2212 Q" not "P = 12 \u2212 1Q". slope sign handled by caller. */
+  function fmtCoef(n) { return (n === 1) ? "" : String(n); }
+
+  /* ---- G5: producer surplus (numeric, graphical) ------------------------ */
+  GEN["sd_producer_surplus"] = {
+    id: "sd_producer_surplus", chapter: 4, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "producer surplus", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 7); var c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      var ps = 0.5 * qStar * (pStar - c);   /* below price, above supply intercept c */
+      return {
+        prompt: "Demand is P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply is P = " + c +
+          " + " + fmtCoef(d) + "Q. Compute the producer surplus at the competitive equilibrium.",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d,
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, a + 1), showEq: true, shade: "surplus" },
+        answer: round2(ps), tolerance: 0.5,
+        rationale: "PS = \u00bd \u00d7 Q* \u00d7 (P* \u2212 supply intercept) = \u00bd \u00d7 " + qStar +
+          " \u00d7 (" + pStar + " \u2212 " + c + ") = " + round2(ps) + "."
+      };
+    }
+  };
+
+  /* ---- G6: total surplus (numeric) -------------------------------------- */
+  GEN["sd_total_surplus"] = {
+    id: "sd_total_surplus", chapter: 4, kind: "numeric", render: "text",
+    difficulty: "hard", concept: "total surplus", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 7); var c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      var ts = 0.5 * qStar * (a - c);   /* whole triangle between D and S up to Q* */
+      return {
+        prompt: "Demand is P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply is P = " + c +
+          " + " + fmtCoef(d) + "Q. What is the total surplus (consumer + producer) at equilibrium?",
+        answer: round2(ts), tolerance: 0.5,
+        rationale: "Total surplus = \u00bd \u00d7 Q* \u00d7 (demand intercept \u2212 supply intercept) = \u00bd \u00d7 " +
+          qStar + " \u00d7 (" + a + " \u2212 " + c + ") = " + round2(ts) + "."
+      };
+    }
+  };
+
+  /* ---- G7: quantity demanded at a price (easy numeric) ------------------ */
+  GEN["sd_qd_at_price"] = {
+    id: "sd_qd_at_price", chapter: 4, kind: "numeric", render: "text",
+    difficulty: "easy", concept: "reading a demand curve", points: 1,
+    build: function (rng) {
+      var a = rng_int(rng, 10, 20); var b = rng_pick(rng, [1, 2]);
+      /* choose a price that yields an integer quantity in range */
+      var qd = rng_int(rng, 2, 7); var price = a - b * qd;
+      return {
+        prompt: "The demand curve is P = " + a + " \u2212 " + fmtCoef(b) +
+          "Q. At a price of " + price + ", what is the quantity demanded?",
+        answer: qd, tolerance: 0.01,
+        rationale: "Set P = " + price + ": " + price + " = " + a + " \u2212 " + fmtCoef(b) +
+          "Q \u2192 Q = " + qd + "."
+      };
+    }
+  };
+
+  /* ---- G8: surplus vs shortage at a given price (MC) -------------------- */
+  GEN["sd_surplus_shortage"] = {
+    id: "sd_surplus_shortage", chapter: 4, kind: "mc", render: "text",
+    difficulty: "med", concept: "disequilibrium", points: 1,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 7); var c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      var above = rng() < 0.5;
+      var setP = above ? pStar + rng_int(rng, 1, 3) : pStar - rng_int(rng, 1, 3);
+      var opts = ["a surplus (excess supply)", "a shortage (excess demand)",
+        "neither \u2014 the market is in equilibrium", "it cannot be determined"];
+      var correct = above ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "In this market the equilibrium price is " + pStar + ". If the price is instead set at " +
+          setP + ", the result is:",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A price " + (above ? "above" : "below") + " equilibrium creates " +
+          (above ? "a surplus (Qs > Qd)." : "a shortage (Qd > Qs).")
+      };
+    }
+  };
+
+  /* ---- G9: demand vs supply determinant (MC conceptual, randomized) ----- */
+  GEN["sd_determinant"] = {
+    id: "sd_determinant", chapter: 4, kind: "mc", render: "text",
+    difficulty: "easy", concept: "determinants of demand/supply", points: 1,
+    build: function (rng) {
+      var items = [
+        { t: "the price of a substitute good rises", ans: "Demand increases (shifts right)" },
+        { t: "consumer tastes shift away from the good", ans: "Demand decreases (shifts left)" },
+        { t: "the wage paid to workers who make the good falls", ans: "Supply increases (shifts right)" },
+        { t: "a new technology makes production more efficient", ans: "Supply increases (shifts right)" },
+        { t: "the number of sellers in the market falls", ans: "Supply decreases (shifts left)" },
+        { t: "buyers expect the price to be much higher next month", ans: "Demand increases (shifts right)" }
+      ];
+      var it = rng_pick(rng, items);
+      var pool = ["Demand increases (shifts right)", "Demand decreases (shifts left)",
+        "Supply increases (shifts right)", "Supply decreases (shifts left)"];
+      var correctIdx = pool.indexOf(it.ans);
+      var sh = shuffleWithAnswer(rng, pool, correctIdx);
+      return {
+        prompt: "Other things equal, if " + it.t + ", what happens in this market?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "This is a determinant that shifts the whole curve, not a movement along it."
+      };
+    }
+  };
+
+  /* ---- G10: double shift ambiguity (MC, hard conceptual) ---------------- */
+  GEN["sd_double_shift"] = {
+    id: "sd_double_shift", chapter: 4, kind: "mc", render: "text",
+    difficulty: "hard", concept: "simultaneous shifts", points: 2,
+    build: function (rng) {
+      /* both curves shift; one of price/quantity is determinate, the other ambiguous */
+      var scenarios = [
+        { t: "demand rises and supply rises", det: "quantity rises", amb: "price is ambiguous" },
+        { t: "demand falls and supply falls", det: "quantity falls", amb: "price is ambiguous" },
+        { t: "demand rises and supply falls", det: "price rises", amb: "quantity is ambiguous" },
+        { t: "demand falls and supply rises", det: "price falls", amb: "quantity is ambiguous" }
+      ];
+      var s = rng_pick(rng, scenarios);
+      var opts = [
+        "Both price and quantity change in determinate directions",
+        s.det.charAt(0).toUpperCase() + s.det.slice(1) + ", but " + s.amb,
+        "Both price and quantity are ambiguous",
+        "Neither price nor quantity changes"
+      ];
+      var sh = shuffleWithAnswer(rng, opts, 1);
+      return {
+        prompt: "Suppose " + s.t + " at the same time. What can we say about the new equilibrium?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "When both curves shift, one variable's direction is determinate and the other depends on the relative sizes of the shifts."
+      };
+    }
+  };
+
+  /* ---- G11: equilibrium with a graph, harder fractional (numeric) ------- */
+  GEN["sd_equilibrium_price_graph"] = {
+    id: "sd_equilibrium_price_graph", chapter: 4, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "equilibrium price (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 8); var c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar; var a = pStar + b * qStar;
+      return {
+        prompt: "The graph shows demand P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply P = " +
+          c + " + " + fmtCoef(d) + "Q. Read off (or compute) the equilibrium price.",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d,
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, pStar + 3), showEq: true, hideValues: true },
+        answer: pStar, tolerance: 0.01,
+        rationale: "At equilibrium Q* = " + qStar + ", so P* = " + c + " + " + fmtCoef(d) + "\u00d7" + qStar + " = " + pStar + "."
+      };
+    }
+  };
+
   /* ---- S1..S3: STATIC conceptual / written (no randomization) -----------
      These carry their own fixed content; the engine returns them as-is. */
   var STATIC = [
@@ -239,6 +398,30 @@
       answer: null,   /* graded by AI/instructor via rubric */
       rubric: "Full credit: (1) at a below-equilibrium price, quantity demanded exceeds quantity supplied; (2) this gap is the shortage; (3) unsatisfied buyers bid the price up / sellers raise prices; (4) as price rises, Qd falls and Qs rises until they're equal at equilibrium. Award partial credit for each element present.",
       rationale: "Looking for the Qd>Qs mechanism plus the upward price adjustment restoring equilibrium."
+    },
+    {
+      id: "ch4_ceteris_paribus", chapter: 4, kind: "mc", render: "text",
+      difficulty: "easy", concept: "ceteris paribus", points: 1,
+      prompt: "When economists draw a demand curve, they hold all factors other than the good's own price constant. This assumption is called:",
+      options: ["ceteris paribus", "comparative advantage", "the invisible hand", "diminishing returns"],
+      answer: 0,
+      rationale: "'Ceteris paribus' means 'other things equal' \u2014 it lets us isolate the price\u2013quantity relationship."
+    },
+    {
+      id: "ch4_normal_inferior", chapter: 4, kind: "mc", render: "text",
+      difficulty: "med", concept: "normal vs inferior goods", points: 1,
+      prompt: "A rise in income causes the demand for bus travel to fall. Bus travel is best described as:",
+      options: ["an inferior good", "a normal good", "a complement to income", "a Giffen good"],
+      answer: 0,
+      rationale: "If a rise in income reduces demand, the good is inferior by definition."
+    },
+    {
+      id: "ch4_written_shift_vs_move", chapter: 4, kind: "short", render: "text",
+      difficulty: "hard", concept: "movement vs shift", points: 3,
+      prompt: "A student claims: \u201cWhen the price of coffee rises, demand for coffee falls.\u201d Explain what is wrong with this statement using the correct economic terminology, and state what actually happens.",
+      answer: null,
+      rubric: "Full credit: (1) identifies the error \u2014 a price change does NOT shift demand; (2) correct term: it causes a decrease in QUANTITY DEMANDED, a movement ALONG the demand curve; (3) 'demand' (the whole curve) shifts only due to non-price determinants (income, tastes, related-goods prices, expectations, number of buyers). Partial credit per element.",
+      rationale: "Key distinction: movement along vs shift of the demand curve."
     }
   ];
 

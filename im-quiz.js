@@ -41,9 +41,7 @@
      In production this comes from im_bank_items; we keep a local fallback map
      so practice works even before the DB bank is populated. */
   var CH_BANK = {
-    4: ["sd_equilibrium", "sd_equilibrium_graph", "sd_shift_effect",
-        "sd_consumer_surplus", "ch4_law_demand_mc", "ch4_change_qd_vs_d",
-        "ch4_written_shortage"]
+    4: ['sd_equilibrium', 'sd_equilibrium_graph', 'sd_shift_effect', 'sd_consumer_surplus', 'sd_producer_surplus', 'sd_total_surplus', 'sd_qd_at_price', 'sd_surplus_shortage', 'sd_determinant', 'sd_double_shift', 'sd_equilibrium_price_graph', 'ch4_law_demand_mc', 'ch4_change_qd_vs_d', 'ch4_written_shortage', 'ch4_ceteris_paribus', 'ch4_normal_inferior', 'ch4_written_shift_vs_move']
   };
 
   /* ---- render a single question into a container -------------------------
