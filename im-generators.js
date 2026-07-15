@@ -1029,6 +1029,620 @@
     }
   };
 
+
+  /* ==================== GRAPHICAL GENERATORS (Ch3-Ch10) ==================== */
+
+  /* ---- Ch3: opportunity cost from a PPF (graphical) --------------------- */
+  GEN["ch3_ppf_oppcost_graph"] = {
+    id: "ch3_ppf_oppcost_graph", chapter: 3, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "PPF opportunity cost (graph)", points: 2,
+    build: function (rng) {
+      var k = rng_pick(rng, [1, 2, 3]); var xmax = rng_int(rng, 6, 9); var ymax = k * xmax;
+      var x1 = rng_int(rng, 1, 2), x2 = rng_int(rng, 4, 6);
+      var y1 = ymax - k * x1, y2 = ymax - k * x2;
+      return {
+        prompt: "This country's PPF is a straight line. Moving from point A (" + x1 + " of X, " + y1 +
+          " of Y) to point B (" + x2 + " of X, " + y2 + " of Y), what is the opportunity cost of one unit of X (in units of Y)?",
+        diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y", bow: 0,
+          points: [{ x: x1, y: y1, label: "A", state: "on" }, { x: x2, y: y2, label: "B", state: "on" }] },
+        answer: k, tolerance: 0.01,
+        rationale: "Along a straight PPF the opportunity cost is constant: (Y lost)/(X gained) = " + (y1 - y2) + "/" + (x2 - x1) + " = " + k + "."
+      };
+    }
+  };
+
+  /* ---- Ch3: identify efficient/inefficient/unattainable point (graphical MC) */
+  GEN["ch3_ppf_point_type"] = {
+    id: "ch3_ppf_point_type", chapter: 3, kind: "mc", render: "graphical",
+    difficulty: "med", concept: "PPF point classification", points: 2,
+    build: function (rng) {
+      var xmax = rng_int(rng, 8, 10), ymax = rng_int(rng, 8, 10);
+      var kind = rng_pick(rng, [0, 1, 2]); /* 0 inside, 1 on, 2 outside */
+      var px, py, state;
+      if (kind === 0) { px = rng_int(rng, 2, 3); py = rng_int(rng, 1, 2); state = "inside"; }
+      else if (kind === 1) { px = 3; py = Math.round(ymax * (1 - 3 / xmax)); state = "on"; }
+      else { px = xmax - 1; py = ymax - 1; state = "outside"; }
+      var opts = ["efficient (on the frontier)", "inefficient (inside the frontier)", "unattainable (beyond the frontier)"];
+      var correct = kind === 1 ? 0 : (kind === 0 ? 1 : 2);
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "Point P is marked relative to the production possibilities frontier. Point P is:",
+        diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y", bow: 0.28,
+          points: [{ x: px, y: py, label: "P", state: state }] },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A point " + (state === "on" ? "on" : state) + " the frontier is " + opts[correct] + "."
+      };
+    }
+  };
+
+  /* ---- Ch4: read equilibrium quantity off the graph (graphical numeric) - */
+  GEN["ch4_read_eq_quantity"] = {
+    id: "ch4_read_eq_quantity", chapter: 4, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "reading equilibrium (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 7), c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      return {
+        prompt: "Read the equilibrium quantity from the supply-and-demand graph.",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true,
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, pStar + 3) },
+        answer: qStar, tolerance: 0.01,
+        rationale: "The curves cross at Q* = " + qStar + " (where quantity demanded equals quantity supplied)."
+      };
+    }
+  };
+
+  /* ---- Ch4: predict effect of a shift, shown graphically (graphical MC) -- */
+  GEN["ch4_shift_graph_effect"] = {
+    id: "ch4_shift_graph_effect", chapter: 4, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "shift effect (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 4, 6), c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var which = rng_pick(rng, ["demand", "supply"]);
+      var shiftBy = rng_pick(rng, [2, 3, 4]);
+      /* demand right (+): P up, Q up; supply right (+): P down, Q up */
+      var pUp = which === "demand"; var qUp = true;
+      var opts = ["Equilibrium price and quantity both rise",
+        "Price rises, quantity falls", "Price falls, quantity rises", "Price and quantity both fall"];
+      var correct = (pUp && qUp) ? 0 : (!pUp && qUp) ? 2 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "The graph shows the " + which + " curve shifting to the right (D\u2081\u2192D\u2082 or S\u2081\u2192S\u2082). What happens to the equilibrium price and quantity?",
+        diagramSpec: { type: "shift", dA: a, dB: -b, sA: c, sB: d, which: which, shiftBy: shiftBy,
+          qmax: Math.max(12, qStar + 5), pmax: Math.max(14, a + 2), hideValues: true },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: which === "demand" ?
+          "A rightward demand shift raises both equilibrium price and quantity." :
+          "A rightward supply shift lowers price but raises quantity."
+      };
+    }
+  };
+
+  /* ---- Ch5: classify elasticity from steep vs flat demand (graphical MC) - */
+  GEN["ch5_steep_flat_graph"] = {
+    id: "ch5_steep_flat_graph", chapter: 5, kind: "mc", render: "graphical",
+    difficulty: "med", concept: "elastic vs inelastic (graph)", points: 2,
+    build: function (rng) {
+      var steep = rng() < 0.5;
+      /* steep demand (large |slope|) = inelastic-looking; flat = elastic-looking */
+      var b = steep ? 3 : 1;   /* demand slope magnitude */
+      var a = rng_int(rng, 14, 20);
+      var opts = ["relatively inelastic (steep)", "relatively elastic (flat)"];
+      var correct = steep ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "Compared with a typical demand curve, the demand curve shown is " + (steep ? "steep" : "flat") +
+          ". This suggests demand is:",
+        diagramSpec: { type: "elasticity", a: a, b: -b, qmax: Math.floor(a / b) + 2, pmax: a + 2,
+          label: "D" },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A steep demand curve means quantity changes little when price changes (inelastic); a flat one means quantity is very responsive (elastic)."
+      };
+    }
+  };
+
+  /* ---- Ch5: total revenue at equilibrium (graphical numeric) ------------ */
+  GEN["ch5_revenue_box_graph"] = {
+    id: "ch5_revenue_box_graph", chapter: 5, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "total revenue (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 6), c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var rev = pStar * qStar;
+      return {
+        prompt: "At the equilibrium shown, total revenue is price \u00d7 quantity (the shaded rectangle). Compute total revenue.",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, showRevenueBox: true,
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, pStar + 3) },
+        answer: rev, tolerance: 0.01,
+        rationale: "Total revenue = P* \u00d7 Q* = " + pStar + " \u00d7 " + qStar + " = " + rev + "."
+      };
+    }
+  };
+
+  /* ---- Ch6: tax incidence split shown graphically (graphical numeric) --- */
+  GEN["ch6_tax_buyer_price_graph"] = {
+    id: "ch6_tax_buyer_price_graph", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "tax buyer price (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8), c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var tax = rng_int(rng, 2, 5);
+      var qt = (a - c - tax) / (b + d);
+      var pb = a - b * qt;   /* price buyers pay */
+      return {
+        prompt: "A per-unit tax of $" + tax + " is imposed on this market (demand P = " + a + " \u2212 " + fmtCoef(b) +
+          "Q, supply P = " + c + " + " + fmtCoef(d) + "Q). What price do BUYERS end up paying? (2 decimals)",
+        diagramSpec: { type: "tax", dA: a, dB: -b, sA: c, sB: d, tax: tax,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + tax + 1) },
+        answer: round2(pb), tolerance: 0.1,
+        rationale: "New quantity Q_t = " + round2(qt) + "; buyers pay the demand price there: P_b = " + a + " \u2212 " + fmtCoef(b) + "\u00d7" + round2(qt) + " = " + round2(pb) + "."
+      };
+    }
+  };
+
+  /* ---- Ch6: price floor surplus read (graphical numeric) ---------------- */
+  GEN["ch6_floor_surplus_graph2"] = {
+    id: "ch6_floor_surplus_graph2", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "price floor surplus (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8), c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var floor = pStar + rng_int(rng, 2, 4);
+      var qd = (a - floor) / b, qs = (floor - c) / d;
+      return {
+        prompt: "The graph shows a price floor of $" + floor + ". Read/compute the surplus (Qs \u2212 Qd) it creates.",
+        diagramSpec: { type: "price_control", dA: a, dB: -b, sA: c, sB: d, control: "floor", level: floor,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + 1) },
+        answer: round2(qs - qd), tolerance: 0.1,
+        rationale: "At P=" + floor + ": Qs = " + round2(qs) + ", Qd = " + round2(qd) + ", surplus = " + round2(qs - qd) + "."
+      };
+    }
+  };
+
+  /* ---- Ch7: consumer surplus area from a graph (graphical numeric) ------ */
+  GEN["ch7_cs_area_graph"] = {
+    id: "ch7_cs_area_graph", chapter: 7, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "consumer surplus area (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 7), c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var cs = 0.5 * qStar * (a - pStar);
+      return {
+        prompt: "Using the shaded consumer-surplus triangle, compute consumer surplus at equilibrium. (Demand P = " + a + " \u2212 " + fmtCoef(b) + "Q, supply P = " + c + " + " + fmtCoef(d) + "Q.)",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, shade: "surplus",
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, a + 1) },
+        answer: round2(cs), tolerance: 0.5,
+        rationale: "CS = \u00bd \u00d7 Q* \u00d7 (demand intercept \u2212 P*) = \u00bd \u00d7 " + qStar + " \u00d7 (" + a + " \u2212 " + pStar + ") = " + round2(cs) + "."
+      };
+    }
+  };
+
+  /* ---- Ch7: total surplus area from a graph (graphical numeric) --------- */
+  GEN["ch7_total_surplus_graph"] = {
+    id: "ch7_total_surplus_graph", chapter: 7, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "total surplus area (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 6), c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var ts = 0.5 * qStar * (a - c);
+      return {
+        prompt: "From the shaded surplus regions, compute TOTAL surplus (CS + PS) at equilibrium.",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, shade: "surplus",
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, a + 1) },
+        answer: round2(ts), tolerance: 0.5,
+        rationale: "Total surplus = \u00bd \u00d7 Q* \u00d7 (demand intercept \u2212 supply intercept) = \u00bd \u00d7 " + qStar + " \u00d7 (" + a + " \u2212 " + c + ") = " + round2(ts) + "."
+      };
+    }
+  };
+
+  /* ---- Ch8: deadweight loss area from a graph (graphical numeric) ------- */
+  GEN["ch8_dwl_area_graph"] = {
+    id: "ch8_dwl_area_graph", chapter: 8, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "deadweight loss area (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8), c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var tax = rng_int(rng, 2, 5);
+      var qt = (a - c - tax) / (b + d);
+      var dwl = 0.5 * tax * (qStar - qt);
+      return {
+        prompt: "The shaded triangle is the deadweight loss from a $" + tax + " tax. Compute its area. (Demand P = " + a + " \u2212 " + fmtCoef(b) + "Q, supply P = " + c + " + " + fmtCoef(d) + "Q.)",
+        diagramSpec: { type: "tax", dA: a, dB: -b, sA: c, sB: d, tax: tax,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + tax + 1) },
+        answer: round2(dwl), tolerance: 0.2,
+        rationale: "DWL = \u00bd \u00d7 tax \u00d7 (Q* \u2212 Q_t) = \u00bd \u00d7 " + tax + " \u00d7 (" + qStar + " \u2212 " + round2(qt) + ") = " + round2(dwl) + "."
+      };
+    }
+  };
+
+  /* ---- Ch8: compare DWL for elastic vs inelastic (graphical MC) --------- */
+  GEN["ch8_dwl_compare_graph"] = {
+    id: "ch8_dwl_compare_graph", chapter: 8, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "DWL and elasticity (graph)", points: 2,
+    build: function (rng) {
+      /* show a market; ask which curve shape gives bigger DWL for same tax */
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 7), c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var tax = 4;
+      var opts = ["when supply and demand are more elastic (flatter)",
+        "when supply and demand are more inelastic (steeper)",
+        "the deadweight loss is the same regardless of elasticity",
+        "only when the tax is small"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "For the tax shown, the deadweight loss would be LARGER:",
+        diagramSpec: { type: "tax", dA: a, dB: -b, sA: c, sB: d, tax: tax,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + tax + 1) },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "More elastic (flatter) curves mean quantity falls more when the tax is imposed, so more trades are lost and DWL is larger."
+      };
+    }
+  };
+
+  /* ---- Ch9: read the efficient scale from cost curves (graphical MC) ----- */
+  GEN["ch9_efficient_scale_graph"] = {
+    id: "ch9_efficient_scale_graph", chapter: 9, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "efficient scale (graph)", points: 2,
+    build: function (rng) {
+      var fc = rng_pick(rng, [18, 20, 24]); var a = rng_pick(rng, [10, 11]);
+      var b = rng_pick(rng, [2.0, 2.2]); var c = rng_pick(rng, [0.16, 0.18, 0.2]);
+      var opts = ["at the minimum point of the ATC curve (where MC crosses ATC)",
+        "at the minimum point of the MC curve", "where AVC equals fixed cost",
+        "at the largest possible quantity"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "On the cost-curve diagram, the firm's EFFICIENT SCALE (lowest average total cost) is:",
+        diagramSpec: { type: "cost_curves", fc: fc, a: a, b: b, c: c, showATC: true, showAVC: true },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Efficient scale is the quantity minimizing ATC \u2014 exactly where the marginal-cost curve intersects the ATC curve."
+      };
+    }
+  };
+
+  /* ---- Ch9: which curve is which (graphical MC) ------------------------- */
+  GEN["ch9_identify_curve_graph"] = {
+    id: "ch9_identify_curve_graph", chapter: 9, kind: "mc", render: "graphical",
+    difficulty: "med", concept: "identifying cost curves", points: 2,
+    build: function (rng) {
+      var fc = rng_pick(rng, [18, 20, 24]);
+      var opts = ["the marginal-cost curve", "the average-total-cost curve",
+        "the average-variable-cost curve", "the fixed-cost curve"];
+      /* the curve that cuts BOTH others at their minimums is MC */
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "In the diagram, which curve passes through the minimum points of BOTH the ATC and AVC curves?",
+        diagramSpec: { type: "cost_curves", fc: fc, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Only the marginal-cost curve passes through the minimum of both the ATC and AVC curves."
+      };
+    }
+  };
+
+  /* ---- Ch10: profit-max quantity from cost curves + price (graphical numeric) */
+  GEN["ch10_profit_max_graph"] = {
+    id: "ch10_profit_max_graph", chapter: 10, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "profit maximization (graph)", points: 2,
+    build: function (rng) {
+      var price = rng_int(rng, 12, 20);
+      var opts = ["where the price line crosses the marginal-cost curve (P = MC)",
+        "where the price line crosses the ATC curve", "at the minimum of ATC",
+        "where price crosses the AVC curve"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "Given the market price shown (dashed line = P = MR), the firm maximizes profit by producing the quantity:",
+        diagramSpec: { type: "cost_curves", fc: 24, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true, price: price },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A competitive firm produces where price (= marginal revenue) equals marginal cost, on the rising part of MC."
+      };
+    }
+  };
+
+  /* ---- Ch10: profit or loss identification (graphical MC) --------------- */
+  GEN["ch10_profit_loss_graph"] = {
+    id: "ch10_profit_loss_graph", chapter: 10, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "profit vs loss (graph)", points: 2,
+    build: function (rng) {
+      /* price above min ATC (~6.8 for default coeffs) => profit; below => loss */
+      var profit = rng() < 0.5;
+      var price = profit ? rng_int(rng, 12, 18) : rng_int(rng, 4, 6);
+      var opts = ["earning a profit (price above average total cost at q*)",
+        "incurring a loss (price below average total cost at q*)",
+        "earning exactly zero profit", "shutting down immediately"];
+      var correct = profit ? 0 : 1;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "At the profit-maximizing quantity shown (shaded rectangle), the firm is:",
+        diagramSpec: { type: "cost_curves", fc: 24, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true, price: price, showProfit: true },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: profit ?
+          "The price line lies above ATC at q*, so the shaded rectangle is a profit." :
+          "The price line lies below ATC at q*, so the shaded rectangle is a loss."
+      };
+    }
+  };
+
+  /* ---- extra graphical to reach 5 per chapter ---- */
+
+  /* Ch3: comparative advantage from two PPFs shown as slopes (numeric) */
+  GEN["ch3_ppf_slope_oppcost"] = {
+    id: "ch3_ppf_slope_oppcost", chapter: 3, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "opportunity cost from PPF slope", points: 2,
+    build: function (rng) {
+      var k = rng_pick(rng, [1, 2, 3]); var xmax = rng_int(rng, 6, 8); var ymax = k * xmax;
+      return {
+        prompt: "A country's straight-line PPF runs from (0, " + ymax + ") on the Y-axis to (" + xmax + ", 0) on the X-axis. What is the opportunity cost of ONE unit of good X, in units of Y?",
+        diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y", bow: 0,
+          points: [{ x: 0, y: ymax, label: "", state: "on" }, { x: xmax, y: 0, label: "", state: "on" }] },
+        answer: k, tolerance: 0.01,
+        rationale: "Slope magnitude = Y-intercept / X-intercept = " + ymax + "/" + xmax + " = " + k + " units of Y per unit of X."
+      };
+    }
+  };
+
+  /* Ch3: pick the point that uses all resources (graphical MC) */
+  GEN["ch3_ppf_efficient_point"] = {
+    id: "ch3_ppf_efficient_point", chapter: 3, kind: "mc", render: "graphical",
+    difficulty: "med", concept: "efficient production (graph)", points: 2,
+    build: function (rng) {
+      var xmax = rng_int(rng, 8, 10), ymax = rng_int(rng, 8, 10);
+      var px = 3, py = Math.round(ymax * (1 - 3 / xmax));
+      var opts = ["Point E uses resources fully and efficiently", "Point E wastes resources",
+        "Point E is unattainable", "Point E produces only good Y"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "Point E lies exactly on the production possibilities frontier. Which statement is correct?",
+        diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y", bow: 0.28,
+          points: [{ x: px, y: py, label: "E", state: "on" }] },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A point on the frontier is productively efficient \u2014 all resources are used and more of one good requires less of the other."
+      };
+    }
+  };
+
+  /* Ch4: read equilibrium PRICE off graph (numeric) */
+  GEN["ch4_read_eq_price"] = {
+    id: "ch4_read_eq_price", chapter: 4, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "reading equilibrium price (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 7), c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      return {
+        prompt: "Read the equilibrium PRICE from the supply-and-demand graph.",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true,
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, pStar + 3) },
+        answer: pStar, tolerance: 0.01,
+        rationale: "The curves cross at P* = " + pStar + "."
+      };
+    }
+  };
+
+  /* Ch5: elasticity along a linear demand curve (graphical MC) */
+  GEN["ch5_linear_elasticity_graph"] = {
+    id: "ch5_linear_elasticity_graph", chapter: 5, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "elasticity along linear demand", points: 2,
+    build: function (rng) {
+      var a = rng_int(rng, 14, 20);
+      var opts = ["more elastic near the top (high price) and less elastic near the bottom",
+        "constant everywhere along the curve", "more elastic near the bottom (low price)",
+        "always perfectly inelastic"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "For the straight-line demand curve shown, how does price elasticity of demand vary along it?",
+        diagramSpec: { type: "elasticity", a: a, b: -1, qmax: a + 2, pmax: a + 2, label: "D" },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Even with constant slope, a linear demand curve is elastic at high prices (top) and inelastic at low prices (bottom)."
+      };
+    }
+  };
+
+  /* Ch5: which curve is more elastic (graphical MC) */
+  GEN["ch5_compare_slopes_graph"] = {
+    id: "ch5_compare_slopes_graph", chapter: 5, kind: "mc", render: "graphical",
+    difficulty: "med", concept: "comparing elasticity (graph)", points: 2,
+    build: function (rng) {
+      var flat = rng() < 0.5;
+      var b = flat ? 1 : 3;
+      var a = rng_int(rng, 12, 18);
+      var opts = ["a flatter demand curve is more elastic", "a steeper demand curve is more elastic",
+        "slope has nothing to do with elasticity", "both curves have the same elasticity everywhere"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "The demand curve shown has a particular steepness. As a general rule, comparing two demand curves through the same point:",
+        diagramSpec: { type: "elasticity", a: a, b: -b, qmax: Math.floor(a / b) + 2, pmax: a + 2, label: "D" },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Through a common point, the flatter demand curve is the more elastic one (quantity responds more to price)."
+      };
+    }
+  };
+
+  /* Ch7: producer surplus area from graph (numeric) */
+  GEN["ch7_ps_area_graph"] = {
+    id: "ch7_ps_area_graph", chapter: 7, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "producer surplus area (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 7), c = rng_int(rng, 1, 4);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var ps = 0.5 * qStar * (pStar - c);
+      return {
+        prompt: "Using the shaded producer-surplus region, compute producer surplus at equilibrium.",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, shade: "surplus",
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, a + 1) },
+        answer: round2(ps), tolerance: 0.5,
+        rationale: "PS = \u00bd \u00d7 Q* \u00d7 (P* \u2212 supply intercept) = \u00bd \u00d7 " + qStar + " \u00d7 (" + pStar + " \u2212 " + c + ") = " + round2(ps) + "."
+      };
+    }
+  };
+
+  /* Ch8: tax revenue rectangle area from graph (numeric) */
+  GEN["ch8_revenue_area_graph"] = {
+    id: "ch8_revenue_area_graph", chapter: 8, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "tax revenue area (graph)", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 5, 8), c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var tax = rng_int(rng, 2, 5);
+      var qt = (a - c - tax) / (b + d);
+      return {
+        prompt: "The shaded rectangle is the government's tax revenue from a $" + tax + " tax. Compute it. (Demand P = " + a + " \u2212 " + fmtCoef(b) + "Q, supply P = " + c + " + " + fmtCoef(d) + "Q.)",
+        diagramSpec: { type: "tax", dA: a, dB: -b, sA: c, sB: d, tax: tax, showRevenue: true,
+          qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + tax + 1) },
+        answer: round2(tax * qt), tolerance: 0.2,
+        rationale: "Revenue = tax \u00d7 Q_t = " + tax + " \u00d7 " + round2(qt) + " = " + round2(tax * qt) + "."
+      };
+    }
+  };
+
+  /* Ch9: MC-ATC crossing identification (graphical MC) */
+  GEN["ch9_mc_crosses_atc_graph"] = {
+    id: "ch9_mc_crosses_atc_graph", chapter: 9, kind: "mc", render: "graphical",
+    difficulty: "med", concept: "MC crosses ATC (graph)", points: 2,
+    build: function (rng) {
+      var fc = rng_pick(rng, [18, 20, 24]);
+      var opts = ["at the minimum of the ATC curve", "at the maximum of the ATC curve",
+        "where ATC meets the vertical axis", "where MC is at its own minimum"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "In the cost-curve diagram, the marginal-cost curve intersects the average-total-cost curve:",
+        diagramSpec: { type: "cost_curves", fc: fc, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "MC crosses ATC at ATC's minimum: below it MC pulls the average down, above it MC pushes the average up."
+      };
+    }
+  };
+
+  /* Ch10: shutdown decision from graph (graphical MC) */
+  GEN["ch10_shutdown_graph"] = {
+    id: "ch10_shutdown_graph", chapter: 10, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "shutdown from graph", points: 2,
+    build: function (rng) {
+      /* AVC min ~ 3.3 for default coeffs; price below that -> shut down */
+      var shut = rng() < 0.5;
+      var price = shut ? 2 : rng_int(rng, 8, 14);
+      var opts = ["keep producing \u2014 price is at or above minimum AVC", "shut down \u2014 price is below minimum AVC"];
+      var correct = shut ? 1 : 0;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "Given the market price shown (dashed line), in the SHORT RUN the firm should:",
+        diagramSpec: { type: "cost_curves", fc: 24, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true, price: price },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: shut ?
+          "The price is below the minimum of AVC, so the firm loses less by shutting down." :
+          "The price is at or above minimum AVC, so the firm should keep producing in the short run."
+      };
+    }
+  };
+
+  /* ---- final gap-fillers ---- */
+
+  /* Ch3: read production tradeoff from PPF (numeric) */
+  GEN["ch3_ppf_tradeoff_graph"] = {
+    id: "ch3_ppf_tradeoff_graph", chapter: 3, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "PPF tradeoff (graph)", points: 2,
+    build: function (rng) {
+      var k = rng_pick(rng, [1, 2]); var xmax = rng_int(rng, 7, 9); var ymax = k * xmax;
+      var x1 = rng_int(rng, 1, 2), x2 = x1 + rng_int(rng, 2, 3);
+      var y1 = ymax - k * x1, y2 = ymax - k * x2;
+      return {
+        prompt: "Moving from A (" + x1 + " of X, " + y1 + " of Y) to B (" + x2 + " of X, " + y2 + " of Y) along the PPF, how many units of Y must be given up in total?",
+        diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y", bow: 0,
+          points: [{ x: x1, y: y1, label: "A", state: "on" }, { x: x2, y: y2, label: "B", state: "on" }] },
+        answer: y1 - y2, tolerance: 0.01,
+        rationale: "Y given up = " + y1 + " \u2212 " + y2 + " = " + (y1 - y2) + " units."
+      };
+    }
+  };
+
+  /* Ch5: total revenue change interpretation from graph (MC) */
+  GEN["ch5_revenue_interpret_graph"] = {
+    id: "ch5_revenue_interpret_graph", chapter: 5, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "revenue rectangle interpretation", points: 2,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var qStar = rng_int(rng, 3, 6), c = rng_int(rng, 1, 3);
+      var pStar = c + d * qStar, a = pStar + b * qStar;
+      var opts = ["the area of the rectangle equals price times quantity (total revenue)",
+        "the area equals consumer surplus", "the area equals the deadweight loss",
+        "the area equals producer surplus only"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "The shaded rectangle in the diagram represents:",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, showRevenueBox: true,
+          qmax: Math.max(10, qStar + 3), pmax: Math.max(12, pStar + 3) },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "The rectangle with height P* and width Q* has area P* \u00d7 Q* = total revenue."
+      };
+    }
+  };
+
+  /* Ch9: read that AFC keeps falling (conceptual graphical MC) */
+  GEN["ch9_avc_below_atc_graph"] = {
+    id: "ch9_avc_below_atc_graph", chapter: 9, kind: "mc", render: "graphical",
+    difficulty: "med", concept: "AVC vs ATC gap (graph)", points: 2,
+    build: function (rng) {
+      var fc = rng_pick(rng, [18, 20, 24]);
+      var opts = ["the vertical gap between ATC and AVC is average fixed cost, which shrinks as output rises",
+        "ATC and AVC are always equal", "AVC lies above ATC",
+        "the gap between them grows without limit"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "In the diagram, what does the vertical distance between the ATC and AVC curves represent, and how does it change as output rises?",
+        diagramSpec: { type: "cost_curves", fc: fc, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "ATC \u2212 AVC = average fixed cost = FC/Q, which continually shrinks as output rises (the curves converge)."
+      };
+    }
+  };
+
+  /* Ch10: zero-profit long-run (graphical MC) */
+  GEN["ch10_zero_profit_graph"] = {
+    id: "ch10_zero_profit_graph", chapter: 10, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "long-run zero profit (graph)", points: 2,
+    build: function (rng) {
+      /* price set at min ATC (~6.8) => zero economic profit */
+      var opts = ["price equals the minimum of ATC, so economic profit is zero",
+        "price is above ATC, so there is a profit", "price is below AVC, so the firm shuts down",
+        "the firm earns a large profit"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "In long-run competitive equilibrium, the price line just touches the bottom of the ATC curve. This means:",
+        diagramSpec: { type: "cost_curves", fc: 24, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true, price: 7 },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "When price equals minimum ATC, revenue exactly covers all costs (including opportunity cost): zero economic profit \u2014 the long-run outcome."
+      };
+    }
+  };
+
+  /* Ch10: price-taker firm demand (graphical MC) */
+  GEN["ch10_firm_demand_graph"] = {
+    id: "ch10_firm_demand_graph", chapter: 10, kind: "mc", render: "graphical",
+    difficulty: "med", concept: "price-taker marginal revenue", points: 2,
+    build: function (rng) {
+      var price = rng_int(rng, 10, 16);
+      var opts = ["a horizontal line at the market price (the firm is a price taker)",
+        "a downward-sloping curve", "the same as the ATC curve", "vertical at the efficient scale"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "For the competitive firm shown, the demand curve it faces (its marginal revenue) is:",
+        diagramSpec: { type: "cost_curves", fc: 24, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true, price: price },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A competitive firm is a price taker: it can sell any quantity at the market price, so its demand (= MR) is a horizontal line at that price."
+      };
+    }
+  };
+
   /* ---- S1..S3: STATIC conceptual / written (no randomization) -----------
      These carry their own fixed content; the engine returns them as-is. */
   var STATIC = [

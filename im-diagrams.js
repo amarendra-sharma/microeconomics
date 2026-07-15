@@ -181,6 +181,12 @@
       s += txt(P.X(qe * 0.28), P.Y((pe + spec.dA) / 2), "CS", { fill: C.surplusStroke, weight: 700, size: 12 });
       s += txt(P.X(qe * 0.28), P.Y((pe + spec.sA) / 2), "PS", { fill: C.supply, weight: 700, size: 12 });
     }
+    /* total-revenue rectangle P* x Q* (for elasticity / revenue questions) */
+    if (spec.showRevenueBox && qe > 0) {
+      s += "<rect x='" + P.X(0) + "' y='" + P.Y(pe) + "' width='" + (P.X(qe) - P.X(0)) +
+        "' height='" + (P.y0 - P.Y(pe)) + "' fill='#0f3d9e14' stroke='#0f3d9e' stroke-dasharray='3 3'/>";
+      s += txt(P.X(qe * 0.4), P.Y(pe / 2), "Revenue", { fill: C.demand, weight: 700, size: 11 });
+    }
     s += linearCurve(P, spec.dA, spec.dB, C.demand, spec.dLabel || "D");
     s += linearCurve(P, spec.sA, spec.sB, C.supply, spec.sLabel || "S");
     if (spec.showEq !== false && qe > 0 && qe < P.qmax) {
@@ -393,10 +399,35 @@
         s += "<circle cx='" + P.X(qMinAtc) + "' cy='" + P.Y(best) + "' r='3.5' fill='" + C.ink + "'/>";
       }
     }
-    /* optional price line (competitive-firm questions) */
+    /* optional price line + profit/loss rectangle (competitive-firm questions).
+       At the profit-max quantity q* where P = MC, shade the rectangle between
+       price and ATC(q*): green if profit (P>ATC), red if loss (P<ATC). */
     if (spec.price != null) {
-      s += line(P.X(0), P.Y(spec.price), P.X(P.qmax), P.Y(spec.price), C.muted, 1.5, "5 4");
-      s += txt(P.X(P.qmax) - 4, P.Y(spec.price) - 5, "P", { anchor: "end", fill: C.muted, weight: 700, size: 12 });
+      var Pr = spec.price;
+      s += line(P.X(0), P.Y(Pr), P.X(P.qmax), P.Y(Pr), C.muted, 1.5, "5 4");
+      s += txt(P.X(P.qmax) - 4, P.Y(Pr) - 5, "P = MR", { anchor: "end", fill: C.muted, weight: 700, size: 12 });
+      if (spec.showProfit) {
+        /* find q* where MC(q) = price, scanning the rising part of MC */
+        var qStar = null;
+        for (var qs2 = 0.5; qs2 <= P.qmax; qs2 += 0.01) {
+          if (MC(qs2) >= Pr) { qStar = qs2; break; }
+        }
+        if (qStar != null && qStar > 0 && qStar < P.qmax) {
+          var atcStar = ATC(qStar);
+          var isProfit = Pr >= atcStar;
+          var fill = isProfit ? "#16653433" : "#991b1b33";
+          var stroke = isProfit ? C.surplusStroke : C.dwlStroke;
+          var yTop = Math.min(P.Y(Pr), P.Y(atcStar));
+          var yBot = Math.max(P.Y(Pr), P.Y(atcStar));
+          s += "<rect x='" + P.X(0) + "' y='" + yTop + "' width='" + (P.X(qStar) - P.X(0)) +
+            "' height='" + (yBot - yTop) + "' fill='" + fill + "' stroke='" + stroke + "' stroke-dasharray='3 3'/>";
+          s += txt(P.X(qStar * 0.42), (yTop + yBot) / 2 + 4, isProfit ? "Profit" : "Loss",
+            { fill: stroke, weight: 700, size: 11 });
+          /* dashed vertical at q* */
+          s += line(P.X(qStar), P.Y(Pr), P.X(qStar), P.y0, C.muted, 1, "4 3");
+          s += txt(P.X(qStar), P.y0 + 14, "q*", { anchor: "middle", fill: C.muted, size: 11 });
+        }
+      }
     }
     return svgWrap(P, s, "cost curves");
   }
