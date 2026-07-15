@@ -1054,23 +1054,34 @@
   /* ---- Ch3: identify efficient/inefficient/unattainable point (graphical MC) */
   GEN["ch3_ppf_point_type"] = {
     id: "ch3_ppf_point_type", chapter: 3, kind: "mc", render: "graphical",
-    difficulty: "med", concept: "PPF point classification", points: 2,
+    difficulty: "hard", concept: "PPF: interpreting points economically", points: 2,
     build: function (rng) {
       var xmax = rng_int(rng, 8, 10), ymax = rng_int(rng, 8, 10);
       var kind = rng_pick(rng, [0, 1, 2]); /* 0 inside, 1 on, 2 outside */
-      var px, py, state;
-      if (kind === 0) { px = rng_int(rng, 2, 3); py = rng_int(rng, 1, 2); state = "inside"; }
-      else if (kind === 1) { px = 3; py = Math.round(ymax * (1 - 3 / xmax)); state = "on"; }
-      else { px = xmax - 1; py = ymax - 1; state = "outside"; }
-      var opts = ["efficient (on the frontier)", "inefficient (inside the frontier)", "unattainable (beyond the frontier)"];
-      var correct = kind === 1 ? 0 : (kind === 0 ? 1 : 2);
-      var sh = shuffleWithAnswer(rng, opts, correct);
+      var px = rng_int(rng, 3, 5), py, state;
+      var onY = window.IMDiagrams.ppfY({ xmax: xmax, ymax: ymax, bow: 0.28 }, px);
+      if (kind === 0) { py = Math.max(1, Math.round(onY - rng_int(rng, 2, 3))); state = "inside"; }
+      else if (kind === 1) { py = onY; state = "on"; }
+      else { py = Math.min(ymax, Math.round(onY + rng_int(rng, 2, 3))); state = "outside"; }
+      /* harder: ask what the point IMPLIES about the economy, not just its name */
+      var optsByKind = [
+        /* inside */["Some resources are idle or misallocated \u2014 the economy could make more of both goods",
+          "The economy is using all resources efficiently", "This output is impossible to achieve", "The two goods have no opportunity cost"],
+        /* on */["Producing more of one good now requires giving up some of the other",
+          "The economy is wasting resources", "More of both goods can be produced with no tradeoff", "This point cannot be reached"],
+        /* outside */["The economy cannot reach this point without more resources or better technology",
+          "The economy is producing efficiently here", "Resources are being wasted", "This point is inside the frontier"]
+      ];
+      var opts = optsByKind[kind];
+      var sh = shuffleWithAnswer(rng, opts, 0);
       return {
-        prompt: "Point P is marked relative to the production possibilities frontier. Point P is:",
+        prompt: "Point P is marked relative to this economy's production possibilities frontier. Which statement correctly describes what point P implies?",
         diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y", bow: 0.28,
           points: [{ x: px, y: py, label: "P", state: state }] },
         options: sh.options, answer: sh.correctIndex,
-        rationale: "A point " + (state === "on" ? "on" : state) + " the frontier is " + opts[correct] + "."
+        rationale: state === "inside" ? "A point inside the frontier signals inefficiency \u2014 idle or poorly-allocated resources; the economy could produce more of both goods." :
+          state === "on" ? "A point on the frontier is efficient: with all resources used, producing more of one good forces a sacrifice of the other (opportunity cost)." :
+          "A point beyond the frontier is currently unattainable \u2014 it would require more resources or improved technology (growth)."
       };
     }
   };
@@ -1224,21 +1235,29 @@
     }
   };
 
-  /* ---- Ch7: total surplus area from a graph (graphical numeric) --------- */
+  /* ---- Ch7: total surplus AND the efficient-quantity insight (harder) --- */
   GEN["ch7_total_surplus_graph"] = {
     id: "ch7_total_surplus_graph", chapter: 7, kind: "numeric", render: "graphical",
-    difficulty: "hard", concept: "total surplus area (graph)", points: 2,
+    difficulty: "hard", concept: "total surplus + efficiency reasoning", points: 3,
     build: function (rng) {
       var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
-      var qStar = rng_int(rng, 3, 6), c = rng_int(rng, 1, 4);
+      var qStar = rng_int(rng, 4, 7), c = rng_int(rng, 1, 4);
       var pStar = c + d * qStar, a = pStar + b * qStar;
-      var ts = 0.5 * qStar * (a - c);
+      var tsMax = 0.5 * qStar * (a - c);
+      /* harder: total surplus if output were CAPPED at q' < q* (e.g., a quota).
+         TS(q') = area under demand minus area under supply from 0 to q'.
+         = integral: (a - c)*q' - 0.5*(b+d)*q'^2  */
+      var qCap = qStar - rng_int(rng, 1, 2);
+      var tsCap = (a - c) * qCap - 0.5 * (b + d) * qCap * qCap;
       return {
-        prompt: "From the shaded surplus regions, compute TOTAL surplus (CS + PS) at equilibrium.",
+        prompt: "In this market, demand is P = " + a + " \u2212 " + fmtCoef(b) + "Q and supply is P = " + c + " + " +
+          fmtCoef(d) + "Q. Suppose a quota limits output to only " + qCap + " units (below the equilibrium quantity). Compute the TOTAL surplus actually realized at that restricted quantity. (2 decimals)",
         diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, shade: "surplus",
           qmax: Math.max(10, qStar + 3), pmax: Math.max(12, a + 1) },
-        answer: round2(ts), tolerance: 0.5,
-        rationale: "Total surplus = \u00bd \u00d7 Q* \u00d7 (demand intercept \u2212 supply intercept) = \u00bd \u00d7 " + qStar + " \u00d7 (" + a + " \u2212 " + c + ") = " + round2(ts) + "."
+        answer: round2(tsCap), tolerance: 0.2,
+        rationale: "Total surplus at quantity q = (demand height \u2212 supply height) summed over units = (a\u2212c)\u00b7q \u2212 \u00bd(b+d)\u00b7q\u00b2 = (" +
+          (a - c) + ")\u00b7" + qCap + " \u2212 \u00bd\u00b7" + (b + d) + "\u00b7" + qCap + "\u00b2 = " + round2(tsCap) +
+          ". (This is less than the maximum " + round2(tsMax) + " at the efficient quantity " + qStar + " \u2014 the shortfall is deadweight loss from underproduction.)"
       };
     }
   };
@@ -1310,20 +1329,27 @@
   };
 
   /* ---- Ch9: which curve is which (graphical MC) ------------------------- */
+  /* ---- Ch9: compute a cost value by reading the curves (harder numeric) - */
   GEN["ch9_identify_curve_graph"] = {
-    id: "ch9_identify_curve_graph", chapter: 9, kind: "mc", render: "graphical",
-    difficulty: "med", concept: "identifying cost curves", points: 2,
+    id: "ch9_identify_curve_graph", chapter: 9, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "average fixed cost from ATC and AVC", points: 3,
     build: function (rng) {
-      var fc = rng_pick(rng, [18, 20, 24]);
-      var opts = ["the marginal-cost curve", "the average-total-cost curve",
-        "the average-variable-cost curve", "the fixed-cost curve"];
-      /* the curve that cuts BOTH others at their minimums is MC */
-      var sh = shuffleWithAnswer(rng, opts, 0);
+      /* Cost model used by the diagram: VC = a*q - b*q^2 + c*q^3 (here a=10,b=2.2,c=0.18),
+         but for a clean student computation we pose it in words with round numbers:
+         at a given quantity the student is told ATC and AVC; AFC = ATC - AVC, and
+         total fixed cost = AFC * q. */
+      var q = rng_int(rng, 4, 8);
+      var avc = rng_int(rng, 6, 12);
+      var afc = rng_int(rng, 3, 8);
+      var atc = avc + afc;
+      var tfc = afc * q;
       return {
-        prompt: "In the diagram, which curve passes through the minimum points of BOTH the ATC and AVC curves?",
-        diagramSpec: { type: "cost_curves", fc: fc, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true },
-        options: sh.options, answer: sh.correctIndex,
-        rationale: "Only the marginal-cost curve passes through the minimum of both the ATC and AVC curves."
+        prompt: "The diagram shows a firm's U-shaped cost curves. At an output of " + q + " units, the ATC curve reads $" +
+          atc + " and the AVC curve reads $" + avc + ". Using the diagram's logic, what is the firm's TOTAL FIXED COST? (Hint: the vertical gap between ATC and AVC is average fixed cost.)",
+        diagramSpec: { type: "cost_curves", fc: 20, a: 10, b: 2.2, c: 0.18, showATC: true, showAVC: true },
+        answer: tfc, tolerance: 0.01,
+        rationale: "Average fixed cost = ATC \u2212 AVC = $" + atc + " \u2212 $" + avc + " = $" + afc + ". Total fixed cost = AFC \u00d7 Q = $" +
+          afc + " \u00d7 " + q + " = $" + tfc + "."
       };
     }
   };
@@ -1389,22 +1415,28 @@
     }
   };
 
-  /* Ch3: pick the point that uses all resources (graphical MC) */
+  /* Ch3: increasing opportunity cost along a bowed PPF (hard application) */
   GEN["ch3_ppf_efficient_point"] = {
     id: "ch3_ppf_efficient_point", chapter: 3, kind: "mc", render: "graphical",
-    difficulty: "med", concept: "efficient production (graph)", points: 2,
+    difficulty: "hard", concept: "increasing opportunity cost (bowed PPF)", points: 3,
     build: function (rng) {
-      var xmax = rng_int(rng, 8, 10), ymax = rng_int(rng, 8, 10);
-      var px = 3, py = Math.round(ymax * (1 - 3 / xmax));
-      var opts = ["Point E uses resources fully and efficiently", "Point E wastes resources",
-        "Point E is unattainable", "Point E produces only good Y"];
+      var xmax = rng_int(rng, 9, 10), ymax = rng_int(rng, 9, 10);
+      var spec = { xmax: xmax, ymax: ymax, bow: 0.28 };
+      /* two points at low-x and high-x regions, both on the frontier */
+      var xa = 1, xb = xmax - 2;
+      var ya = window.IMDiagrams.ppfY(spec, xa), yb = window.IMDiagrams.ppfY(spec, xb);
+      /* moving one more unit of X near A costs less Y than near B (bowed out => increasing OC) */
+      var opts = ["The opportunity cost of producing more X rises as the economy moves from A toward B",
+        "The opportunity cost of X is constant along the whole frontier",
+        "The opportunity cost of producing more X falls as the economy moves from A toward B",
+        "Producing more X has no opportunity cost"];
       var sh = shuffleWithAnswer(rng, opts, 0);
       return {
-        prompt: "Point E lies exactly on the production possibilities frontier. Which statement is correct?",
+        prompt: "This economy's PPF is bowed outward. Points A (low X) and B (high X) both lie on the frontier. What does the bowed shape tell you about the opportunity cost of good X as the economy shifts from A toward B?",
         diagramSpec: { type: "ppf", xmax: xmax, ymax: ymax, xlab: "Good X", ylab: "Good Y", bow: 0.28,
-          points: [{ x: px, y: py, label: "E", state: "on" }] },
+          points: [{ x: xa, y: ya, label: "A", state: "on" }, { x: xb, y: yb, label: "B", state: "on" }] },
         options: sh.options, answer: sh.correctIndex,
-        rationale: "A point on the frontier is productively efficient \u2014 all resources are used and more of one good requires less of the other."
+        rationale: "A bowed-out (concave) PPF reflects INCREASING opportunity cost: as resources ill-suited to X are pulled into producing it, each additional unit of X costs more Y \u2014 the frontier gets steeper moving from A toward B."
       };
     }
   };
@@ -2627,6 +2659,136 @@
       answer: null,
       rubric: "Full credit: (1) buyers who value the good most and sellers who can produce at lowest cost are the ones who trade; (2) this maximizes consumer + producer surplus; (3) the equilibrium quantity equates marginal value and marginal cost; (4) so the market outcome is efficient without central direction (invisible hand). Partial credit per element.",
       rationale: "Looking for the allocation to highest-value buyers/lowest-cost sellers maximizing total surplus." }
+    ,
+    /* ==================== HARD APPLICATION QUESTIONS ==================== */
+
+    /* Ch3: comparative advantage reversal trap */
+    { id: "ch3_hard_ca_trap", chapter: 3, kind: "mc", render: "text", difficulty: "hard", concept: "comparative advantage application", points: 3,
+      prompt: "In one hour, Maya can bake 12 loaves of bread or knit 3 sweaters. In one hour, Leo can bake 4 loaves or knit 2 sweaters. Maya is faster at BOTH. Who should specialize in sweaters, and why?",
+      options: ["Leo \u2014 his opportunity cost of a sweater (2 loaves) is lower than Maya's (4 loaves)",
+        "Maya \u2014 she is faster at knitting sweaters", "Leo \u2014 he is slower at everything so he should knit",
+        "Maya \u2014 she has the absolute advantage in both goods"],
+      answer: 0,
+      rationale: "Maya's OC of 1 sweater = 12/3 = 4 loaves; Leo's = 4/2 = 2 loaves. Leo gives up less bread per sweater, so despite Maya's absolute advantage, Leo has the comparative advantage in sweaters." },
+
+    { id: "ch3_hard_terms_trade", chapter: 3, kind: "mc", render: "text", difficulty: "hard", concept: "terms of trade range", points: 3,
+      prompt: "Country A's opportunity cost of 1 unit of wine is 2 units of cloth; Country B's is 5 units of cloth. For BOTH to gain, the international price of 1 wine (in cloth) must be:",
+      options: ["between 2 and 5 units of cloth", "less than 2 units of cloth",
+        "more than 5 units of cloth", "exactly 3.5 units of cloth only"],
+      answer: 0,
+      rationale: "A exports wine (its low-OC good) only if it gets more than 2 cloth; B imports wine only if it pays less than 5. Any price strictly between 2 and 5 makes both better off than producing at home." },
+
+    /* Ch4: distinguishing shift vs movement in a scenario */
+    { id: "ch4_hard_shift_scenario", chapter: 4, kind: "mc", render: "text", difficulty: "hard", concept: "shift vs movement application", points: 3,
+      prompt: "The price of coffee beans (an input) rises AND, at the same time, a new study makes coffee more popular. In the coffee market, we can be CERTAIN that:",
+      options: ["the equilibrium price rises, but the effect on quantity is ambiguous",
+        "both price and quantity rise", "both price and quantity fall",
+        "quantity rises, but the effect on price is ambiguous"],
+      answer: 0,
+      rationale: "Higher input cost shifts supply left (P up, Q down); higher popularity shifts demand right (P up, Q up). Both push price UP (so price definitely rises), but they push quantity in opposite directions \u2014 net effect on quantity is ambiguous." },
+
+    { id: "ch4_hard_double_shift", chapter: 4, kind: "mc", render: "text", difficulty: "hard", concept: "simultaneous shifts", points: 3,
+      prompt: "A severe frost destroys much of the orange crop, while consumer incomes also fall (oranges are a normal good). What is the certain effect on the orange market?",
+      options: ["Quantity falls, but the effect on price is ambiguous",
+        "Price rises and quantity rises", "Price falls and quantity falls",
+        "Price rises, but the effect on quantity is ambiguous"],
+      answer: 0,
+      rationale: "The frost shifts supply left (P up, Q down); falling income shifts demand left (P down, Q down). Both reduce quantity (Q definitely falls), but they push price in opposite directions \u2014 net price effect is ambiguous." },
+
+    /* Ch5: elasticity + total revenue application */
+    { id: "ch5_hard_revenue_decision", chapter: 5, kind: "mc", render: "text", difficulty: "hard", concept: "elasticity revenue application", points: 3,
+      prompt: "A concert promoter currently sells all 5,000 seats at $40. She finds that a 10% price increase would cut tickets sold by 4%. To maximize revenue she should:",
+      options: ["raise the price \u2014 demand is inelastic (|E| = 0.4 < 1) so revenue rises",
+        "lower the price \u2014 demand is elastic so revenue rises",
+        "keep the price \u2014 revenue is already maximized", "raise the price only if the venue expands"],
+      answer: 0,
+      rationale: "|E| = 4%/10% = 0.4 < 1, so demand is inelastic: the price rise outweighs the small quantity loss, and revenue increases. She should raise the price." },
+
+    { id: "ch5_hard_cross_elasticity", chapter: 5, kind: "mc", render: "text", difficulty: "hard", concept: "cross-price elasticity application", points: 3,
+      prompt: "When a streaming service raised its price 20%, sales of a rival service rose 30%, while sales of internet-connected TVs fell 10%. What do these tell you?",
+      options: ["The rival is a substitute (positive cross-elasticity); the TVs are complements (negative cross-elasticity)",
+        "Both the rival and TVs are substitutes", "Both are complements",
+        "The rival is a complement; the TVs are substitutes"],
+      answer: 0,
+      rationale: "Rival sales rose when the price rose \u2192 positive cross-price elasticity \u2192 substitute. TV sales fell when the price rose \u2192 negative cross-price elasticity \u2192 complement." },
+
+    /* Ch6: tax incidence with elasticity reasoning */
+    { id: "ch6_hard_incidence_elastic", chapter: 6, kind: "mc", render: "text", difficulty: "hard", concept: "tax incidence and elasticity", points: 3,
+      prompt: "A new tax is placed on insulin, which has very inelastic demand and relatively elastic supply. Who bears most of the burden, and why?",
+      options: ["Buyers \u2014 the more inelastic side of the market bears more of the tax",
+        "Sellers \u2014 the tax is legally collected from them",
+        "The burden splits exactly 50/50 regardless of elasticity",
+        "Sellers \u2014 because supply is elastic they cannot pass any tax on"],
+      answer: 0,
+      rationale: "The side that is less able to change its behavior (more inelastic) bears more of the tax. With inelastic demand and elastic supply, buyers can't easily reduce purchases, so they bear most of the burden." },
+
+    { id: "ch6_hard_min_wage_who", chapter: 6, kind: "mc", render: "text", difficulty: "hard", concept: "minimum wage incidence", points: 3,
+      prompt: "An economist argues a binding minimum wage can hurt some of the very workers it aims to help. The BEST explanation is that:",
+      options: ["at the higher wage, firms demand fewer workers, so some low-skill workers lose their jobs (a surplus of labor)",
+        "all workers earn more, so none are hurt", "the minimum wage causes a labor shortage",
+        "firms always absorb the cost with no employment effect"],
+      answer: 0,
+      rationale: "A binding wage floor raises quantity of labor supplied above quantity demanded \u2014 a surplus (unemployment). Workers who keep jobs earn more, but those who lose or cannot find jobs are made worse off." },
+
+    /* Ch7: efficiency and DWL reasoning */
+    { id: "ch7_hard_efficiency_reason", chapter: 7, kind: "mc", render: "text", difficulty: "hard", concept: "why equilibrium is efficient", points: 3,
+      prompt: "At the competitive equilibrium, the marginal buyer values the last unit at exactly its marginal cost. If a planner FORCED one extra unit to be produced beyond equilibrium, that unit would:",
+      options: ["cost more to produce than any remaining buyer values it, reducing total surplus",
+        "increase total surplus because more output is always better",
+        "leave total surplus unchanged", "raise consumer surplus without lowering producer surplus"],
+      answer: 0,
+      rationale: "Beyond equilibrium, marginal cost exceeds marginal value, so producing the extra unit destroys surplus (its cost outweighs its benefit). That's why equilibrium output is efficient." },
+
+    /* Ch8: DWL vs revenue tradeoff numeric reasoning */
+    { id: "ch8_hard_dwl_double", chapter: 8, kind: "mc", render: "text", difficulty: "hard", concept: "DWL scaling application", points: 3,
+      prompt: "A $2 tax on a good creates a $6 deadweight loss. If the government raises the tax to $6 (three times as large), the deadweight loss will be APPROXIMATELY:",
+      options: ["$54 \u2014 DWL grows with the square of the tax (3\u00b2 = 9 times larger)",
+        "$18 \u2014 three times larger", "$6 \u2014 unchanged", "$12 \u2014 twice as large"],
+      answer: 0,
+      rationale: "DWL rises with the square of the tax. Tripling the tax multiplies DWL by 3\u00b2 = 9, so $6 \u00d7 9 = $54." },
+
+    { id: "ch8_hard_tax_base_choice", chapter: 8, kind: "mc", render: "text", difficulty: "hard", concept: "efficient tax base", points: 3,
+      prompt: "A government must raise a fixed amount of revenue and wants to minimize deadweight loss. Of these goods, which is the BEST to tax on efficiency grounds?",
+      options: ["Table salt \u2014 demand is very inelastic, so quantity barely falls",
+        "Restaurant meals \u2014 demand is elastic", "Foreign vacations \u2014 many substitutes",
+        "Luxury sports cars \u2014 highly elastic demand"],
+      answer: 0,
+      rationale: "Taxing an inelastic good (salt) distorts quantity the least, minimizing deadweight loss per dollar of revenue. Elastic goods would see large quantity drops and big DWL." },
+
+    /* Ch9: cost curve reasoning */
+    { id: "ch9_hard_mc_atc_logic", chapter: 9, kind: "mc", render: "text", difficulty: "hard", concept: "MC-ATC averaging logic", points: 3,
+      prompt: "A firm's ATC is currently $20 and falling as it produces more. What must be true about the marginal cost of the units it is currently adding?",
+      options: ["Marginal cost is below $20 (that's why it's pulling the average down)",
+        "Marginal cost is above $20", "Marginal cost equals $20",
+        "Marginal cost must be at its own minimum"],
+      answer: 0,
+      rationale: "An average falls only when the incoming (marginal) value is below the current average. Since ATC is falling, MC must be below ATC ($20)." },
+
+    { id: "ch9_hard_economic_profit", chapter: 9, kind: "mc", render: "text", difficulty: "hard", concept: "economic profit reasoning", points: 3,
+      prompt: "An entrepreneur's firm has $500,000 revenue and $450,000 in explicit costs, giving $50,000 accounting profit. She gave up a $70,000 salary to run it. Her economic profit is:",
+      options: ["\u2212$20,000 \u2014 she'd be $20,000 better off at her old job",
+        "$50,000 \u2014 the same as accounting profit", "$120,000 \u2014 adding back her salary",
+        "$0 \u2014 economic profit is always zero"],
+      answer: 0,
+      rationale: "Economic profit = accounting profit \u2212 implicit costs = $50,000 \u2212 $70,000 = \u2212$20,000. The negative figure means her resources (her time) would earn more elsewhere." },
+
+    /* Ch10: shutdown vs exit numeric application */
+    { id: "ch10_hard_shutdown_numeric", chapter: 10, kind: "mc", render: "text", difficulty: "hard", concept: "shutdown decision application", points: 3,
+      prompt: "A competitive firm faces a price of $8. At its best output, ATC = $11 and AVC = $7. In the SHORT run the firm should:",
+      options: ["keep producing \u2014 price ($8) covers AVC ($7), so operating loses less than shutting down",
+        "shut down \u2014 price is below ATC", "shut down \u2014 the firm is making a loss",
+        "keep producing \u2014 because price is below ATC it will earn a profit"],
+      answer: 0,
+      rationale: "Short-run rule: operate if P \u2265 AVC. Here $8 > $7, so producing covers all variable cost plus some fixed cost \u2014 the loss is smaller than the fixed cost paid if shut down. (It's still a loss since P < ATC, but operating is the lesser loss.)" },
+
+    { id: "ch10_hard_longrun_entry", chapter: 10, kind: "mc", render: "text", difficulty: "hard", concept: "long-run adjustment", points: 3,
+      prompt: "In a competitive industry, firms currently earn positive economic profit. Predict the long-run sequence of events.",
+      options: ["New firms enter \u2192 market supply rises \u2192 price falls \u2192 profit shrinks to zero at min ATC",
+        "Firms exit \u2192 supply falls \u2192 price rises \u2192 profit grows",
+        "Nothing changes \u2014 profits persist forever",
+        "Existing firms raise their prices to lock in profit"],
+      answer: 0,
+      rationale: "Positive economic profit attracts entry. Entry increases supply, driving price down, until price equals minimum ATC and economic profit is zero \u2014 the long-run equilibrium." }
   ];
 
   /* ---- public API ------------------------------------------------------- */

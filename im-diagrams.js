@@ -377,9 +377,17 @@
       }
       if (pts.length < 2) { return ""; }
       var out = "<polyline points='" + pts.join(" ") + "' fill='none' stroke='" + stroke + "' stroke-width='2.5' />";
-      /* label near a point that's inside the box */
+      /* label near a point that's inside the box; keep it clear of the right edge
+         so multi-character labels (ATC/AVC) don't get clipped by the viewBox */
       if (lastInsideQ != null) {
-        out += txt(P.X(lastInsideQ) + 4, P.Y(lastInsideV) - 2, label, { fill: stroke, weight: 700, size: 12 });
+        var lx = P.X(lastInsideQ) + 4;
+        var rightEdge = P.X(P.qmax);
+        if (lx > rightEdge - 26) {
+          /* too close to the edge: right-anchor the label just inside the plot */
+          out += txt(rightEdge - 4, P.Y(lastInsideV) - 2, label, { fill: stroke, weight: 700, size: 12, anchor: "end" });
+        } else {
+          out += txt(lx, P.Y(lastInsideV) - 2, label, { fill: stroke, weight: 700, size: 12 });
+        }
       }
       return out;
     }
@@ -447,5 +455,15 @@
     }
   }
 
-  global.IMDiagrams = { render: renderDiagram };
+  /* exact frontier y for a given x, matching the drawn bowed curve above */
+  function ppfY(spec, x) {
+    var xmax = spec.xmax || 10, ymax = spec.ymax || 10;
+    var bow = (spec.bow != null) ? spec.bow : 0.28;
+    var t = x / xmax;
+    var y = (1 - t) * ymax + bow * ymax * Math.sin(Math.PI * t) * 0.9;
+    if (y > ymax) { y = ymax; }
+    return y;
+  }
+
+  global.IMDiagrams = { render: renderDiagram, ppfY: ppfY };
 })(this);
