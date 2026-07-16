@@ -1675,6 +1675,416 @@
     }
   };
 
+
+  /* ==================== CHAPTER 11 — Monopoly (graphical) ============== */
+
+  /* Ch11: find monopoly quantity where MR=MC (graphical numeric) */
+  GEN["ch11_monopoly_quantity"] = {
+    id: "ch11_monopoly_quantity", chapter: 11, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "monopoly output MR=MC", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]);
+      var mc0 = rng_int(rng, 2, 5);
+      var qm = rng_int(rng, 3, 7);           /* choose Qm integer, back out a */
+      var a = mc0 + 2 * b * qm;               /* so MR=MC at qm exactly */
+      return {
+        prompt: "A monopolist faces demand P = " + a + " \u2212 " + fmtCoef(b) + "Q with constant marginal cost MC = " +
+          mc0 + ". Using MR = MC (recall MR = " + a + " \u2212 " + fmtCoef(2 * b) + "Q), find the profit-maximizing quantity.",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, qmax: Math.round((a - mc0) / b) + 2, pmax: a + 2, showCompetitive: true },
+        answer: qm, tolerance: 0.01,
+        rationale: "Set MR = MC: " + a + " \u2212 " + fmtCoef(2 * b) + "Q = " + mc0 + " \u2192 Q = (" + a + "\u2212" + mc0 + ")/" + (2 * b) + " = " + qm + "."
+      };
+    }
+  };
+
+  /* Ch11: monopoly price (graphical numeric) */
+  GEN["ch11_monopoly_price"] = {
+    id: "ch11_monopoly_price", chapter: 11, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "monopoly price from demand", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]);
+      var mc0 = rng_int(rng, 2, 5);
+      var qm = rng_int(rng, 3, 6);
+      var a = mc0 + 2 * b * qm;
+      var pm = a - b * qm;                     /* price up on demand at Qm */
+      return {
+        prompt: "A monopolist faces demand P = " + a + " \u2212 " + fmtCoef(b) + "Q with MC = " + mc0 +
+          ". After finding the profit-maximizing quantity (where MR = MC), what PRICE does the monopolist charge? (Read the price up on the demand curve.)",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, qmax: Math.round((a - mc0) / b) + 2, pmax: a + 2 },
+        answer: pm, tolerance: 0.01,
+        rationale: "Qm = " + qm + " (from MR=MC). The monopoly price is the demand height at Qm: P = " + a + " \u2212 " + fmtCoef(b) + "\u00d7" + qm + " = " + pm + " (above MC \u2014 a markup)."
+      };
+    }
+  };
+
+  /* Ch11: monopoly deadweight loss (graphical numeric) */
+  GEN["ch11_monopoly_dwl"] = {
+    id: "ch11_monopoly_dwl", chapter: 11, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "monopoly deadweight loss", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]);
+      var mc0 = rng_int(rng, 2, 4);
+      var qm = rng_int(rng, 3, 5);
+      var a = mc0 + 2 * b * qm;
+      var pm = a - b * qm;
+      var qc = (a - mc0) / b;                  /* competitive quantity where P=MC */
+      /* DWL triangle: base (qc - qm), height (pm - mc0) */
+      var dwl = 0.5 * (qc - qm) * (pm - mc0);
+      return {
+        prompt: "A monopolist faces demand P = " + a + " \u2212 " + fmtCoef(b) + "Q with MC = " + mc0 +
+          ". The monopoly produces Q = " + qm + " while the efficient (competitive) quantity is Q = " + qc +
+          ". Compute the deadweight loss (the shaded triangle). (2 decimals)",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, qmax: Math.round(qc) + 2, pmax: a + 2, showDWL: true, showCompetitive: true },
+        answer: round2(dwl), tolerance: 0.2,
+        rationale: "DWL = \u00bd \u00d7 (Qc \u2212 Qm) \u00d7 (Pm \u2212 MC) = \u00bd \u00d7 (" + qc + "\u2212" + qm + ") \u00d7 (" + pm + "\u2212" + mc0 + ") = " + round2(dwl) + "."
+      };
+    }
+  };
+
+  /* Ch11: monopoly profit from the rectangle (graphical numeric) */
+  GEN["ch11_monopoly_profit"] = {
+    id: "ch11_monopoly_profit", chapter: 11, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "monopoly profit", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]);
+      var mc0 = rng_int(rng, 2, 4);
+      var qm = rng_int(rng, 4, 6);
+      var a = mc0 + 2 * b * qm;
+      var pm = a - b * qm;
+      var atc = rng_int(rng, mc0, pm - 1);     /* ATC between MC and Pm so there's a profit */
+      var profit = (pm - atc) * qm;
+      return {
+        prompt: "A monopolist produces Q = " + qm + " and charges P = " + pm + " (demand P = " + a + " \u2212 " +
+          fmtCoef(b) + "Q, MC = " + mc0 + "). If its average total cost at that output is " + atc +
+          ", what is its profit (the shaded rectangle)?",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, atc: atc, showProfit: true, qmax: Math.round((a - mc0) / b) + 2, pmax: a + 2 },
+        answer: profit, tolerance: 0.01,
+        rationale: "Profit = (P \u2212 ATC) \u00d7 Q = (" + pm + " \u2212 " + atc + ") \u00d7 " + qm + " = " + profit + "."
+      };
+    }
+  };
+
+  /* Ch11: interpret why MR < price for a monopoly (graphical MC) */
+  GEN["ch11_mr_below_demand"] = {
+    id: "ch11_mr_below_demand", chapter: 11, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "why MR lies below demand", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]);
+      var mc0 = rng_int(rng, 2, 5);
+      var qm = rng_int(rng, 3, 6);
+      var a = mc0 + 2 * b * qm;
+      var opts = ["To sell one more unit the monopolist must lower the price on ALL units, so marginal revenue is less than the price",
+        "The monopolist can sell extra units without lowering the price",
+        "Marginal revenue equals price for a monopoly, just like perfect competition",
+        "Marginal revenue is above the demand curve"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "In the diagram, the marginal-revenue (MR) curve lies BELOW the demand curve. Why?",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, qmax: Math.round((a - mc0) / b) + 2, pmax: a + 2 },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A monopolist faces a downward-sloping demand curve. To sell an extra unit it must cut the price on every unit sold, so the revenue from one more unit (MR) is below the price on the demand curve."
+      };
+    }
+  };
+
+
+  /* ============ CHAPTER 12 — Monopolistic Competition (graphical) ====== */
+
+  /* Ch12: long-run zero profit (price tangent to ATC) - reuse monopoly diagram, MC=slope */
+  GEN["ch12_lr_zero_profit"] = {
+    id: "ch12_lr_zero_profit", chapter: 12, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "monopolistic competition long-run", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]);
+      var mc0 = rng_int(rng, 2, 4);
+      var qm = rng_int(rng, 3, 6);
+      var a = mc0 + 2 * b * qm;
+      var pm = a - b * qm;
+      var opts = ["Price equals average total cost, so economic profit is zero \u2014 the long-run outcome after entry",
+        "Price is far above ATC, so the firm earns large long-run profits",
+        "The firm produces at the minimum of ATC (efficient scale)",
+        "Marginal revenue equals price"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "A monopolistically competitive firm faces this downward-sloping demand curve. In LONG-RUN equilibrium, the demand curve is just tangent to ATC at the firm's output. What does that tangency imply, and does the firm produce at efficient scale?",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, atc: pm, showProfit: true, qmax: Math.round((a - mc0) / b) + 2, pmax: a + 2 },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "In long-run monopolistic competition, entry drives price down until demand is tangent to ATC \u2014 zero economic profit. But the tangency is on the downward-sloping part of ATC, so the firm produces BELOW efficient scale (excess capacity)."
+      };
+    }
+  };
+
+  /* Ch12: markup over marginal cost (graphical numeric) */
+  GEN["ch12_markup"] = {
+    id: "ch12_markup", chapter: 12, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "price markup over MC", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]);
+      var mc0 = rng_int(rng, 3, 6);
+      var qm = rng_int(rng, 3, 6);
+      var a = mc0 + 2 * b * qm;
+      var pm = a - b * qm;
+      var markup = pm - mc0;
+      return {
+        prompt: "A monopolistically competitive firm has demand P = " + a + " \u2212 " + fmtCoef(b) + "Q and MC = " +
+          mc0 + ". It produces where MR = MC. By how much does its PRICE exceed its marginal cost (the markup)?",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, qmax: Math.round((a - mc0) / b) + 2, pmax: a + 2 },
+        answer: markup, tolerance: 0.01,
+        rationale: "Qm = " + qm + ", Pm = " + pm + ". Markup = Pm \u2212 MC = " + pm + " \u2212 " + mc0 + " = " + markup +
+          ". Unlike perfect competition, price exceeds marginal cost here."
+      };
+    }
+  };
+
+  /* ============ CHAPTER 15 — Externalities (graphical) ================= */
+
+  /* Ch15: negative externality - socially optimal vs market quantity (numeric) */
+  GEN["ch15_neg_externality_q"] = {
+    id: "ch15_neg_externality_q", chapter: 15, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "negative externality optimal quantity", points: 3,
+    build: function (rng) {
+      /* Demand (private value) P=a-b*Q; private supply (MC) P=c+d*Q; external cost e per unit.
+         Market q where D=S; social optimum where D = S + e. */
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var c = rng_int(rng, 1, 3);
+      var qMkt = rng_int(rng, 6, 9);
+      var a = c + (b + d) * qMkt;              /* so market eq at qMkt */
+      var e = rng_int(rng, 2, 4);              /* external cost per unit */
+      var qOpt = (a - c - e) / (b + d);        /* social optimum */
+      return {
+        prompt: "A good creates a negative externality (pollution). Private demand is P = " + a + " \u2212 " + fmtCoef(b) +
+          "Q, private supply is P = " + c + " + " + fmtCoef(d) + "Q, and each unit imposes an external cost of $" + e +
+          " on others. The market produces " + qMkt + " units. What is the socially OPTIMAL quantity? (2 decimals)",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true,
+          qmax: qMkt + 3, pmax: a + 2 },
+        answer: round2(qOpt), tolerance: 0.1,
+        rationale: "The social optimum sets demand = social cost (private MC + external cost): " + a + " \u2212 " + fmtCoef(b) +
+          "Q = " + c + " + " + fmtCoef(d) + "Q + " + e + " \u2192 Q = " + round2(qOpt) + " (less than the market's " + qMkt + " \u2014 the market overproduces)."
+      };
+    }
+  };
+
+  /* Ch15: corrective (Pigovian) tax size (numeric) */
+  GEN["ch15_pigovian_tax"] = {
+    id: "ch15_pigovian_tax", chapter: 15, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "Pigovian tax", points: 3,
+    build: function (rng) {
+      var e = rng_int(rng, 2, 6);
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var c = rng_int(rng, 1, 3);
+      var qMkt = rng_int(rng, 6, 9);
+      var a = c + (b + d) * qMkt;
+      return {
+        prompt: "A factory's production imposes an external cost of $" + e + " per unit on nearby residents. What per-unit corrective (Pigovian) tax would lead the market to produce the socially optimal quantity?",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, qmax: qMkt + 3, pmax: a + 2 },
+        answer: e, tolerance: 0.01,
+        rationale: "A Pigovian tax equal to the external cost ($" + e + " per unit) makes producers internalize the externality, shifting the market to the socially optimal quantity."
+      };
+    }
+  };
+
+  /* Ch15: identify over/under-production from externality type (MC) */
+  GEN["ch15_externality_type"] = {
+    id: "ch15_externality_type", chapter: 15, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "externality over/underproduction", points: 3,
+    build: function (rng) {
+      var negative = rng() < 0.5;
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var c = rng_int(rng, 1, 3);
+      var qMkt = rng_int(rng, 5, 8);
+      var a = c + (b + d) * qMkt;
+      var opts = negative ?
+        ["The market OVERproduces relative to the social optimum; a tax can correct it",
+         "The market UNDERproduces; a subsidy can correct it",
+         "The market produces the efficient quantity", "Externalities have no effect on efficiency"] :
+        ["The market UNDERproduces relative to the social optimum; a subsidy can correct it",
+         "The market OVERproduces; a tax can correct it",
+         "The market produces the efficient quantity", "Externalities have no effect on efficiency"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "Consider a good that generates a " + (negative ? "NEGATIVE externality (e.g., pollution)" : "POSITIVE externality (e.g., vaccination, education)") +
+          ". Compared with the socially optimal quantity, what does the free market do, and how can policy correct it?",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, qmax: qMkt + 3, pmax: a + 2 },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: negative ?
+          "With a negative externality, social cost exceeds private cost, so the market overproduces. A corrective tax (Pigovian) reduces output to the optimum." :
+          "With a positive externality, social benefit exceeds private benefit, so the market underproduces. A subsidy raises output to the optimum."
+      };
+    }
+  };
+
+
+  /* Ch12: monopolistic competition — is price above MC? (graphical MC) */
+  GEN["ch12_price_vs_mc_graph"] = {
+    id: "ch12_price_vs_mc_graph", chapter: 12, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "P>MC in mon. comp. (graph)", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var mc0 = rng_int(rng, 3, 6); var qm = rng_int(rng, 3, 6);
+      var a = mc0 + 2 * b * qm;
+      var opts = ["Price exceeds marginal cost, so the outcome is not efficient (some valued units go unsold)",
+        "Price equals marginal cost, so the outcome is efficient",
+        "Marginal revenue exceeds price", "Price is below marginal cost"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "This monopolistically competitive firm produces where MR = MC. Comparing the price it charges (on the demand curve) with its marginal cost, what can you conclude about efficiency?",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, qmax: Math.round((a - mc0) / b) + 2, pmax: a + 2 },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Because demand slopes down, the profit-maximizing price sits above marginal cost. Units that buyers value above MC aren't produced \u2014 an efficiency loss (though offset partly by variety)."
+      };
+    }
+  };
+
+  /* Ch12: identify excess capacity (graphical MC) */
+  GEN["ch12_excess_capacity_graph"] = {
+    id: "ch12_excess_capacity_graph", chapter: 12, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "excess capacity (graph)", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]); var mc0 = rng_int(rng, 3, 5); var qm = rng_int(rng, 3, 5);
+      var a = mc0 + 2 * b * qm; var pm = a - b * qm;
+      var opts = ["It produces less than the efficient scale \u2014 it has excess capacity",
+        "It produces exactly at minimum ATC", "It produces more than the efficient scale",
+        "It produces where price equals marginal cost"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "In long-run equilibrium this monopolistically competitive firm's demand is tangent to ATC on ATC's downward-sloping portion. What does this imply about its scale of production?",
+        diagramSpec: { type: "monopoly", a: a, b: b, mc0: mc0, atc: pm, showProfit: true, qmax: Math.round((a - mc0) / b) + 2, pmax: a + 2 },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Tangency on the falling part of ATC means the firm operates below the efficient scale (minimum ATC) \u2014 the hallmark 'excess capacity' of monopolistic competition."
+      };
+    }
+  };
+
+  /* Ch14: labor market equilibrium wage (graphical numeric) */
+  GEN["ch14_labor_eq_wage"] = {
+    id: "ch14_labor_eq_wage", chapter: 14, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "labor market equilibrium (graph)", points: 3,
+    build: function (rng) {
+      /* labor demand (VMPL): W = a - b*L ; labor supply: W = c + d*L */
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var Lstar = rng_int(rng, 3, 7), c = rng_int(rng, 2, 5);
+      var wStar = c + d * Lstar, a = wStar + b * Lstar;
+      return {
+        prompt: "In a competitive labor market, labor demand (the value of marginal product) is W = " + a + " \u2212 " +
+          fmtCoef(b) + "L and labor supply is W = " + c + " + " + fmtCoef(d) + "L. Find the equilibrium WAGE.",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true,
+          xlab: "Labor (L)", ylab: "Wage (W)", qmax: Lstar + 3, pmax: a + 2 },
+        answer: wStar, tolerance: 0.01,
+        rationale: "Set labor demand = labor supply: " + a + " \u2212 " + fmtCoef(b) + "L = " + c + " + " + fmtCoef(d) +
+          "L \u2192 L = " + Lstar + ", so W = " + wStar + "."
+      };
+    }
+  };
+
+  /* Ch14: effect of a labor-supply increase (graphical MC) */
+  GEN["ch14_labor_supply_shift"] = {
+    id: "ch14_labor_supply_shift", chapter: 14, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "labor supply shift (graph)", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var Lstar = rng_int(rng, 4, 6), c = rng_int(rng, 2, 4);
+      var wStar = c + d * Lstar, a = wStar + b * Lstar;
+      var opts = ["The wage falls and the quantity of labor employed rises",
+        "The wage rises and employment falls", "Both wage and employment rise",
+        "Both wage and employment fall"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "The graph shows a competitive labor market (demand = VMPL). If immigration increases the labor SUPPLY (shifts it right), holding labor demand fixed, what happens to the equilibrium wage and employment?",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true,
+          xlab: "Labor (L)", ylab: "Wage (W)", qmax: Lstar + 4, pmax: a + 2 },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A rightward labor-supply shift moves down along labor demand: the wage falls while the quantity of labor employed rises."
+      };
+    }
+  };
+
+  /* Ch14: effect of higher output price on labor demand (graphical MC) */
+  GEN["ch14_labor_demand_shift_graph"] = {
+    id: "ch14_labor_demand_shift_graph", chapter: 14, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "labor demand shift (graph)", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var Lstar = rng_int(rng, 4, 6), c = rng_int(rng, 2, 4);
+      var wStar = c + d * Lstar, a = wStar + b * Lstar;
+      var opts = ["Both the equilibrium wage and employment rise",
+        "The wage falls and employment falls", "The wage rises but employment falls",
+        "Nothing changes"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "The price of the output these workers produce rises, increasing the value of their marginal product (labor DEMAND shifts right), with labor supply fixed. What happens to the equilibrium wage and employment?",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true,
+          xlab: "Labor (L)", ylab: "Wage (W)", qmax: Lstar + 4, pmax: a + 3 },
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "A rightward labor-demand shift (higher VMPL) raises both the equilibrium wage and the quantity of labor employed."
+      };
+    }
+  };
+
+  /* Ch14: VMPL read/computation (graphical numeric) */
+  GEN["ch14_vmpl_graph"] = {
+    id: "ch14_vmpl_graph", chapter: 14, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "VMPL and hiring (graph)", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var Lstar = rng_int(rng, 3, 6), c = rng_int(rng, 2, 5);
+      var wStar = c + d * Lstar, a = wStar + b * Lstar;
+      return {
+        prompt: "Labor demand (VMPL) is W = " + a + " \u2212 " + fmtCoef(b) + "L and labor supply is W = " + c + " + " +
+          fmtCoef(d) + "L. How many workers (L) will this competitive firm/market employ in equilibrium?",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true,
+          xlab: "Labor (L)", ylab: "Wage (W)", qmax: Lstar + 3, pmax: a + 2 },
+        answer: Lstar, tolerance: 0.01,
+        rationale: "Employment is where labor demand meets supply: " + a + " \u2212 " + fmtCoef(b) + "L = " + c + " + " +
+          fmtCoef(d) + "L \u2192 L = " + Lstar + " (each worker hired until VMPL = wage)."
+      };
+    }
+  };
+
+  /* Ch15: two more graphical — total external cost, and welfare gain from tax */
+  GEN["ch15_external_cost_total"] = {
+    id: "ch15_external_cost_total", chapter: 15, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "total external cost (graph)", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var c = rng_int(rng, 1, 3);
+      var qMkt = rng_int(rng, 5, 9);
+      var a = c + (b + d) * qMkt;
+      var e = rng_int(rng, 2, 4);
+      var totalExt = e * qMkt;
+      return {
+        prompt: "A market produces " + qMkt + " units, and each unit imposes an external cost of $" + e +
+          " on bystanders. What is the TOTAL external cost imposed at the market quantity?",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, qmax: qMkt + 3, pmax: a + 2 },
+        answer: totalExt, tolerance: 0.01,
+        rationale: "Total external cost = external cost per unit \u00d7 quantity = $" + e + " \u00d7 " + qMkt + " = $" + totalExt + "."
+      };
+    }
+  };
+
+  /* Ch15: deadweight loss from a negative externality (graphical numeric) */
+  GEN["ch15_externality_dwl"] = {
+    id: "ch15_externality_dwl", chapter: 15, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "externality deadweight loss (graph)", points: 3,
+    build: function (rng) {
+      var b = rng_pick(rng, [1, 2]), d = rng_pick(rng, [1, 2]);
+      var c = rng_int(rng, 1, 3);
+      var qMkt = rng_int(rng, 6, 9);
+      var a = c + (b + d) * qMkt;
+      var e = rng_int(rng, 2, 4);
+      var qOpt = (a - c - e) / (b + d);
+      /* DWL triangle: half * e * (qMkt - qOpt) */
+      var dwl = 0.5 * e * (qMkt - qOpt);
+      return {
+        prompt: "With private demand P = " + a + " \u2212 " + fmtCoef(b) + "Q, private supply P = " + c + " + " +
+          fmtCoef(d) + "Q, and an external cost of $" + e + " per unit, the market makes " + qMkt +
+          " units but the optimum is " + round2(qOpt) + ". Compute the deadweight loss from overproduction. (2 decimals)",
+        diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, qmax: qMkt + 3, pmax: a + 2 },
+        answer: round2(dwl), tolerance: 0.2,
+        rationale: "DWL = \u00bd \u00d7 (external cost) \u00d7 (Q_market \u2212 Q_optimal) = \u00bd \u00d7 " + e + " \u00d7 (" + qMkt + " \u2212 " +
+          round2(qOpt) + ") = " + round2(dwl) + "."
+      };
+    }
+  };
+
   /* ---- S1..S3: STATIC conceptual / written (no randomization) -----------
      These carry their own fixed content; the engine returns them as-is. */
   var STATIC = [
@@ -2789,6 +3199,906 @@
         "Existing firms raise their prices to lock in profit"],
       answer: 0,
       rationale: "Positive economic profit attracts entry. Entry increases supply, driving price down, until price equals minimum ATC and economic profit is zero \u2014 the long-run equilibrium." }
+    ,
+    /* ==================== Chapter 11 — Monopoly ==================== */
+    { id: "ch11_source_monopoly", chapter: 11, kind: "mc", render: "text", difficulty: "easy", concept: "barriers to entry", points: 1,
+      prompt: "The fundamental cause of any monopoly is:",
+      options: ["barriers to entry that keep other firms out", "high consumer demand",
+        "low production costs", "government price controls"], answer: 0,
+      rationale: "A monopoly persists only because barriers to entry (a key resource, a government-granted right, or natural cost advantages) prevent competitors from entering." },
+    { id: "ch11_natural_monopoly", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "natural monopoly", points: 3,
+      prompt: "A 'natural monopoly' arises when:",
+      options: ["a single firm can supply the whole market at lower average cost than two or more firms could (economies of scale over the relevant range)",
+        "a firm owns a natural resource", "the government bans competition",
+        "the product is a natural good like water from a spring"], answer: 0,
+      rationale: "A natural monopoly occurs when average total cost keeps falling over the entire relevant range of output, so one firm serves the market more cheaply than several \u2014 e.g., water distribution." },
+    { id: "ch11_price_maker", chapter: 11, kind: "mc", render: "text", difficulty: "easy", concept: "price maker", points: 1,
+      prompt: "Unlike a competitive firm, a monopolist is a 'price maker,' which means it:",
+      options: ["faces the downward-sloping market demand curve and chooses a point on it",
+        "can charge any price and sell any quantity", "must accept the market price",
+        "has a horizontal demand curve"], answer: 0,
+      rationale: "A monopoly IS the industry, so it faces the whole downward-sloping demand curve; raising price reduces quantity sold." },
+    { id: "ch11_mr_less_price", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "marginal revenue two effects", points: 3,
+      prompt: "For a monopolist, selling one more unit has two effects on revenue. They are:",
+      options: ["an output effect (more units sold) and a price effect (lower price on all units)",
+        "a cost effect and a demand effect", "an income effect and a substitution effect",
+        "only the output effect \u2014 there is no price effect"], answer: 0,
+      rationale: "MR = price MINUS the revenue lost from cutting price on all prior units. The output effect adds revenue; the price effect subtracts it, so MR < price." },
+    { id: "ch11_profit_max_rule", chapter: 11, kind: "mc", render: "text", difficulty: "med", concept: "monopoly profit maximization", points: 1,
+      prompt: "A monopolist maximizes profit by choosing the quantity where:",
+      options: ["marginal revenue equals marginal cost", "price equals marginal cost",
+        "price equals average total cost", "marginal revenue equals price"], answer: 0,
+      rationale: "Like any firm, a monopoly sets MR = MC \u2014 but then charges the higher price the demand curve allows at that quantity." },
+    { id: "ch11_no_supply_curve", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "monopoly has no supply curve", points: 3,
+      prompt: "Why does a monopoly NOT have a supply curve (unlike a competitive firm)?",
+      options: ["Its output depends on the shape of demand, not just price \u2014 the same price can map to different quantities",
+        "It always produces the same quantity", "It never responds to costs",
+        "Because it has no marginal cost curve"], answer: 0,
+      rationale: "A competitive firm's supply is its MC curve because it takes price as given. A monopoly chooses price AND quantity together based on demand, so there's no single price-to-quantity mapping." },
+    { id: "ch11_dwl_source", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "monopoly inefficiency", points: 3,
+      prompt: "The deadweight loss of monopoly arises because the monopolist produces a quantity where:",
+      options: ["price exceeds marginal cost \u2014 some units buyers value above cost go unproduced",
+        "price is below marginal cost", "price equals marginal cost",
+        "average total cost is minimized"], answer: 0,
+      rationale: "By restricting output to raise price, the monopoly leaves P > MC. Units that buyers value above their cost aren't produced \u2014 that lost surplus is the deadweight loss." },
+    { id: "ch11_vs_competition", chapter: 11, kind: "mc", render: "text", difficulty: "med", concept: "monopoly vs competition outcome", points: 2,
+      prompt: "Compared with a competitive market, a monopoly typically produces:",
+      options: ["less output and charges a higher price", "more output at a lower price",
+        "the same output at a higher price", "more output at the same price"], answer: 0,
+      rationale: "The monopoly restricts output (Qm < Qc) to push price above marginal cost \u2014 lower quantity, higher price than competition." },
+    { id: "ch11_price_discrimination", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "price discrimination", points: 3,
+      prompt: "Price discrimination (charging different buyers different prices) requires that the firm:",
+      options: ["has market power and can prevent resale between buyers",
+        "is a price taker", "faces a horizontal demand curve",
+        "charges everyone the same price"], answer: 0,
+      rationale: "To price-discriminate a firm needs market power, a way to sort buyers by willingness to pay, and the ability to stop low-price buyers reselling to high-price ones." },
+    { id: "ch11_perfect_pd", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "perfect price discrimination", points: 3,
+      prompt: "Under PERFECT price discrimination (each buyer charged their exact willingness to pay), what happens to deadweight loss and consumer surplus?",
+      options: ["Deadweight loss disappears (efficient output), but the firm captures all surplus \u2014 consumer surplus is zero",
+        "Both rise", "Deadweight loss rises and consumer surplus rises",
+        "Nothing changes relative to single-price monopoly"], answer: 0,
+      rationale: "Perfect price discrimination leads the monopoly to sell to every buyer whose value exceeds cost (efficient quantity, no DWL), but it extracts the entire surplus as profit, leaving buyers with none." },
+    { id: "ch11_regulation", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "regulating natural monopoly", points: 3,
+      prompt: "If a regulator forces a natural monopoly to price at marginal cost, a problem arises because:",
+      options: ["with falling average cost, MC lies below ATC, so pricing at MC means the firm makes losses",
+        "the firm would earn excessive profit", "output would fall to zero",
+        "marginal cost pricing is always efficient with no downside"], answer: 0,
+      rationale: "For a natural monopoly, ATC is still falling, so MC < ATC. Marginal-cost pricing sets price below average cost, causing losses \u2014 the firm needs a subsidy or must be allowed average-cost pricing." },
+    { id: "ch11_patent_tradeoff", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "patents tradeoff", points: 3,
+      prompt: "Patents grant temporary monopoly power. The central tradeoff of patent policy is:",
+      options: ["higher prices and deadweight loss now, versus stronger incentives to innovate",
+        "lower prices now versus lower innovation", "no tradeoff \u2014 patents are pure benefit",
+        "more competition now versus less later"], answer: 0,
+      rationale: "Patents create monopoly pricing (a cost to consumers today) in exchange for the incentive to invest in research and innovation (a benefit over time)." },
+    { id: "ch11_markup_elasticity", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "markup and elasticity", points: 3,
+      prompt: "A monopolist facing MORE elastic demand will tend to set a markup over marginal cost that is:",
+      options: ["smaller \u2014 elastic demand punishes high prices with big quantity losses",
+        "larger \u2014 elastic demand allows bigger markups", "unaffected by elasticity",
+        "always exactly double marginal cost"], answer: 0,
+      rationale: "The more elastic demand is, the more customers a monopoly loses by raising price, so its profit-maximizing markup over MC is smaller." },
+    { id: "ch11_numeric_mr", chapter: 11, kind: "numeric", render: "text", difficulty: "hard", concept: "monopoly MR=MC", points: 2,
+      prompt: "A monopolist has demand P = 100 \u2212 2Q (so MR = 100 \u2212 4Q) and constant MC = 20. What quantity maximizes profit?",
+      answer: 20, tolerance: 0.01,
+      rationale: "Set MR = MC: 100 \u2212 4Q = 20 \u2192 4Q = 80 \u2192 Q = 20." },
+    { id: "ch11_numeric_price", chapter: 11, kind: "numeric", render: "text", difficulty: "hard", concept: "monopoly price", points: 2,
+      prompt: "A monopolist has demand P = 100 \u2212 2Q and MC = 20, and produces the profit-maximizing quantity Q = 20. What price does it charge?",
+      answer: 60, tolerance: 0.01,
+      rationale: "Plug Q = 20 into demand: P = 100 \u2212 2(20) = 60. Note P ($60) far exceeds MC ($20) \u2014 the monopoly markup." },
+    { id: "ch11_written_dwl", chapter: 11, kind: "short", render: "text", difficulty: "hard", concept: "why monopoly is inefficient", points: 3,
+      prompt: "Explain why a single-price monopoly produces an inefficient outcome. In your answer, describe what happens to the quantity produced, the relationship between price and marginal cost, and who is harmed.",
+      answer: null,
+      rubric: "Full credit: (1) monopoly sets MR=MC and restricts output below the competitive/efficient level; (2) this leaves price above marginal cost; (3) units whose value exceeds cost go unproduced \u2014 deadweight loss; (4) consumers are harmed (higher price, less quantity), and total surplus falls. Partial credit per element.",
+      rationale: "Looking for output restriction, P > MC, deadweight loss, and harm to consumers/total surplus." },
+    { id: "ch11_written_price_disc", chapter: 11, kind: "short", render: "text", difficulty: "hard", concept: "price discrimination analysis", points: 3,
+      prompt: "Movie theaters charge lower prices to students and seniors. Explain how this is price discrimination, what conditions make it possible, and why it can actually INCREASE total surplus compared to a single price.",
+      answer: null,
+      rubric: "Full credit: (1) different groups charged different prices based on willingness to pay / elasticity; (2) requires market power, ability to sort groups (ID), and no resale; (3) it can raise output by serving price-sensitive buyers who wouldn't buy at the single price; (4) more units traded \u2192 smaller deadweight loss / higher total surplus. Partial credit per element.",
+      rationale: "Looking for the sorting mechanism, the no-resale/market-power conditions, and the efficiency gain from serving more buyers." },
+    { id: "ch11_antitrust", chapter: 11, kind: "mc", render: "text", difficulty: "med", concept: "public policy toward monopoly", points: 2,
+      prompt: "Which is a common public-policy response to the problems caused by monopoly?",
+      options: ["antitrust laws that block mergers or break up firms to promote competition",
+        "guaranteeing every firm a monopoly", "banning all large firms",
+        "eliminating patents entirely"], answer: 0,
+      rationale: "Governments use antitrust law (blocking anticompetitive mergers, prosecuting collusion, sometimes breaking up firms), regulation, or public ownership to address monopoly power." },
+    { id: "ch11_two_effects_calc", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "marginal revenue can be negative", points: 3,
+      prompt: "A monopolist currently sells 10 units at $8. To sell an 11th unit it must drop the price to $7.50 on ALL units. Its marginal revenue from the 11th unit is:",
+      options: ["$2.50 \u2014 the $7.50 from the new unit minus $5.00 lost on the original 10",
+        "$7.50 \u2014 the price of the new unit", "$8.00", "$82.50"], answer: 0,
+      rationale: "New revenue = 11 \u00d7 $7.50 = $82.50; old = 10 \u00d7 $8 = $80. MR = $82.50 \u2212 $80 = $2.50. The price effect ($0.50 \u00d7 10 = $5 lost) makes MR far below the $7.50 price." },
+    { id: "ch11_welfare_transfer", chapter: 11, kind: "mc", render: "text", difficulty: "hard", concept: "monopoly welfare vs transfer", points: 3,
+      prompt: "When a competitive market becomes a monopoly, the higher price causes a transfer from consumers to the firm PLUS a deadweight loss. The deadweight loss specifically represents:",
+      options: ["surplus that disappears entirely because efficient trades no longer happen",
+        "profit gained by the monopolist", "consumer surplus transferred to the firm",
+        "the firm's fixed costs"], answer: 0,
+      rationale: "The transfer (higher price on units still sold) moves surplus from consumers to the monopoly \u2014 no net loss. The deadweight loss is different: it's surplus that vanishes because units that should be traded aren't." }
+    ,
+    /* ==================== Chapter 12 — Monopolistic Competition ==================== */
+    { id: "ch12_features", chapter: 12, kind: "mc", render: "text", difficulty: "easy", concept: "monopolistic competition features", points: 1,
+      prompt: "A monopolistically competitive market is characterized by:",
+      options: ["many firms selling similar but differentiated products, with free entry and exit",
+        "a single seller", "a few interdependent firms", "identical products and price-taking firms"], answer: 0,
+      rationale: "Monopolistic competition combines many firms and free entry (like competition) with product differentiation that gives each firm a bit of pricing power (like monopoly)." },
+    { id: "ch12_differentiation", chapter: 12, kind: "mc", render: "text", difficulty: "med", concept: "product differentiation", points: 1,
+      prompt: "Product differentiation gives a monopolistically competitive firm:",
+      options: ["a downward-sloping demand curve, so it has some control over price",
+        "a horizontal demand curve", "no customers", "the ability to set any price with no loss of sales"], answer: 0,
+      rationale: "Because its product is distinct, the firm can raise price and still keep some loyal customers \u2014 hence a downward-sloping (though elastic) demand curve." },
+    { id: "ch12_sr_profit", chapter: 12, kind: "mc", render: "text", difficulty: "med", concept: "short-run profit", points: 1,
+      prompt: "In the SHORT run, a monopolistically competitive firm:",
+      options: ["can earn economic profits or losses, like a monopoly", "always earns zero profit",
+        "must be a price taker", "always shuts down"], answer: 0,
+      rationale: "In the short run, entry hasn't adjusted, so these firms can earn profit or loss depending on demand relative to cost." },
+    { id: "ch12_lr_entry", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "long-run entry", points: 3,
+      prompt: "If monopolistically competitive firms are earning economic profit, the long-run adjustment is:",
+      options: ["new firms enter, stealing customers, shifting each firm's demand left until profit is zero",
+        "firms exit until profit rises", "prices rise indefinitely",
+        "nothing \u2014 profits persist"], answer: 0,
+      rationale: "Free entry means profits attract new differentiated products. Each existing firm's demand shifts left and becomes more elastic until economic profit reaches zero (demand tangent to ATC)." },
+    { id: "ch12_excess_capacity", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "excess capacity", points: 3,
+      prompt: "In long-run equilibrium, a monopolistically competitive firm produces on the downward-sloping part of its ATC curve. This means it has:",
+      options: ["excess capacity \u2014 it produces below the efficient scale (minimum ATC)",
+        "no excess capacity", "the lowest possible average cost",
+        "a horizontal demand curve"], answer: 0,
+      rationale: "Because demand is tangent to ATC on its downward-sloping portion (not the minimum), the firm could lower average cost by producing more \u2014 it operates with excess capacity." },
+    { id: "ch12_markup_price", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "price above MC", points: 3,
+      prompt: "Even in long-run equilibrium (zero profit), a monopolistically competitive firm charges a price that:",
+      options: ["exceeds marginal cost, because demand slopes downward",
+        "equals marginal cost", "is below marginal cost", "equals marginal revenue"], answer: 0,
+      rationale: "Zero profit means P = ATC, but because the demand curve slopes down, that point still has P > MC \u2014 unlike perfect competition where P = MC." },
+    { id: "ch12_vs_perfect_comp", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "comparison to competition", points: 3,
+      prompt: "Compared with perfect competition, monopolistic competition is 'inefficient' mainly because:",
+      options: ["price exceeds marginal cost and firms have excess capacity",
+        "firms earn large long-run profits", "there are too few products",
+        "products are identical"], answer: 0,
+      rationale: "The markup (P > MC) means some mutually beneficial trades don't happen, and firms don't reach minimum ATC (excess capacity). But product variety is a benefit that partly offsets this." },
+    { id: "ch12_advertising_debate", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "advertising", points: 3,
+      prompt: "Economists debate advertising. The critique that advertising is socially WASTEFUL argues that it:",
+      options: ["manipulates tastes and impedes competition without adding real information",
+        "always provides useful information", "lowers prices for consumers",
+        "has no effect on demand"], answer: 0,
+      rationale: "Critics say advertising manipulates preferences and builds brand loyalty that reduces competition; defenders argue it informs consumers and can intensify competition. Both views appear in the debate." },
+    { id: "ch12_brand_names", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "brand names", points: 3,
+      prompt: "A defense of brand names is that they:",
+      options: ["give firms an incentive to maintain quality and give consumers information about consistency",
+        "always raise prices without benefit", "reduce product variety",
+        "eliminate competition"], answer: 0,
+      rationale: "Brands can signal consistent quality and give firms a reputational incentive to keep quality high, which benefits consumers \u2014 though critics argue they mainly create artificial differentiation." },
+    { id: "ch12_variety_benefit", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "product variety externality", points: 3,
+      prompt: "When a new firm enters a monopolistically competitive market, it creates a positive 'product-variety' externality because:",
+      options: ["consumers gain surplus from having a new differentiated option to choose from",
+        "it lowers all firms' costs", "it eliminates deadweight loss",
+        "it forces other firms to exit"], answer: 0,
+      rationale: "A new product gives consumers additional variety they value \u2014 a benefit the entrant doesn't capture. (There's also a business-stealing externality that works the other way.)" },
+    { id: "ch12_business_stealing", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "business-stealing externality", points: 3,
+      prompt: "The 'business-stealing' externality of entry in monopolistic competition refers to the fact that a new firm:",
+      options: ["takes customers and profit away from existing firms, a cost it doesn't bear",
+        "always benefits existing firms", "reduces total market output",
+        "lowers consumer variety"], answer: 0,
+      rationale: "Entry draws customers from incumbents, reducing their profit \u2014 a negative externality on rivals. Whether entry is socially excessive or insufficient depends on how this balances against the variety benefit." },
+    { id: "ch12_examples", chapter: 12, kind: "mc", render: "text", difficulty: "easy", concept: "identifying market structure", points: 1,
+      prompt: "Which is the best real-world example of monopolistic competition?",
+      options: ["restaurants in a large city", "the local electricity distributor",
+        "the market for wheat", "commercial aircraft manufacturing (Boeing/Airbus)"], answer: 0,
+      rationale: "Restaurants are many, differentiated (cuisine, location, atmosphere), and easy to enter/exit \u2014 classic monopolistic competition. Electricity is a natural monopoly; wheat is competitive; aircraft is oligopoly." },
+    { id: "ch12_demand_elastic", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "demand elasticity in mon. comp.", points: 3,
+      prompt: "A monopolistically competitive firm's demand is MORE elastic than a monopolist's because:",
+      options: ["close substitutes from rival firms are available, so customers can switch",
+        "it sells a unique product", "it faces no competition",
+        "it is a price taker"], answer: 0,
+      rationale: "With many differentiated rivals offering close substitutes, a firm that raises price loses more customers than a pure monopoly would \u2014 its demand is more elastic (though still downward-sloping)." },
+    { id: "ch12_written_lr", chapter: 12, kind: "short", render: "text", difficulty: "hard", concept: "long-run equilibrium analysis", points: 3,
+      prompt: "Describe the long-run equilibrium of a monopolistically competitive firm. Explain why economic profit is zero yet the outcome still differs from perfect competition in two important ways.",
+      answer: null,
+      rubric: "Full credit: (1) entry/exit drives demand to tangency with ATC \u2192 zero economic profit; (2) difference 1: price exceeds marginal cost (a markup, some lost trades); (3) difference 2: firm produces below efficient scale (excess capacity); (4) but consumers gain product variety. Partial credit per element.",
+      rationale: "Looking for zero-profit tangency plus the P>MC markup and excess-capacity differences from perfect competition." },
+    { id: "ch12_written_advertising", chapter: 12, kind: "short", render: "text", difficulty: "hard", concept: "advertising debate", points: 3,
+      prompt: "Present both sides of the economic debate over advertising: one argument that it is socially valuable and one that it is wasteful. Then explain how advertising as a 'signal of quality' can be informative even when the ad's content is uninformative.",
+      answer: null,
+      rubric: "Full credit: (1) valuable: conveys information, promotes competition, lowers search costs; (2) wasteful: manipulates tastes, builds barriers, costly non-price competition; (3) signaling: a firm willing to spend heavily on ads signals it expects repeat business, which only high-quality firms expect \u2014 so ad spending itself is informative regardless of content. Partial credit per element.",
+      rationale: "Looking for both sides of the debate plus the willingness-to-spend signaling argument." },
+    { id: "ch12_efficient_scale_gap", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "excess capacity implication", points: 3,
+      prompt: "Because a monopolistically competitive firm operates with excess capacity, it could reduce its average cost by producing more. Why doesn't it?",
+      options: ["Selling more would require cutting price along its downward-sloping demand, which isn't profitable at the margin",
+        "It is legally prohibited", "Its costs would rise to infinity",
+        "It has no unused capacity"], answer: 0,
+      rationale: "The firm stops where MR = MC. Producing more would need a lower price on its downward-sloping demand, and beyond MR=MC that reduces profit \u2014 so it rationally leaves capacity unused." }
+    ,
+    /* ==================== Chapter 13 — Oligopoly ==================== */
+    { id: "ch13_definition", chapter: 13, kind: "mc", render: "text", difficulty: "easy", concept: "oligopoly definition", points: 1,
+      prompt: "An oligopoly is a market with:",
+      options: ["only a few sellers, whose decisions are interdependent", "one seller",
+        "many sellers of identical goods", "many sellers of differentiated goods"], answer: 0,
+      rationale: "Oligopoly means a few firms dominate; each is large enough that its actions affect rivals, so their decisions are strategically interdependent." },
+    { id: "ch13_interdependence", chapter: 13, kind: "mc", render: "text", difficulty: "med", concept: "strategic interdependence", points: 1,
+      prompt: "The key feature that makes oligopoly analysis different from other market structures is:",
+      options: ["each firm must consider how rivals will react to its decisions",
+        "firms ignore each other completely", "there is no competition",
+        "products are always identical"], answer: 0,
+      rationale: "With only a few firms, each one's best move depends on what the others do \u2014 strategic interdependence \u2014 which is why game theory is used to analyze oligopoly." },
+    { id: "ch13_collusion", chapter: 13, kind: "mc", render: "text", difficulty: "med", concept: "collusion and cartels", points: 1,
+      prompt: "When oligopolists collude to act like a single monopoly, they form a:",
+      options: ["cartel, agreeing on quantity or price", "competitive fringe",
+        "natural monopoly", "perfectly competitive market"], answer: 0,
+      rationale: "A cartel is a group of firms coordinating output/price to capture monopoly profits (e.g., OPEC). Such agreements are illegal in many countries and hard to sustain." },
+    { id: "ch13_cartel_unstable", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "why cartels break down", points: 3,
+      prompt: "Cartels tend to be unstable because each member has an incentive to:",
+      options: ["cheat by producing more than its quota, since price still exceeds its marginal cost",
+        "produce less than agreed", "raise its price above the cartel price",
+        "exit the market"], answer: 0,
+      rationale: "At the cartel (monopoly) price, each firm's MC is below price, so producing extra units is individually profitable. This temptation to cheat undermines the agreement." },
+    { id: "ch13_prisoners_dilemma", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "prisoners' dilemma", points: 3,
+      prompt: "The prisoners' dilemma explains oligopoly behavior by showing that:",
+      options: ["individually rational choices (each firm producing more) lead to an outcome worse for both than cooperation",
+        "cooperation is always the dominant strategy", "firms always achieve the monopoly outcome",
+        "there is never any conflict of interest"], answer: 0,
+      rationale: "Each firm's dominant strategy is to produce a high quantity (defect), but when both do, they end up with lower joint profit than if both had cooperated \u2014 the dilemma." },
+    { id: "ch13_dominant_strategy", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "dominant strategy", points: 3,
+      prompt: "A 'dominant strategy' in game theory is one that:",
+      options: ["is best for a player regardless of what the other players do",
+        "is best only if rivals cooperate", "leads to the worst outcome",
+        "requires coordination with rivals"], answer: 0,
+      rationale: "A dominant strategy yields a higher payoff than any alternative no matter what opponents choose. When each player has one, the outcome is predictable (often a dilemma)." },
+    { id: "ch13_nash", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "Nash equilibrium", points: 3,
+      prompt: "A Nash equilibrium is a situation in which:",
+      options: ["each player chooses their best strategy given the strategies chosen by all others",
+        "all players cooperate perfectly", "one player controls the outcome",
+        "no player has any strategy"], answer: 0,
+      rationale: "At a Nash equilibrium no player can gain by unilaterally changing strategy, given what everyone else is doing \u2014 it's self-enforcing but need not be jointly optimal." },
+    { id: "ch13_output_effect", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "two effects on oligopolist", points: 3,
+      prompt: "When an oligopolist considers raising its output, it weighs the output effect (more units at the price) against the price effect (lower price on all units). Compared with a monopolist, an oligopolist tends to give MORE weight to the output effect because:",
+      options: ["it only bears the price-effect loss on its OWN units, not the whole market's",
+        "it faces no price effect at all", "it ignores marginal cost",
+        "it is a price taker"], answer: 0,
+      rationale: "Each oligopolist internalizes the price drop only on its own sales, not rivals', so it's more tempted to expand output than a monopoly \u2014 pushing the market toward more output than monopoly but less than competition." },
+    { id: "ch13_size_effect", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "number of firms and competitiveness", points: 3,
+      prompt: "As the number of firms in an oligopoly grows very large, the market outcome approaches:",
+      options: ["the perfectly competitive outcome (price near marginal cost)",
+        "the monopoly outcome", "zero output", "a cartel"], answer: 0,
+      rationale: "More firms means each gives less weight to the price effect, so output rises and price falls toward marginal cost \u2014 approaching perfect competition as the number grows large." },
+    { id: "ch13_repeated_game", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "repeated games and cooperation", points: 3,
+      prompt: "Cooperation among oligopolists is easier to sustain when the game is REPEATED because:",
+      options: ["firms can punish cheating in future periods (e.g., trigger strategies), deterring defection today",
+        "repetition removes the incentive to compete", "there is no way to detect cheating",
+        "future profits don't matter"], answer: 0,
+      rationale: "In repeated interaction, the threat of future retaliation (reverting to competition if anyone cheats) can make cooperation individually rational \u2014 sustaining collusion that would collapse in a one-shot game." },
+    { id: "ch13_antitrust_oligopoly", chapter: 13, kind: "mc", render: "text", difficulty: "med", concept: "antitrust and oligopoly", points: 2,
+      prompt: "Antitrust laws generally treat explicit price-fixing agreements among oligopolists as:",
+      options: ["illegal, because they harm consumers by raising prices",
+        "legal and encouraged", "efficient and welfare-enhancing",
+        "irrelevant to consumer welfare"], answer: 0,
+      rationale: "Explicit collusion (price-fixing, bid-rigging) is per se illegal in most jurisdictions because it mimics monopoly, raising prices and reducing output at consumers' expense." },
+    { id: "ch13_tit_for_tat", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "punishment strategies", points: 3,
+      prompt: "In a repeated prisoners' dilemma between two firms, a 'grim trigger' strategy means:",
+      options: ["cooperate until the rival cheats, then produce the competitive quantity forever after",
+        "always defect", "always cooperate no matter what",
+        "randomly choose each period"], answer: 0,
+      rationale: "Grim trigger sustains cooperation by threatening permanent punishment: cooperate as long as the rival does, but if they ever cheat, revert to the competitive (low-profit) outcome forever." },
+    { id: "ch13_public_goods_link", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "prisoners' dilemma applications", points: 3,
+      prompt: "The prisoners' dilemma logic ALSO explains why:",
+      options: ["arms races, overfishing, and advertising wars occur despite hurting all participants",
+        "cooperation is always automatic", "monopolies never form",
+        "markets are always efficient"], answer: 0,
+      rationale: "Many social situations share the structure: each party's dominant strategy (arm, overfish, advertise more) leads to a collectively worse outcome \u2014 the same dilemma as oligopoly output choices." },
+    { id: "ch13_written_cartel", chapter: 13, kind: "short", render: "text", difficulty: "hard", concept: "cartel instability", points: 3,
+      prompt: "Two firms form a cartel to split monopoly profits. Explain, using the logic of the prisoners' dilemma, why each firm is tempted to cheat and why the cartel is likely to break down. What might sustain cooperation?",
+      answer: null,
+      rubric: "Full credit: (1) at the cartel price, each firm's MC is below price, so producing extra is individually profitable \u2014 the incentive to cheat; (2) if both cheat, output rises and profits fall toward the competitive level (the dilemma); (3) so the cooperative outcome isn't a Nash equilibrium in a one-shot game; (4) repeated interaction with punishment (trigger strategies) or enforceable agreements can sustain cooperation. Partial credit per element.",
+      rationale: "Looking for the MC<price cheating incentive, the dilemma structure, and repeated-game/punishment as a sustaining mechanism." },
+    { id: "ch13_written_pd", chapter: 13, kind: "short", render: "text", difficulty: "hard", concept: "prisoners' dilemma structure", points: 3,
+      prompt: "Explain what a dominant strategy and a Nash equilibrium are, and use them to describe the outcome of a one-shot prisoners' dilemma between two firms deciding whether to keep output low (cooperate) or high (defect).",
+      answer: null,
+      rubric: "Full credit: (1) dominant strategy = best regardless of the other's choice; (2) Nash equilibrium = each best-responds to the other; (3) each firm's dominant strategy is high output (defect); (4) so the Nash equilibrium is both defect \u2014 worse for both than mutual cooperation. Partial credit per element.",
+      rationale: "Looking for correct definitions and the both-defect Nash outcome that's jointly worse than cooperation." },
+    { id: "ch13_concentration", chapter: 13, kind: "mc", render: "text", difficulty: "med", concept: "measuring market power", points: 2,
+      prompt: "A 'concentration ratio' measures:",
+      options: ["the share of total market output produced by the largest few firms",
+        "the number of consumers", "the price elasticity of demand",
+        "a firm's marginal cost"], answer: 0,
+      rationale: "The concentration ratio (e.g., the four-firm ratio) sums the market shares of the largest firms \u2014 a higher ratio suggests a more concentrated, oligopolistic market." }
+    ,
+    /* ==================== Chapter 14 — Markets for Factors of Production ==================== */
+    { id: "ch14_derived_demand", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "derived demand", points: 3,
+      prompt: "The demand for labor is called a 'derived demand' because it:",
+      options: ["is derived from the demand for the goods that labor produces",
+        "is derived from workers' preferences", "comes from the government",
+        "depends only on the wage"], answer: 0,
+      rationale: "Firms hire workers to produce output, so labor demand depends on \u2014 is derived from \u2014 how much consumers want the final product." },
+    { id: "ch14_vmpl", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "value of marginal product", points: 3,
+      prompt: "A competitive, profit-maximizing firm hires labor up to the point where:",
+      options: ["the value of the marginal product of labor equals the wage",
+        "the marginal product of labor is zero", "total product is maximized",
+        "the wage equals the price of output"], answer: 0,
+      rationale: "The firm hires until VMPL (price \u00d7 marginal product of labor) equals the wage \u2014 the last worker's contribution to revenue just covers their pay." },
+    { id: "ch14_vmpl_calc", chapter: 14, kind: "numeric", render: "text", difficulty: "hard", concept: "VMPL computation", points: 2,
+      prompt: "A worker's marginal product is 8 units per hour, and each unit sells for $5 in a competitive market. What is the value of the marginal product of that worker (per hour)?",
+      answer: 40, tolerance: 0.01,
+      rationale: "VMPL = price \u00d7 marginal product = $5 \u00d7 8 = $40. The firm would hire this worker as long as the wage is at or below $40." },
+    { id: "ch14_labor_demand_shift", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "shifts in labor demand", points: 3,
+      prompt: "Which change would shift the DEMAND for labor to the RIGHT?",
+      options: ["a rise in the price of the output the workers produce",
+        "an increase in the wage", "a fall in the demand for the final product",
+        "an increase in the number of workers available"], answer: 0,
+      rationale: "A higher output price raises the value of each worker's marginal product (VMPL), increasing labor demand. A wage change is a movement along the curve; more workers shifts supply, not demand." },
+    { id: "ch14_labor_supply", chapter: 14, kind: "mc", render: "text", difficulty: "med", concept: "labor supply", points: 1,
+      prompt: "The labor-supply curve generally slopes upward because:",
+      options: ["a higher wage raises the opportunity cost of leisure, encouraging people to work more",
+        "people work less when paid more", "wages don't affect work decisions",
+        "leisure has no value"], answer: 0,
+      rationale: "A higher wage makes each hour of leisure more costly (in forgone pay), so on balance people supply more labor \u2014 an upward-sloping supply curve." },
+    { id: "ch14_marginal_product_labor", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "diminishing marginal product and labor demand", points: 3,
+      prompt: "The labor-demand (VMPL) curve slopes downward primarily because:",
+      options: ["the marginal product of labor diminishes as more workers are added",
+        "output prices always fall", "wages always rise", "workers become lazier"], answer: 0,
+      rationale: "With other inputs fixed, adding workers eventually lowers each additional worker's marginal product (diminishing returns), so VMPL \u2014 and thus labor demand \u2014 declines." },
+    { id: "ch14_complementary_inputs", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "capital and labor", points: 3,
+      prompt: "If a firm gives its workers better equipment (more capital), the demand for labor will most likely:",
+      options: ["increase, because more capital raises the marginal product of labor",
+        "decrease to zero", "be unaffected", "become perfectly inelastic"], answer: 0,
+      rationale: "Capital and labor are often complements: better tools raise workers' marginal product, increasing their VMPL and the firm's demand for labor (and their wages)." },
+    { id: "ch14_wage_determination", chapter: 14, kind: "mc", render: "text", difficulty: "med", concept: "equilibrium wage", points: 1,
+      prompt: "In a competitive labor market, the equilibrium wage is determined by:",
+      options: ["the supply of and demand for labor", "the government alone",
+        "only the firm's preferences", "the price of capital only"], answer: 0,
+      rationale: "Like any competitive market, the wage adjusts to equate the quantity of labor supplied and demanded." },
+    { id: "ch14_other_factors", chapter: 14, kind: "mc", render: "text", difficulty: "med", concept: "land and capital returns", points: 1,
+      prompt: "In competitive factor markets, the price paid for the use of land or capital equals:",
+      options: ["the value of that factor's marginal product",
+        "zero", "the wage of labor", "the government-set rate"], answer: 0,
+      rationale: "The same marginal-productivity logic applies to all factors: each is paid the value of its marginal product in equilibrium." },
+    { id: "ch14_factor_linkage", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "linkage among factor prices", points: 3,
+      prompt: "An event that reduces the supply of one factor (say, a decline in the number of workers) will tend to:",
+      options: ["raise the wage of remaining workers but can lower the return to complementary capital",
+        "raise all factor prices equally", "have no effect on any factor",
+        "lower the wage of workers"], answer: 0,
+      rationale: "Factors are interdependent: fewer workers raises their wage, but with less labor to work with, complementary capital may become less productive, lowering its return." },
+    { id: "ch14_monopsony", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "monopsony", points: 3,
+      prompt: "A 'monopsony' in a labor market is a situation where:",
+      options: ["there is a single dominant buyer of labor, giving the employer wage-setting power",
+        "there are many employers", "workers set their own wages",
+        "the government employs everyone"], answer: 0,
+      rationale: "A monopsony is a market with one main buyer (employer). Like a monopoly in reverse, it can push the wage below the competitive level by hiring fewer workers." },
+    { id: "ch14_human_capital", chapter: 14, kind: "mc", render: "text", difficulty: "med", concept: "human capital and wages", points: 1,
+      prompt: "One reason more-educated workers tend to earn higher wages is that:",
+      options: ["education raises their productivity (human capital), increasing their VMPL",
+        "education has no effect on productivity", "firms are required to pay them more",
+        "educated workers supply less labor"], answer: 0,
+      rationale: "Human capital \u2014 skills and knowledge from education and training \u2014 raises a worker's marginal product and thus the value employers place on their labor." },
+    { id: "ch14_written_labor_demand", chapter: 14, kind: "short", render: "text", difficulty: "hard", concept: "labor demand analysis", points: 3,
+      prompt: "Explain why the demand for labor is a 'derived demand' and why a competitive firm hires workers up to the point where the value of the marginal product of labor equals the wage. What happens if VMPL exceeds the wage?",
+      answer: null,
+      rubric: "Full credit: (1) labor demand is derived from demand for the output workers make; (2) the firm hires until VMPL = wage because that maximizes profit; (3) if VMPL > wage, the worker adds more to revenue than to cost, so hiring more raises profit; (4) the firm keeps hiring until VMPL falls to the wage (diminishing marginal product). Partial credit per element.",
+      rationale: "Looking for derived demand, the VMPL=wage rule, and the profit logic when VMPL exceeds the wage." },
+    { id: "ch14_written_wage_gap", chapter: 14, kind: "short", render: "text", difficulty: "hard", concept: "wage differences", points: 3,
+      prompt: "Using marginal-productivity theory, give two distinct reasons why one worker might earn a higher wage than another in competitive labor markets.",
+      answer: null,
+      rubric: "Full credit: any two valid, distinct reasons tied to VMPL, e.g.: (1) higher human capital/skills raise marginal product; (2) working with more/better capital raises marginal product; (3) producing a higher-valued output raises VMPL; (4) compensating differentials for unpleasant/risky jobs; (5) innate ability/effort. Two clearly explained reasons earn full credit. Partial credit for one.",
+      rationale: "Looking for two valid VMPL-based reasons for wage differences." },
+    { id: "ch14_supply_shift_wage", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "immigration/supply and wages", points: 3,
+      prompt: "If a large number of new workers enter a competitive labor market (labor supply shifts right), holding labor demand fixed, the equilibrium wage will:",
+      options: ["fall, and the quantity of labor employed will rise",
+        "rise, and employment will fall", "stay the same",
+        "rise, and employment will rise"], answer: 0,
+      rationale: "A rightward shift in labor supply moves down along labor demand: the wage falls and the quantity of labor employed rises." }
+    ,
+    /* ==================== Chapter 15 — Externalities ==================== */
+    { id: "ch15_definition", chapter: 15, kind: "mc", render: "text", difficulty: "easy", concept: "externality definition", points: 1,
+      prompt: "An externality is:",
+      options: ["an uncompensated cost or benefit that a market activity imposes on a bystander",
+        "a tax paid to the government", "a cost paid by the buyer",
+        "any cost of production"], answer: 0,
+      rationale: "An externality is a side effect on someone not party to the transaction \u2014 e.g., pollution (negative) or a neighbor's flowers (positive)." },
+    { id: "ch15_negative_over", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "negative externality overproduction", points: 3,
+      prompt: "In a market with a negative externality (like pollution), the free market produces:",
+      options: ["more than the socially optimal quantity, because producers ignore the external cost",
+        "less than the optimal quantity", "exactly the optimal quantity",
+        "nothing at all"], answer: 0,
+      rationale: "Producers weigh only their private cost, not the external cost borne by others, so the market output exceeds the level that would maximize total (social) surplus." },
+    { id: "ch15_positive_under", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "positive externality underproduction", points: 3,
+      prompt: "A good with a positive externality (like vaccination or education) is:",
+      options: ["underproduced by the free market, because buyers ignore the external benefit",
+        "overproduced by the market", "produced at the optimal level",
+        "never produced"], answer: 0,
+      rationale: "Buyers consider only their private benefit, not the benefit to others, so the market quantity falls short of the socially optimal level." },
+    { id: "ch15_pigovian", chapter: 15, kind: "mc", render: "text", difficulty: "med", concept: "Pigovian tax", points: 1,
+      prompt: "A tax designed to correct a negative externality is called a:",
+      options: ["Pigovian tax, set equal to the external cost per unit",
+        "sales tax", "lump-sum tax", "tariff"], answer: 0,
+      rationale: "A Pigovian tax equal to the external cost makes producers internalize the externality, moving output toward the social optimum." },
+    { id: "ch15_subsidy_positive", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "correcting positive externality", points: 3,
+      prompt: "To correct a positive externality, the government could:",
+      options: ["subsidize the activity so more of it is produced/consumed",
+        "tax the activity to reduce it", "ban the activity",
+        "do nothing \u2014 markets handle positive externalities efficiently"], answer: 0,
+      rationale: "A subsidy equal to the external benefit encourages the additional production/consumption that raises total surplus (e.g., education subsidies)." },
+    { id: "ch15_coase", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "Coase theorem", points: 3,
+      prompt: "The Coase theorem states that if private parties can bargain costlessly over an externality, they:",
+      options: ["can reach the efficient outcome on their own, regardless of the initial assignment of rights",
+        "always need government intervention", "will never reach agreement",
+        "will always produce too much pollution"], answer: 0,
+      rationale: "Coase argued that with well-defined property rights and no transaction costs, private bargaining internalizes the externality and reaches efficiency \u2014 who holds the right affects the distribution, not the efficient quantity." },
+    { id: "ch15_coase_fails", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "why Coase bargaining fails", points: 3,
+      prompt: "Private bargaining often FAILS to solve externalities in practice because of:",
+      options: ["transaction costs \u2014 too many parties, holdouts, or costly negotiation",
+        "the absence of any externality", "government intervention",
+        "the fact that bargaining is always illegal"], answer: 0,
+      rationale: "When many parties are involved (e.g., air pollution affecting millions), the costs of organizing and enforcing an agreement are prohibitive, so private bargaining breaks down and policy is needed." },
+    { id: "ch15_tradable_permits", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "cap and trade", points: 3,
+      prompt: "A key advantage of tradable pollution permits (cap-and-trade) over a uniform quantity limit is that permits:",
+      options: ["let reductions happen where they are cheapest, since firms that can cut cheaply sell permits to those who can't",
+        "allow unlimited pollution", "require every firm to cut by the same amount",
+        "eliminate the need to set any cap"], answer: 0,
+      rationale: "Tradable permits achieve a given pollution target at least cost: firms with low abatement costs cut more and sell permits to firms with high abatement costs \u2014 an efficient allocation of the cleanup." },
+    { id: "ch15_tax_vs_permits", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "corrective tax vs permits", points: 3,
+      prompt: "A corrective tax and a system of tradable permits are similar in that both:",
+      options: ["put a price on pollution, giving firms an incentive to reduce it efficiently",
+        "set the quantity of pollution with certainty", "ban pollution outright",
+        "ignore the cost of abatement"], answer: 0,
+      rationale: "Both are market-based: a tax sets the price of pollution directly; permits set the quantity and let the market determine the price. Both let firms choose the cheapest way to meet the goal." },
+    { id: "ch15_command_control", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "regulation vs market-based", points: 3,
+      prompt: "Compared with command-and-control regulation (e.g., 'every firm must install scrubber X'), economists often prefer market-based tools because they:",
+      options: ["achieve pollution reduction at lower total cost by letting firms find the cheapest abatement",
+        "always allow more pollution", "are easier to write into law",
+        "guarantee identical behavior by every firm"], answer: 0,
+      rationale: "Market-based policies harness firms' own cost information, concentrating cleanup where it's cheapest \u2014 generally reaching a target more cheaply than uniform mandates." },
+    { id: "ch15_internalize", chapter: 15, kind: "mc", render: "text", difficulty: "med", concept: "internalizing the externality", points: 1,
+      prompt: "To 'internalize an externality' means to:",
+      options: ["alter incentives so people account for the external effects of their actions",
+        "ignore the externality", "move production indoors",
+        "eliminate all production"], answer: 0,
+      rationale: "Internalizing means making decision-makers face the true social cost or benefit \u2014 via taxes, subsidies, permits, or property rights \u2014 so private incentives align with social welfare." },
+    { id: "ch15_private_solutions", chapter: 15, kind: "mc", render: "text", difficulty: "med", concept: "private solutions", points: 1,
+      prompt: "Which is a PRIVATE (non-governmental) solution to an externality?",
+      options: ["moral codes, charities, or contracts between the affected parties",
+        "a Pigovian tax", "tradable permits issued by the state",
+        "command-and-control regulation"], answer: 0,
+      rationale: "Private solutions include social norms, charities, integrating businesses, and Coasean bargaining/contracts \u2014 all working without direct government action." },
+    { id: "ch15_written_pollution", chapter: 15, kind: "short", render: "text", difficulty: "hard", concept: "negative externality policy", points: 3,
+      prompt: "A factory emits pollution that harms a nearby community. Explain why the free-market quantity is inefficient, and compare a Pigovian tax with a command-and-control emission limit as ways to fix it. Which do many economists prefer, and why?",
+      answer: null,
+      rubric: "Full credit: (1) the firm ignores external cost, so social cost > private cost and the market overproduces (deadweight loss); (2) a Pigovian tax equal to the external cost internalizes it, reaching the optimum and letting firms choose how to abate; (3) command-and-control mandates specific actions; (4) economists often prefer the tax (or permits) because it achieves the target at lower cost by using firms' abatement-cost information. Partial credit per element.",
+      rationale: "Looking for the overproduction argument plus the tax-vs-mandate comparison and the cost-efficiency preference." },
+    { id: "ch15_written_coase", chapter: 15, kind: "short", render: "text", difficulty: "hard", concept: "Coase theorem application", points: 3,
+      prompt: "A dog owner's barking dog disturbs one neighbor. Explain how, according to the Coase theorem, the two might reach an efficient outcome through private bargaining, and why the same logic often fails for a problem like city-wide air pollution.",
+      answer: null,
+      rubric: "Full credit: (1) with clear property rights and low bargaining costs, the neighbors can negotiate a payment (either direction) that reaches the efficient outcome; (2) the efficient result holds regardless of who has the initial right (rights affect distribution, not efficiency); (3) air pollution involves millions of parties \u2192 high transaction costs, free-riding, holdouts; (4) so private bargaining breaks down and government policy is needed. Partial credit per element.",
+      rationale: "Looking for the costless-bargaining efficiency result and why transaction costs defeat it at scale." },
+    { id: "ch15_optimal_not_zero", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "optimal pollution is not zero", points: 3,
+      prompt: "Most economists argue the socially optimal level of pollution is NOT zero because:",
+      options: ["eliminating all pollution would require giving up too many valuable goods \u2014 the optimum balances marginal benefit and marginal cost of abatement",
+        "pollution is always harmless", "zero pollution is physically impossible only",
+        "firms should never be regulated"], answer: 0,
+      rationale: "Reducing pollution has rising marginal costs (lost output); the optimum is where the marginal benefit of further cleanup equals its marginal cost \u2014 usually a positive, not zero, level of pollution." }
+    ,
+    /* ==================== Chapter 16 — Asymmetric Information / Info Economics ==================== */
+    { id: "ch16_asym_info", chapter: 16, kind: "mc", render: "text", difficulty: "easy", concept: "asymmetric information", points: 1,
+      prompt: "Asymmetric information refers to a situation where:",
+      options: ["one party in a transaction knows more relevant information than the other",
+        "both parties know everything", "neither party has any information",
+        "information is free to all"], answer: 0,
+      rationale: "Asymmetric information means one side (e.g., a used-car seller or an insurance buyer) has private knowledge the other lacks, which can distort markets." },
+    { id: "ch16_adverse_selection", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "adverse selection", points: 3,
+      prompt: "Adverse selection is a problem that arises BEFORE a transaction, when:",
+      options: ["the informed party's hidden characteristics make the mix of goods/people in the market worse (e.g., mostly low-quality used cars)",
+        "one party changes behavior after the deal", "both parties are fully informed",
+        "prices are set by the government"], answer: 0,
+      rationale: "Adverse selection: hidden pre-existing traits (a car's true condition, a person's health risk) cause high-quality goods or low-risk people to exit, leaving a worse-than-average pool." },
+    { id: "ch16_lemons", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "market for lemons", points: 3,
+      prompt: "In Akerlof's 'market for lemons,' used-car buyers can't tell good cars from bad ones. The result is that:",
+      options: ["buyers offer only an average price, good-car owners withdraw, and the market fills with lemons",
+        "only high-quality cars are sold", "prices rise to reflect quality",
+        "the market works perfectly"], answer: 0,
+      rationale: "Because buyers pay only an average price, owners of good cars won't sell, worsening the average quality \u2014 a downward spiral driven by adverse selection." },
+    { id: "ch16_moral_hazard", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "moral hazard", points: 3,
+      prompt: "Moral hazard is a problem that arises AFTER a transaction, when:",
+      options: ["one party changes behavior (takes more risk or less care) because they no longer bear the full consequences",
+        "hidden characteristics distort the market beforehand", "both parties are honest",
+        "there is no insurance"], answer: 0,
+      rationale: "Moral hazard: once insured or unmonitored, a party has weaker incentives to be careful (e.g., an insured driver drives less cautiously) because they don't bear the full cost of their actions." },
+    { id: "ch16_signaling", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "signaling", points: 3,
+      prompt: "'Signaling' addresses asymmetric information when:",
+      options: ["the informed party takes a costly action to credibly reveal its private information (e.g., a warranty signals quality)",
+        "the uninformed party gathers information", "the government sets prices",
+        "both parties stay ignorant"], answer: 0,
+      rationale: "Signaling: the party WITH information takes an action that's only worthwhile if their claim is true \u2014 e.g., a firm offering a long warranty, or a worker earning a degree \u2014 credibly conveying quality." },
+    { id: "ch16_screening", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "screening", points: 3,
+      prompt: "'Screening' differs from signaling in that:",
+      options: ["the UNINFORMED party takes an action to induce the informed party to reveal information (e.g., insurers offering different deductible options)",
+        "the informed party reveals information", "no information is ever revealed",
+        "it only applies to labor markets"], answer: 0,
+      rationale: "Screening is done by the uninformed side \u2014 e.g., an insurer offering a menu of policies so that high- and low-risk customers self-select into different plans, revealing their type." },
+    { id: "ch16_education_signal", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "education as a signal", points: 3,
+      prompt: "The 'signaling' theory of education argues that a college degree can raise wages even if college teaches no useful skills, because:",
+      options: ["completing a degree signals pre-existing ability/persistence that employers value",
+        "education always adds human capital", "degrees are randomly assigned",
+        "employers ignore education"], answer: 0,
+      rationale: "In the pure signaling view, the degree is valuable as a credible signal of underlying traits (ability, work ethic) that only capable people can attain \u2014 separate from the human-capital (skill-building) view." },
+    { id: "ch16_warranty_signal", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "warranties as signals", points: 3,
+      prompt: "A generous warranty can serve as a credible quality signal because:",
+      options: ["it is cheap to offer for a high-quality product but expensive for a low-quality one",
+        "all firms can offer it equally cheaply", "it conveys no information",
+        "customers ignore warranties"], answer: 0,
+      rationale: "A signal is credible only if it's costlier for low-quality types. A firm confident in its product expects few claims, so a strong warranty costs it little \u2014 low-quality firms can't profitably imitate it." },
+    { id: "ch16_insurance_adverse", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "adverse selection in insurance", points: 3,
+      prompt: "Adverse selection in health insurance means that, at a given premium:",
+      options: ["sicker (higher-risk) people are more likely to buy, raising insurers' costs and premiums",
+        "only healthy people buy insurance", "risk has no effect on who buys",
+        "premiums always fall over time"], answer: 0,
+      rationale: "Those who know they're high-risk value insurance most, so they disproportionately enroll. This raises average claims and premiums, which can drive out low-risk buyers \u2014 a selection spiral." },
+    { id: "ch16_deductible", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "deductibles and moral hazard", points: 3,
+      prompt: "Insurance deductibles and co-pays help reduce moral hazard by:",
+      options: ["making the insured bear part of the cost, restoring some incentive for care",
+        "eliminating all risk for the insured", "increasing claims",
+        "removing the insured's incentive to be careful"], answer: 0,
+      rationale: "By leaving the insured responsible for part of any loss, deductibles/co-pays restore some 'skin in the game,' curbing the careless behavior that full coverage would encourage." },
+    { id: "ch16_efficiency_wages", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "efficiency wages / moral hazard in labor", points: 3,
+      prompt: "Paying 'efficiency wages' (above the market wage) can reduce the moral-hazard problem of workers shirking because:",
+      options: ["a higher wage makes the job more valuable to keep, so workers exert more effort to avoid being fired",
+        "it lowers the firm's costs", "it guarantees workers never quit",
+        "it has no effect on effort"], answer: 0,
+      rationale: "Above-market pay raises the cost of job loss, giving workers an incentive to work hard rather than risk being caught shirking and dismissed \u2014 addressing the hidden-action (moral hazard) problem." },
+    { id: "ch16_written_asym", chapter: 16, kind: "short", render: "text", difficulty: "hard", concept: "adverse selection vs moral hazard", points: 3,
+      prompt: "Distinguish adverse selection from moral hazard, giving one example of each from insurance markets. For each, name one mechanism that helps reduce the problem.",
+      answer: null,
+      rubric: "Full credit: (1) adverse selection = hidden characteristics BEFORE the deal (e.g., high-risk people buying more insurance); mechanism: screening/risk classification, mandates; (2) moral hazard = hidden actions AFTER the deal (e.g., insured taking more risk); mechanism: deductibles/co-pays/monitoring; (3) clear example for each; (4) a valid remedy for each. Partial credit per element.",
+      rationale: "Looking for the before/after distinction, correct examples, and a remedy for each." },
+    { id: "ch16_written_signaling", chapter: 16, kind: "short", render: "text", difficulty: "hard", concept: "signaling analysis", points: 3,
+      prompt: "Explain what makes an action a CREDIBLE signal in a market with asymmetric information. Then evaluate whether a job applicant's expensive college degree is best understood as human capital, a signal, or both.",
+      answer: null,
+      rubric: "Full credit: (1) a credible signal must be costlier (or only feasible) for the low-quality type, so imitation isn't worthwhile; (2) human-capital view: college builds productive skills; (3) signaling view: the degree reveals pre-existing ability/persistence; (4) a reasonable conclusion that it is likely both, with justification. Partial credit per element.",
+      rationale: "Looking for the differential-cost credibility condition and a reasoned human-capital vs signaling evaluation." }
+    ,
+    /* ==================== Chapter 17 — Behavioral Economics ==================== */
+    { id: "ch17_definition", chapter: 17, kind: "mc", render: "text", difficulty: "easy", concept: "behavioral economics", points: 1,
+      prompt: "Behavioral economics studies:",
+      options: ["how real people actually make decisions, often departing from perfect rationality",
+        "only perfectly rational agents", "the behavior of firms only",
+        "how animals respond to prices"], answer: 0,
+      rationale: "Behavioral economics incorporates insights from psychology to explain systematic ways people deviate from the fully rational 'homo economicus' model." },
+    { id: "ch17_bounded_rationality", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "bounded rationality", points: 3,
+      prompt: "'Bounded rationality' means that people:",
+      options: ["try to make good decisions but are limited by cognitive capacity, information, and time, so they use rules of thumb",
+        "are always perfectly rational", "never make good decisions",
+        "ignore all information"], answer: 0,
+      rationale: "Bounded rationality: people are intendedly rational but constrained, so they rely on heuristics (mental shortcuts) rather than solving every problem optimally." },
+    { id: "ch17_overconfidence", chapter: 17, kind: "mc", render: "text", difficulty: "med", concept: "overconfidence", points: 1,
+      prompt: "Evidence that most drivers rate themselves 'above average' illustrates the bias of:",
+      options: ["overconfidence", "loss aversion", "anchoring", "hyperbolic discounting"], answer: 0,
+      rationale: "Overconfidence is the systematic tendency to overestimate one's own abilities or the precision of one's knowledge." },
+    { id: "ch17_loss_aversion", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "loss aversion", points: 3,
+      prompt: "Loss aversion describes the finding that people:",
+      options: ["feel the pain of a loss more strongly than the pleasure of an equal-sized gain",
+        "value gains and losses equally", "always prefer risk",
+        "ignore losses entirely"], answer: 0,
+      rationale: "Loss aversion: a $100 loss hurts more than a $100 gain feels good. It helps explain the endowment effect and reluctance to sell at a loss." },
+    { id: "ch17_endowment", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "endowment effect", points: 3,
+      prompt: "The 'endowment effect' is the tendency to:",
+      options: ["value a good more highly simply because one owns it",
+        "value goods one doesn't own more", "ignore ownership when valuing goods",
+        "always undervalue what one owns"], answer: 0,
+      rationale: "People often demand much more to give up an item than they'd have paid to acquire it \u2014 a consequence of loss aversion applied to things one already possesses." },
+    { id: "ch17_anchoring", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "anchoring", points: 3,
+      prompt: "'Anchoring' occurs when:",
+      options: ["an initial number (even an irrelevant one) influences subsequent judgments or valuations",
+        "people ignore all reference points", "decisions are perfectly rational",
+        "prices never affect willingness to pay"], answer: 0,
+      rationale: "Anchoring: an arbitrary starting figure (like a suggested price) pulls estimates toward it, biasing negotiations and valuations." },
+    { id: "ch17_framing", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "framing effects", points: 3,
+      prompt: "A 'framing effect' means that people's choices can change when:",
+      options: ["the same options are described differently (e.g., '90% survival' vs '10% mortality')",
+        "the options are genuinely different", "prices change", "income changes"], answer: 0,
+      rationale: "Framing: logically equivalent descriptions produce different choices because presentation affects perception \u2014 a departure from the rationality assumption that framing shouldn't matter." },
+    { id: "ch17_time_inconsistency", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "time inconsistency / present bias", points: 3,
+      prompt: "A person who plans to start dieting 'tomorrow' but never does is exhibiting:",
+      options: ["time inconsistency (present bias) \u2014 overweighting immediate costs and benefits",
+        "perfect self-control", "loss aversion", "the endowment effect"], answer: 0,
+      rationale: "Present-biased (hyperbolic) preferences make people place disproportionate weight on the present, so plans made for the future are reversed when 'the future' arrives." },
+    { id: "ch17_sunk_cost_fallacy", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "sunk cost fallacy", points: 3,
+      prompt: "Continuing a failing project because 'we've already invested so much' is the:",
+      options: ["sunk-cost fallacy \u2014 letting unrecoverable past costs drive forward-looking decisions",
+        "rational response to marginal analysis", "endowment effect", "anchoring bias"], answer: 0,
+      rationale: "Rational decisions ignore sunk (unrecoverable) costs and weigh only future costs and benefits. The fallacy is letting past investment justify throwing good money after bad." },
+    { id: "ch17_ultimatum", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "fairness / ultimatum game", points: 3,
+      prompt: "In ultimatum-game experiments, responders often reject small but positive offers. This suggests that people:",
+      options: ["care about fairness, not just their own monetary payoff",
+        "are purely self-interested", "never reject any offer",
+        "always accept the smallest offer"], answer: 0,
+      rationale: "A purely self-interested responder would accept any positive amount. Frequent rejection of 'unfair' low offers shows that fairness and reciprocity enter people's preferences." },
+    { id: "ch17_nudge", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "nudges and defaults", points: 3,
+      prompt: "Automatically enrolling employees in a retirement plan (while letting them opt out) dramatically raises participation. This works because of:",
+      options: ["default bias / status-quo bias \u2014 people tend to stick with the default option",
+        "loss aversion only", "perfect rationality", "anchoring on wages"], answer: 0,
+      rationale: "People disproportionately stick with defaults (inertia/status-quo bias), so setting a beneficial default ('nudge') strongly influences behavior without restricting choice." },
+    { id: "ch17_mental_accounting", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "mental accounting", points: 3,
+      prompt: "Treating a $500 tax refund as 'fun money' to splurge, while carefully budgeting regular salary, is an example of:",
+      options: ["mental accounting \u2014 treating money differently depending on its source or label",
+        "rational fungibility of money", "loss aversion", "anchoring"], answer: 0,
+      rationale: "Money is fungible, so rationally its source shouldn't matter. Mental accounting is the tendency to put money in separate 'accounts' and treat them by different rules." },
+    { id: "ch17_written_biases", chapter: 17, kind: "short", render: "text", difficulty: "hard", concept: "behavioral biases application", points: 3,
+      prompt: "Choose TWO behavioral concepts (e.g., loss aversion, present bias, anchoring, framing, sunk-cost fallacy). Define each and give a concrete real-world example showing how it leads people to depart from the standard rational-choice prediction.",
+      answer: null,
+      rubric: "Full credit: for EACH of two concepts \u2014 (a) a correct definition and (b) a concrete, valid example showing the departure from rationality. Two concepts fully handled = full credit; one concept = partial.",
+      rationale: "Looking for correct definitions and valid, concrete examples for two distinct behavioral concepts." },
+    { id: "ch17_written_nudge", chapter: 17, kind: "short", render: "text", difficulty: "hard", concept: "nudges and policy", points: 3,
+      prompt: "Explain what a 'nudge' is and why default options are so powerful. Then give one argument in favor of using nudges in policy and one concern critics raise about them.",
+      answer: null,
+      rubric: "Full credit: (1) a nudge alters the choice architecture to influence decisions without removing options or changing incentives much; (2) defaults are powerful due to status-quo bias/inertia; (3) a pro (helps people overcome biases, cheap, preserves freedom of choice); (4) a con (paternalism, who decides what's 'good,' manipulation concerns). Partial credit per element.",
+      rationale: "Looking for the definition, the status-quo-bias mechanism, and a balanced pro/con on nudge policy." }
+    ,
+    /* ==================== TOP-UP BATCH (Ch12-17) ==================== */
+
+    /* --- Ch12 (need 5) --- */
+    { id: "ch12_nonprice_comp", chapter: 12, kind: "mc", render: "text", difficulty: "med", concept: "non-price competition", points: 1,
+      prompt: "Monopolistically competitive firms compete heavily through:",
+      options: ["product differentiation and advertising (non-price competition)",
+        "identical pricing only", "producing identical goods", "cutting output to zero"], answer: 0,
+      rationale: "Because products are differentiated, firms compete on features, quality, branding, and advertising \u2014 not just price." },
+    { id: "ch12_number_products", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "socially optimal variety", points: 3,
+      prompt: "Whether a monopolistically competitive market provides too many or too few products is ambiguous because entry creates:",
+      options: ["a positive variety externality and a negative business-stealing externality that work in opposite directions",
+        "only benefits", "only costs", "no externalities at all"], answer: 0,
+      rationale: "Entry adds valuable variety (positive) but steals business from incumbents (negative). Since these pull opposite ways, economists can't say in general whether there's too much or too little entry." },
+    { id: "ch12_vs_monopoly", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "mon. comp. vs monopoly", points: 3,
+      prompt: "A monopolistically competitive firm differs from a monopoly mainly because:",
+      options: ["free entry drives its long-run economic profit to zero",
+        "it faces an upward-sloping demand curve", "it is a price taker",
+        "it never advertises"], answer: 0,
+      rationale: "Both face downward-sloping demand and set MR=MC, but free entry in monopolistic competition competes away long-run profit \u2014 a monopoly (protected by barriers) can keep earning it." },
+    { id: "ch12_markup_reason", chapter: 12, kind: "mc", render: "text", difficulty: "hard", concept: "why firms welcome customers", points: 3,
+      prompt: "Because price exceeds marginal cost, a monopolistically competitive firm:",
+      options: ["is happy to gain an extra customer at the going price \u2014 hence advertising and promotions",
+        "loses money on each extra sale", "wants fewer customers",
+        "sets price equal to marginal cost"], answer: 0,
+      rationale: "With P > MC, each additional sale adds more to revenue than to cost, so firms actively seek more customers through advertising and promotions." },
+    { id: "ch12_written_efficiency", chapter: 12, kind: "short", render: "text", difficulty: "hard", concept: "welfare of monopolistic competition", points: 3,
+      prompt: "Is monopolistic competition socially wasteful? Present the case that it is inefficient AND the offsetting benefit it provides. Conclude with a balanced judgment.",
+      answer: null,
+      rubric: "Full credit: (1) inefficiency: P > MC (markup, lost trades) and excess capacity (above min ATC); (2) offsetting benefit: product variety consumers value; (3) the business-stealing vs variety externalities make net welfare ambiguous; (4) a balanced conclusion. Partial credit per element.",
+      rationale: "Looking for the P>MC/excess-capacity inefficiency, the variety benefit, and a balanced conclusion." },
+
+    /* --- Ch13 (need 9): payoff-matrix numeric + application --- */
+    { id: "ch13_pd_payoff", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "reading a payoff matrix", points: 3,
+      prompt: "Two firms choose High or Low output. Profits (Firm A, Firm B): both Low = (50, 50); both High = (30, 30); A High/B Low = (60, 20); A Low/B High = (20, 60). What is the Nash equilibrium?",
+      options: ["Both choose High (30, 30)", "Both choose Low (50, 50)",
+        "A High, B Low (60, 20)", "There is no Nash equilibrium"], answer: 0,
+      rationale: "High is a dominant strategy for each (60>50 if rival Low; 30>20 if rival High). So both play High \u2192 (30,30), a Nash equilibrium that is worse for both than mutual Low (50,50)." },
+    { id: "ch13_pd_cooperative", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "cooperative outcome", points: 3,
+      prompt: "In that same game (both Low = 50 each; both High = 30 each), the OUTCOME THAT MAXIMIZES JOINT PROFIT is:",
+      options: ["both choose Low (total 100) \u2014 but it isn't a Nash equilibrium",
+        "both choose High (total 60)", "one High, one Low (total 80)",
+        "there is no way to maximize joint profit"], answer: 0,
+      rationale: "Joint profit is highest when both cooperate at Low (50+50=100). But since each is individually tempted to defect to High, this cooperative outcome isn't self-enforcing in a one-shot game." },
+    { id: "ch13_dominant_check", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "identifying dominant strategy", points: 3,
+      prompt: "A firm earns more by advertising than not advertising REGARDLESS of what its rival does. For this firm, advertising is:",
+      options: ["a dominant strategy", "a dominated strategy",
+        "irrelevant", "only optimal if the rival advertises"], answer: 0,
+      rationale: "A strategy that yields a higher payoff no matter what the opponent does is a dominant strategy \u2014 here, advertising." },
+    { id: "ch13_oligopoly_price", chapter: 13, kind: "mc", render: "text", difficulty: "med", concept: "oligopoly price range", points: 2,
+      prompt: "Compared with monopoly and perfect competition, the price in an oligopoly typically lies:",
+      options: ["between the monopoly price and the competitive price",
+        "above the monopoly price", "below the competitive price",
+        "exactly at the competitive price always"], answer: 0,
+      rationale: "Oligopolists produce more than a monopoly (each ignores the price effect on rivals' output) but less than perfect competition, so price falls in between." },
+    { id: "ch13_kinked", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "price rigidity", points: 3,
+      prompt: "Oligopoly prices are sometimes 'sticky' (change infrequently) partly because firms fear that:",
+      options: ["if they cut price, rivals will match it (starting a price war), but if they raise it, rivals won't follow",
+        "customers never respond to prices", "costs never change",
+        "the government forbids price changes"], answer: 0,
+      rationale: "The classic intuition: rivals match price cuts (so cutting gains little and risks a war) but not price increases (so raising loses customers) \u2014 discouraging changes in either direction." },
+    { id: "ch13_collusion_detect", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "sustaining collusion", points: 3,
+      prompt: "Collusion is EASIER to sustain when:",
+      options: ["there are few firms, stable demand, and cheating is easy to detect",
+        "there are many firms and volatile demand", "cheating is hard to detect",
+        "products are highly differentiated and secret"], answer: 0,
+      rationale: "Few firms, transparent prices, and easy detection of cheating make punishment credible and collusion stable; many firms, secrecy, and volatility make it collapse." },
+    { id: "ch13_game_advertise", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "advertising dilemma", points: 3,
+      prompt: "Two cigarette firms would BOTH be better off not advertising, yet both advertise heavily. This is because:",
+      options: ["advertising is each firm's dominant strategy, producing a prisoners'-dilemma outcome worse for both",
+        "advertising is banned", "neither firm benefits from advertising",
+        "they have successfully colluded"], answer: 0,
+      rationale: "If each firm gains customers by advertising regardless of the rival's choice, advertising is dominant \u2014 both do it, spending heavily and ending up with the same market shares but lower profits (a dilemma)." },
+    { id: "ch13_written_oligopoly_output", chapter: 13, kind: "short", render: "text", difficulty: "hard", concept: "why oligopoly output is between", points: 3,
+      prompt: "Explain why total output in an oligopoly is generally greater than a monopoly's but less than a competitive market's. Use the 'output effect' and 'price effect' in your answer.",
+      answer: null,
+      rubric: "Full credit: (1) each firm weighs the output effect (extra units sold at the price) vs the price effect (lower price on its own units); (2) an oligopolist bears the price effect only on its OWN output, not rivals', so it's more willing to expand than a monopoly \u2192 more output; (3) but each still restricts somewhat (unlike price-taking competitors) \u2192 less than competition; (4) so oligopoly output/price lies between. Partial credit per element.",
+      rationale: "Looking for the output vs price effect logic and why partial internalization puts oligopoly between monopoly and competition." },
+    { id: "ch13_number_and_price", chapter: 13, kind: "mc", render: "text", difficulty: "med", concept: "entry and oligopoly price", points: 2,
+      prompt: "As more firms enter an oligopolistic market, the equilibrium price tends to:",
+      options: ["fall toward marginal cost", "rise toward the monopoly price",
+        "stay exactly at the monopoly level", "become undefined"], answer: 0,
+      rationale: "More firms means each gives less weight to the price effect, expanding output and pushing price down toward marginal cost \u2014 approaching the competitive outcome." },
+
+    /* --- Ch14 (need 6) --- */
+    { id: "ch14_compensating_diff", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "compensating differentials", points: 3,
+      prompt: "Dangerous or unpleasant jobs often pay more than safe, pleasant jobs requiring similar skill. Economists call this a:",
+      options: ["compensating differential", "human-capital premium",
+        "monopsony wage", "minimum wage effect"], answer: 0,
+      rationale: "A compensating differential is the extra pay that offsets the nonmonetary disadvantages (risk, discomfort) of a job, so workers are willing to take it." },
+    { id: "ch14_union", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "unions and wages", points: 3,
+      prompt: "By bargaining collectively, a union that raises wages above the competitive level typically causes:",
+      options: ["higher wages for employed members but fewer jobs in the unionized sector",
+        "higher employment in that sector", "no change in employment",
+        "lower wages for members"], answer: 0,
+      rationale: "Like a binding wage floor, an above-equilibrium union wage reduces the quantity of labor demanded \u2014 helping those who keep jobs but reducing employment in that sector." },
+    { id: "ch14_capital_return", chapter: 14, kind: "mc", render: "text", difficulty: "med", concept: "return to capital", points: 1,
+      prompt: "In competitive markets, the rental price of capital tends to equal:",
+      options: ["the value of capital's marginal product", "zero",
+        "the wage rate", "the price of output"], answer: 0,
+      rationale: "The marginal-productivity theory of factor prices applies to capital too: it earns the value of its marginal product in equilibrium." },
+    { id: "ch14_superstar", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "superstar phenomenon", points: 3,
+      prompt: "Top entertainers and athletes earn enormous incomes partly because:",
+      options: ["technology lets the best performer serve a huge market at low marginal cost, so small talent gaps yield large income gaps",
+        "they work far more hours than others", "governments set their pay",
+        "their marginal product is unmeasurable"], answer: 0,
+      rationale: "The 'superstar' effect: when every consumer wants the best and technology (recordings, broadcasts) lets one person supply millions, tiny differences in ability translate into huge differences in earnings." },
+    { id: "ch14_discrimination", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "discrimination and markets", points: 3,
+      prompt: "Economic theory suggests that in COMPETITIVE markets, employer discrimination that ignores productivity tends to:",
+      options: ["be costly to the discriminating firm, since rivals can profit by hiring the productive workers it rejects",
+        "always persist without limit", "raise the discriminating firm's profit",
+        "have no effect on anyone"], answer: 0,
+      rationale: "A firm that passes over productive workers for non-productivity reasons forgoes profit; non-discriminating competitors can hire them cheaply and out-compete it \u2014 so competition tends to erode (though not always eliminate) such discrimination." },
+    { id: "ch14_written_superstar", chapter: 14, kind: "short", render: "text", difficulty: "hard", concept: "superstar markets", points: 3,
+      prompt: "Explain the two conditions that give rise to 'superstar' labor markets with extreme income inequality, and why an ordinary excellent local plumber does not become a superstar.",
+      answer: null,
+      rubric: "Full credit: (1) every customer wants the best available product/performer; (2) the good can be produced at low marginal cost so one seller can supply the whole market (recordings/broadcast); (3) a plumber must be physically present, so their market is geographically limited and can't scale; (4) hence no superstar effect for plumbing. Partial credit per element.",
+      rationale: "Looking for the two superstar conditions and why non-scalable local services don't qualify." }
+    ,
+    /* --- Ch15 (need 5) --- */
+    { id: "ch15_technology_spillover", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "technology spillover", points: 3,
+      prompt: "Research and development often creates a 'technology spillover' \u2014 a positive externality. This implies that, without policy, firms will:",
+      options: ["invest less in R&D than is socially optimal", "invest more than optimal",
+        "invest the optimal amount", "never invest in R&D"], answer: 0,
+      rationale: "Because a firm can't capture all the benefits its innovations confer on others, private R&D falls short of the social optimum \u2014 a rationale for patents and research subsidies." },
+    { id: "ch15_double_counting", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "social vs private cost", points: 3,
+      prompt: "The 'social cost' curve of a good with a negative externality lies ABOVE the private supply curve by an amount equal to:",
+      options: ["the external cost per unit", "the market price",
+        "consumer surplus", "the firm's fixed cost"], answer: 0,
+      rationale: "Social cost = private cost + external cost. The vertical distance between the social-cost and private-supply curves is exactly the per-unit external cost." },
+    { id: "ch15_gas_tax", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "Pigovian tax examples", points: 3,
+      prompt: "A gasoline tax is often defended as a corrective (Pigovian) tax because gasoline use causes:",
+      options: ["negative externalities like pollution and congestion",
+        "positive externalities", "no externalities", "only private costs"], answer: 0,
+      rationale: "Driving imposes external costs (pollution, congestion, accident risk) on others; a gas tax makes drivers internalize some of these, and it also raises revenue \u2014 a 'double dividend.'" },
+    { id: "ch15_permits_vs_tax_uncertainty", chapter: 15, kind: "mc", render: "text", difficulty: "hard", concept: "tax vs permits under uncertainty", points: 3,
+      prompt: "A key difference between a pollution tax and a fixed quantity of tradable permits is that:",
+      options: ["a tax fixes the PRICE of pollution while permits fix the QUANTITY of pollution",
+        "both fix the price", "both fix the quantity",
+        "neither affects pollution"], answer: 0,
+      rationale: "A tax sets the price and lets quantity adjust; a permit cap sets the total quantity and lets the permit price adjust. Which is preferable depends on the costs of missing a price vs a quantity target." },
+    { id: "ch15_written_optimal_pollution", chapter: 15, kind: "short", render: "text", difficulty: "hard", concept: "optimal level of pollution", points: 3,
+      prompt: "Explain why the economically efficient level of pollution is generally not zero. Use the concepts of marginal benefit and marginal cost of pollution reduction.",
+      answer: null,
+      rubric: "Full credit: (1) reducing pollution has benefits (less harm) but also costs (lost output/abatement expense); (2) the marginal benefit of cleanup falls and marginal cost rises as pollution nears zero; (3) the optimum is where marginal benefit of reduction = marginal cost of reduction; (4) that point is usually a positive level of pollution, since eliminating the last bit costs more than it's worth. Partial credit per element.",
+      rationale: "Looking for the MB=MC-of-abatement logic yielding a positive optimal pollution level." },
+
+    /* --- Ch16 (need 12) --- */
+    { id: "ch16_hidden_char_action", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "hidden characteristics vs actions", points: 3,
+      prompt: "Adverse selection involves hidden ____, while moral hazard involves hidden ____.",
+      options: ["characteristics; actions", "actions; characteristics",
+        "prices; costs", "costs; prices"], answer: 0,
+      rationale: "Adverse selection = hidden characteristics known before the deal; moral hazard = hidden actions taken after the deal." },
+    { id: "ch16_used_car_remedy", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "remedies for lemons", points: 3,
+      prompt: "Which helps overcome the 'lemons' problem in used cars?",
+      options: ["independent inspections, warranties, and dealer reputation",
+        "hiding the car's history", "banning used-car sales",
+        "charging everyone the average price"], answer: 0,
+      rationale: "Mechanisms that credibly reveal quality \u2014 inspections, certified pre-owned warranties, reputations, return policies \u2014 reduce the information gap that drives adverse selection." },
+    { id: "ch16_insurance_mandate", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "mandates and adverse selection", points: 3,
+      prompt: "Requiring everyone to buy health insurance (an individual mandate) addresses adverse selection by:",
+      options: ["bringing low-risk people into the pool, lowering average cost and stabilizing premiums",
+        "excluding healthy people", "raising premiums for everyone",
+        "eliminating the need for insurers"], answer: 0,
+      rationale: "A mandate prevents low-risk individuals from opting out, keeping the risk pool balanced so premiums don't spiral upward as they would if only high-risk people enrolled." },
+    { id: "ch16_principal_agent", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "principal-agent problem", points: 3,
+      prompt: "The 'principal-agent problem' arises when:",
+      options: ["an agent (e.g., an employee) can take hidden actions that don't serve the principal's (employer's) interest",
+        "two equally informed parties trade", "there is no delegation of tasks",
+        "the government owns all firms"], answer: 0,
+      rationale: "When a principal delegates to an agent whose actions can't be perfectly monitored, the agent may pursue their own interest \u2014 a moral-hazard problem addressed by incentives and monitoring." },
+    { id: "ch16_stock_options", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "incentive contracts", points: 3,
+      prompt: "Paying executives partly in stock or options is intended to reduce the principal-agent problem by:",
+      options: ["aligning the manager's payoff with the firm's performance (owners' interest)",
+        "guaranteeing a fixed salary", "removing all risk from managers",
+        "hiding the firm's performance"], answer: 0,
+      rationale: "Tying pay to firm value gives managers a personal stake in outcomes owners care about, mitigating the hidden-action problem \u2014 though it can create new distortions (excessive risk-taking)." },
+    { id: "ch16_screening_insurance", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "screening menus", points: 3,
+      prompt: "An insurer offers two policies: high-premium/low-deductible and low-premium/high-deductible. This menu SCREENS customers because:",
+      options: ["high-risk buyers tend to pick the low-deductible plan, revealing their type through their choice",
+        "everyone picks the same plan", "it reveals nothing about risk",
+        "it forces buyers to disclose medical records"], answer: 0,
+      rationale: "By designing options so that different risk types prefer different plans, the uninformed insurer induces customers to self-select \u2014 screening that reveals hidden risk through choices." },
+    { id: "ch16_reputation", chapter: 16, kind: "mc", render: "text", difficulty: "med", concept: "reputation", points: 1,
+      prompt: "Online seller ratings and reviews help solve information problems mainly by:",
+      options: ["building reputations that give sellers an incentive to maintain quality",
+        "hiding seller behavior", "eliminating all bad sellers instantly",
+        "setting prices"], answer: 0,
+      rationale: "Reputation systems make past behavior visible, so sellers who cheat lose future business \u2014 incentivizing honesty and quality even among strangers." },
+    { id: "ch16_political_info", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "rational ignorance", points: 3,
+      prompt: "'Rational ignorance' in the context of voting means that a voter:",
+      options: ["rationally chooses not to gather costly information because one vote is unlikely to be decisive",
+        "is irrational for not voting", "always fully informs themselves",
+        "has perfect information"], answer: 0,
+      rationale: "Since the cost of becoming informed exceeds the tiny chance of a single vote changing the outcome, staying uninformed can be individually rational \u2014 a challenge for democracy." },
+    { id: "ch16_condorcet", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "Condorcet paradox", points: 3,
+      prompt: "The Condorcet paradox shows that majority-rule voting over three or more options can:",
+      options: ["produce intransitive (cyclic) social preferences even when individuals' preferences are transitive",
+        "always yield a clear winner", "never produce a winner",
+        "eliminate the need for voting"], answer: 0,
+      rationale: "With cyclical group preferences (A beats B, B beats C, C beats A), the outcome can depend on the agenda/order of votes \u2014 majority rule doesn't always yield a consistent social ranking." },
+    { id: "ch16_arrow", chapter: 16, kind: "mc", render: "text", difficulty: "hard", concept: "Arrow's impossibility theorem", points: 3,
+      prompt: "Arrow's impossibility theorem states that:",
+      options: ["no voting system can perfectly aggregate individual preferences into social preferences while satisfying a set of reasonable conditions",
+        "majority rule is always fair", "markets always fail",
+        "dictatorship is efficient"], answer: 0,
+      rationale: "Arrow proved that no rank-order voting rule can simultaneously satisfy a small set of seemingly reasonable fairness criteria (beyond dictatorship) \u2014 a fundamental limit on aggregating preferences." },
+    { id: "ch16_written_lemons", chapter: 16, kind: "short", render: "text", difficulty: "hard", concept: "lemons market analysis", points: 3,
+      prompt: "Explain the 'market for lemons' and how it can cause a market to unravel. Then describe two mechanisms \u2014 one used by sellers and one by buyers \u2014 that can restore trade.",
+      answer: null,
+      rubric: "Full credit: (1) buyers can't tell quality, so they pay only an average price; (2) good-quality owners withdraw, lowering average quality, which lowers price further (unraveling); (3) seller mechanism: signaling (warranties, certification, reputation); (4) buyer mechanism: screening (inspections, test drives, history reports). Partial credit per element.",
+      rationale: "Looking for the unraveling logic plus one seller-side and one buyer-side remedy." },
+    { id: "ch16_written_moral_hazard", chapter: 16, kind: "short", render: "text", difficulty: "hard", concept: "moral hazard remedies", points: 3,
+      prompt: "Define moral hazard and give a workplace example. Explain two different ways an employer can reduce it.",
+      answer: null,
+      rubric: "Full credit: (1) moral hazard = hidden action after an agreement when a party doesn't bear full consequences; (2) a valid workplace example (worker shirking when unmonitored); (3) remedy one (monitoring/supervision); (4) remedy two (incentive pay, efficiency wages, or profit-sharing). Partial credit per element.",
+      rationale: "Looking for the definition, a valid example, and two distinct remedies." },
+
+    /* --- Ch17 (need 11) --- */
+    { id: "ch17_availability", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "availability heuristic", points: 3,
+      prompt: "People overestimate the risk of dramatic events (plane crashes, shark attacks) relative to mundane ones (car crashes). This reflects the:",
+      options: ["availability heuristic \u2014 judging probability by how easily examples come to mind",
+        "endowment effect", "sunk-cost fallacy", "anchoring bias"], answer: 0,
+      rationale: "The availability heuristic leads people to overweight vivid, memorable events, distorting risk perception away from actual frequencies." },
+    { id: "ch17_confirmation", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "confirmation bias", points: 3,
+      prompt: "An investor who seeks out only news that supports a stock they already own is showing:",
+      options: ["confirmation bias", "loss aversion", "the endowment effect", "framing"], answer: 0,
+      rationale: "Confirmation bias is the tendency to seek, interpret, and remember information in a way that confirms one's prior beliefs, while discounting contrary evidence." },
+    { id: "ch17_status_quo", chapter: 17, kind: "mc", render: "text", difficulty: "med", concept: "status quo bias", points: 1,
+      prompt: "Sticking with a default insurance plan year after year without reevaluating reflects:",
+      options: ["status-quo bias", "overconfidence", "the availability heuristic", "fairness preferences"], answer: 0,
+      rationale: "Status-quo bias is the preference for keeping things as they are, a key reason default options are so influential." },
+    { id: "ch17_rational_model", chapter: 17, kind: "mc", render: "text", difficulty: "med", concept: "standard model contrast", points: 1,
+      prompt: "The standard economic model assumes people are rational maximizers. Behavioral economics argues this is:",
+      options: ["a useful approximation that nonetheless misses systematic, predictable deviations",
+        "completely correct in all cases", "useless and should be discarded entirely",
+        "only about firms, not people"], answer: 0,
+      rationale: "Behavioral economics doesn't reject optimization wholesale; it documents systematic biases the standard model misses, refining rather than replacing it." },
+    { id: "ch17_gambler", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "gambler's fallacy", points: 3,
+      prompt: "After a coin lands heads five times, believing tails is 'due' is the:",
+      options: ["gambler's fallacy \u2014 wrongly thinking independent events are self-correcting",
+        "availability heuristic", "endowment effect", "loss aversion"], answer: 0,
+      rationale: "The gambler's fallacy is the mistaken belief that past independent outcomes change future probabilities; a fair coin remains 50/50 regardless of history." },
+    { id: "ch17_present_bias_saving", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "present bias and saving", points: 3,
+      prompt: "Present bias helps explain why many people:",
+      options: ["save too little for retirement despite intending to save more",
+        "always save the optimal amount", "never consume in the present",
+        "ignore the present entirely"], answer: 0,
+      rationale: "Present-biased preferences make immediate consumption very tempting, so people repeatedly postpone saving \u2014 a rationale for automatic-enrollment retirement plans." },
+    { id: "ch17_commitment", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "commitment devices", points: 3,
+      prompt: "A person who puts money in an account with an early-withdrawal penalty to force themselves to save is using a:",
+      options: ["commitment device to overcome present bias",
+        "sunk cost", "signal", "framing effect"], answer: 0,
+      rationale: "A commitment device deliberately restricts one's future choices to counteract anticipated self-control problems (present bias) \u2014 e.g., penalty-locked savings, gym contracts." },
+    { id: "ch17_fairness_pricing", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "fairness in pricing", points: 3,
+      prompt: "Firms often avoid raising prices sharply during emergencies (e.g., snow shovels in a blizzard) even when demand spikes, because:",
+      options: ["consumers perceive such increases as unfair and may punish the firm later",
+        "it is always illegal", "higher prices reduce their profit",
+        "demand is perfectly elastic"], answer: 0,
+      rationale: "Perceptions of fairness affect behavior: customers may boycott or resent 'price gouging,' so firms sometimes forgo short-run profit to preserve goodwill \u2014 a departure from pure profit-maximization." },
+    { id: "ch17_choice_overload", chapter: 17, kind: "mc", render: "text", difficulty: "hard", concept: "choice overload", points: 3,
+      prompt: "Offering consumers a very large number of options can sometimes REDUCE the likelihood they buy anything. This 'choice overload' challenges the standard assumption that:",
+      options: ["more options are always weakly better for a rational chooser",
+        "people dislike all choices", "prices determine demand",
+        "firms maximize profit"], answer: 0,
+      rationale: "Standard theory says extra options can't hurt (you can ignore them). Choice overload shows that too many options can overwhelm people, causing them to defer or avoid deciding." },
+    { id: "ch17_written_behavioral_policy", chapter: 17, kind: "short", render: "text", difficulty: "hard", concept: "behavioral policy design", points: 3,
+      prompt: "A government wants more people to save for retirement. Using behavioral concepts, explain why simply offering a savings program may not work, and design two features (based on behavioral insights) that would raise participation.",
+      answer: null,
+      rubric: "Full credit: (1) present bias/procrastination and status-quo bias mean people intend to enroll but never do; (2) feature one: automatic enrollment (default) so inertia works FOR saving; (3) feature two: auto-escalation of contributions, or a commitment device, or simplification; (4) explanation tying each feature to the bias it addresses. Partial credit per element.",
+      rationale: "Looking for the present-bias/inertia diagnosis and two behaviorally-grounded design features (defaults, escalation, commitment) that address them." },
+    { id: "ch17_written_loss_aversion", chapter: 17, kind: "short", render: "text", difficulty: "hard", concept: "loss aversion applications", points: 3,
+      prompt: "Define loss aversion and the endowment effect, explain how they are related, and give a real-world example where loss aversion leads to a choice the standard rational model would not predict.",
+      answer: null,
+      rubric: "Full credit: (1) loss aversion = losses loom larger than equivalent gains; (2) endowment effect = valuing an owned item more than the same item unowned; (3) relation: the endowment effect follows from loss aversion (giving up an owned item feels like a loss); (4) a valid example (refusing to sell a stock at a loss, demanding high price to give up a mug, reluctance to switch defaults). Partial credit per element.",
+      rationale: "Looking for both definitions, the loss-aversion-to-endowment-effect link, and a valid non-rational example." }
   ];
 
   /* ---- public API ------------------------------------------------------- */

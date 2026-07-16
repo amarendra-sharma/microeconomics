@@ -440,6 +440,64 @@
     return svgWrap(P, s, "cost curves");
   }
 
+  /* monopoly: demand P=a-b*Q, MR=a-2b*Q, MC (constant mc0 or rising mc0+mcSlope*Q),
+     optional ATC for profit, mark Qm (MR=MC), monopoly price Pm on demand, the
+     competitive point (MC=demand), profit rectangle, and deadweight-loss triangle. */
+  function monopoly(spec) {
+    var a = spec.a, b = spec.b;                 /* demand intercept & slope magnitude */
+    var mc0 = (spec.mc0 != null) ? spec.mc0 : 2;
+    var mcSlope = (spec.mcSlope != null) ? spec.mcSlope : 0;
+    function D(q) { return a - b * q; }
+    function MR(q) { return a - 2 * b * q; }
+    function MC(q) { return mc0 + mcSlope * q; }
+    /* Qm where MR=MC: a-2b*q = mc0+mcSlope*q -> q=(a-mc0)/(2b+mcSlope) */
+    var qm = (a - mc0) / (2 * b + mcSlope);
+    var pm = D(qm);
+    var mcm = MC(qm);
+    /* competitive q where D=MC: a-b*q = mc0+mcSlope*q -> q=(a-mc0)/(b+mcSlope) */
+    var qc = (a - mc0) / (b + mcSlope);
+    var pc = MC(qc);
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax || (qc * 1.25), pmax: spec.pmax || (a * 1.1) });
+    var s = axes(P, spec.xlab || "Quantity", spec.ylab || "Price");
+    /* profit rectangle (Pm - ATC(qm)) x qm, if ATC provided */
+    if (spec.showProfit && spec.atc != null) {
+      var atcm = spec.atc;                       /* caller supplies ATC at qm for a clean number */
+      var isProfit = pm >= atcm;
+      var fill = isProfit ? "#16653433" : "#991b1b33";
+      var stroke = isProfit ? C.surplusStroke : C.dwlStroke;
+      var yTop = Math.min(P.Y(pm), P.Y(atcm)), yBot = Math.max(P.Y(pm), P.Y(atcm));
+      s += "<rect x='" + P.X(0) + "' y='" + yTop + "' width='" + (P.X(qm) - P.X(0)) +
+        "' height='" + (yBot - yTop) + "' fill='" + fill + "' stroke='" + stroke + "' stroke-dasharray='3 3'/>";
+      s += txt(P.X(qm * 0.4), (yTop + yBot) / 2 + 4, isProfit ? "Profit" : "Loss", { fill: stroke, weight: 700, size: 11 });
+    }
+    /* deadweight loss triangle between qm and qc (bounded by demand above, MC below) */
+    if (spec.showDWL) {
+      s += poly([[P.X(qm), P.Y(pm)], [P.X(qm), P.Y(mcm)], [P.X(qc), P.Y(pc)]], C.dwl, C.dwlStroke);
+      s += txt(P.X((qm + qc) / 2 + 0.1), P.Y((pm + pc) / 2), "DWL", { fill: C.dwlStroke, weight: 700, size: 10 });
+    }
+    /* curves */
+    s += linearCurve(P, a, -b, C.demand, "D", qc * 1.05);
+    s += linearCurve(P, a, -2 * b, C.alt, "MR", qm * 0.85);
+    if (mcSlope === 0) {
+      s += line(P.X(0), P.Y(mc0), P.X(P.qmax), P.Y(mc0), C.supply, 2.5);
+      s += txt(P.X(P.qmax) - 4, P.Y(mc0) - 5, "MC", { anchor: "end", fill: C.supply, weight: 700, size: 12 });
+    } else {
+      s += linearCurve(P, mc0, mcSlope, C.supply, "MC", qc * 0.9);
+    }
+    /* mark monopoly point: Qm on axis, Pm on demand */
+    s += line(P.X(qm), P.y0, P.X(qm), P.Y(pm), C.muted, 1, "4 3");
+    s += line(P.x0, P.Y(pm), P.X(qm), P.Y(pm), C.muted, 1, "4 3");
+    s += "<circle cx='" + P.X(qm) + "' cy='" + P.Y(pm) + "' r='3.5' fill='" + C.ink + "'/>";
+    s += txt(P.X(qm), P.y0 + 14, "Qm", { anchor: "middle", fill: C.muted, size: 11 });
+    s += txt(P.x0 - 8, P.Y(pm) + 4, "Pm", { anchor: "end", fill: C.muted, size: 11 });
+    /* optionally mark competitive point */
+    if (spec.showCompetitive) {
+      s += "<circle cx='" + P.X(qc) + "' cy='" + P.Y(pc) + "' r='3' fill='" + C.surplusStroke + "'/>";
+      s += txt(P.X(qc), P.y0 + 14, "Qc", { anchor: "middle", fill: C.surplusStroke, size: 11 });
+    }
+    return svgWrap(P, s, "monopoly");
+  }
+
   function renderDiagram(spec) {
     if (!spec || !spec.type) { return ""; }
     switch (spec.type) {
@@ -451,6 +509,7 @@
       case "curve":         return curve(spec);
       case "ppf":           return ppf(spec);
       case "cost_curves":   return costCurves(spec);
+      case "monopoly":      return monopoly(spec);
       default: return "";
     }
   }
