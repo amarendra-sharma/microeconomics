@@ -2079,6 +2079,9 @@ function openAssembler(){
       '<div class="field"><label>Closes (optional)</label><input id="axCloses" type="datetime-local"></div>'+
       '<div class="field"><label style="display:flex;align-items:center;gap:7px;margin-top:26px;"><input type="checkbox" id="axShuffle"> Shuffle question order</label></div>'+
     '</div>'+
+    // ---- proctoring / integrity (same engine as StrategyArena) ----
+    '<div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input id="axProctor" type="checkbox" checked> Soft proctoring (fullscreen, tab-switch detection, copy/paste block, integrity log). <span style="color:var(--text-subtle);font-size:11px;">Deters casual cheating; not a substitute for a lockdown browser.</span></label></div>'+
+    '<div class="field"><label>Webcam monitoring</label><select id="axCamMode"><option value="off" selected>Off</option><option value="flag">On \u2014 allow if camera denied, but flag it</option><option value="block">On \u2014 require camera to start (block if denied)</option></select><span style="color:var(--text-subtle);font-size:11px;">Shows a live self-view, stores a snapshot when a flag fires, and (Chrome/Edge) flags no-face / multiple-faces. Tell students they will be recorded.</span></div>'+
     '<div class="field"><label>Instructions (optional)</label><textarea id="axInstr" style="min-height:46px;"></textarea></div>'+
     // ---- build mode tabs ----
     '<div style="display:flex;gap:8px;margin:6px 0 12px;">'+
@@ -2309,7 +2312,8 @@ function openAssembler(){
     var payload={ course_id:State.teachCourseId, kind:$('axKind').value, title:title, item_ids:payloadIds,
       total_points:pts, time_limit_minutes:tl, instructions:$('axInstr').value.trim(), is_published:false,
       max_attempts:att, shuffle_questions:$('axShuffle').checked, attempt_scoring:$('axScoring').value,
-      opens_at:opensV, closes_at:closesV, random_per_student:perStudent, random_recipe:recipe };
+      opens_at:opensV, closes_at:closesV, random_per_student:perStudent, random_recipe:recipe,
+      proctored:($('axProctor')?$('axProctor').checked:true), camera_mode:($('axCamMode')?$('axCamMode').value:'off') };
     $('axSave').disabled=true;
     function doInsert(){
       sb.from('im_exam').insert(payload).then(function(res){
@@ -3082,7 +3086,7 @@ function startGradedQuiz_LEGACY(chapter) {
       var failed = false;
       picks.forEach(function(p){
         chain = chain.then(function(){
-          return sb.functions.invoke('grade-attempt', { body: { action:'issue', item_id:p.id, course_id:courseId } }).then(function(fn){
+          return sb.functions.invoke('im-grade-attempt', { body: { action:'issue', item_id:p.id, course_id:courseId } }).then(function(fn){
             if (fn.error || !fn.data || fn.data.error) { failed = true; return; }
             issued.push({ attempt_id:fn.data.attempt_id, item_type:fn.data.item_type, prompt:fn.data.prompt, options:fn.data.options, points:fn.data.points, figure:fn.data.figure });
           });
@@ -3172,7 +3176,7 @@ function submitGradedQuiz() {
     possible += (it.points ? Number(it.points) : 1);
     chain = chain.then(function(){
       var submitted = (QuizState.answers[i] !== undefined) ? QuizState.answers[i] : '-999999';
-      return sb.functions.invoke('grade-attempt', { body: { action:'grade', attempt_id: it.attempt_id, submitted_value: submitted } }).then(function(fn){
+      return sb.functions.invoke('im-grade-attempt', { body: { action:'grade', attempt_id: it.attempt_id, submitted_value: submitted } }).then(function(fn){
         if (fn.data && fn.data.points_earned) { earned += Number(fn.data.points_earned); }
       });
     });
@@ -3247,6 +3251,12 @@ function renderFigure(fig) {
   if (!fig || !fig.type) { return ''; }
   if (fig.type === 'matrix') { return renderMatrixFigure(fig); }
   if (fig.type === 'tree') { return renderTreeFigure(fig); }
+  if (fig.type === 'svg' && fig.svg) {
+    // Server-rendered diagram (supply/demand, cost curves, monopoly, etc.).
+    // The svg string is produced by the same im-diagrams engine used elsewhere;
+    // it is self-contained and safe to inject (no scripts, no external refs).
+    return '<div class="fig-svg" style="margin:10px 0;max-width:480px;">' + fig.svg + '</div>';
+  }
   return '';
 }
 function renderMatrixFigure(fig) {
@@ -3401,7 +3411,7 @@ function submitAnswer() {
     submitted = v;
   }
   $('submitAnsBtn').disabled = true;
-  sb.functions.invoke('grade-attempt', {
+  sb.functions.invoke('im-grade-attempt', {
     body: { action: 'grade', attempt_id: item.attempt_id, submitted_value: submitted }
   }).then(function(fn) {
     var fb = $('qFeedback');
@@ -3922,7 +3932,7 @@ function reallyStartExam(exam, accom) {
     var failed = false;
     ids.forEach(function(itemId) {
       chain = chain.then(function() {
-        return sb.functions.invoke('grade-attempt', { body: { action:'issue', item_id:itemId, course_id:exam.course_id, exam_id:exam.id } }).then(function(fn) {
+        return sb.functions.invoke('im-grade-attempt', { body: { action:'issue', item_id:itemId, course_id:exam.course_id, exam_id:exam.id } }).then(function(fn) {
           if (fn.error) { failed = true; return; }
           if (fn.data && fn.data.error) { failed = true; ExamState.issueError = fn.data.error; return; }
           if (fn.data && fn.data.attempt_id) {
@@ -4078,7 +4088,7 @@ function gradeExam(auto) {
       } else {
         if (submitted === undefined || submitted === '') { submitted = '__BLANK__'; }
       }
-      return sb.functions.invoke('grade-attempt', { body: { action:'grade', attempt_id: it.attempt_id, submitted_value: submitted } }).then(function(fn) {
+      return sb.functions.invoke('im-grade-attempt', { body: { action:'grade', attempt_id: it.attempt_id, submitted_value: submitted } }).then(function(fn) {
         if (isFree) { pendingCount++; return; }
         if (fn.data && fn.data.is_correct) { correct++; earned += (fn.data.points_earned ? Number(fn.data.points_earned) : 0); }
       });
@@ -4484,7 +4494,7 @@ function runDiagnostics() {
     if (r.error || !r.data || r.data.length === 0) { p('5. Grader test — skipped (no numeric item found)', 'dim'); return null; }
     var itemId = r.data[0].id;
     p('5. Grader — issuing item ' + esc(itemId) + ' …', 'dim');
-    return sb.functions.invoke('grade-attempt', { body: { action:'issue', item_id: itemId, course_id: State.selfCourseId } })
+    return sb.functions.invoke('im-grade-attempt', { body: { action:'issue', item_id: itemId, course_id: State.selfCourseId } })
       .then(function(fn) {
         if (fn.error || !fn.data || fn.data.error) {
           p('   issue FAILED: ' + esc(fn.error ? fn.error.message : (fn.data ? fn.data.error : '?')), 'fail'); return;
@@ -4492,7 +4502,7 @@ function runDiagnostics() {
         p('   issued attempt ' + esc(fn.data.attempt_id) + '  ✓', 'pass');
         p('   prompt: ' + esc(fn.data.prompt), 'dim');
         // submit a deliberately wrong answer to confirm grading runs
-        return sb.functions.invoke('grade-attempt', { body: { action:'grade', attempt_id: fn.data.attempt_id, submitted_value: '-999999' } })
+        return sb.functions.invoke('im-grade-attempt', { body: { action:'grade', attempt_id: fn.data.attempt_id, submitted_value: '-999999' } })
           .then(function(g) {
             if (g.error || !g.data) { p('   grade FAILED: ' + esc(g.error ? g.error.message : '?'), 'fail'); return; }
             p('   graded wrong answer -> is_correct=' + g.data.is_correct + '  ✓ (grader live)', 'pass');
