@@ -498,6 +498,59 @@
     return svgWrap(P, s, "monopoly");
   }
 
+  /* payoff_matrix: a 2x2 game matrix. Rows = Player A's strategies, columns =
+     Player B's strategies. Each cell shows the payoff pair (A, B) with A's payoff
+     in navy and B's in gold. Spec:
+       playerA, playerB: names (default "Firm A"/"Firm B")
+       stratA: [rowLabel0, rowLabel1], stratB: [colLabel0, colLabel1]
+       cells: [[ [a,b], [a,b] ], [ [a,b], [a,b] ]]  // cells[row][col] = [A payoff, B payoff]
+       highlight: [row,col] to shade a cell (e.g., the Nash equilibrium), optional
+       highlightLabel: text placed under the highlighted cell, optional */
+  function payoffMatrix(spec) {
+    var W = spec.w || 460, H = spec.h || 340;
+    var pA = spec.playerA || "Firm A", pB = spec.playerB || "Firm B";
+    var sA = spec.stratA || ["Strategy 1", "Strategy 2"];
+    var sB = spec.stratB || ["Strategy 1", "Strategy 2"];
+    var cells = spec.cells;
+    /* layout: leave margins for player labels and strategy labels */
+    var left = 96, top = 70;                      /* where the 2x2 grid starts */
+    var cw = (W - left - 20) / 2;                 /* cell width */
+    var chh = (H - top - 30) / 2;                 /* cell height */
+    var s = "<rect x='0' y='0' width='" + W + "' height='" + H + "' fill='#ffffff'/>";
+    /* Player B header (top, spanning the two columns) */
+    s += txt(left + cw, 22, pB + " chooses:", { anchor: "middle", fill: C.supply, weight: 700, size: 13 });
+    /* Player B strategy labels (column headers) */
+    s += txt(left + cw / 2, 52, sB[0], { anchor: "middle", fill: C.ink, weight: 600, size: 12 });
+    s += txt(left + cw + cw / 2, 52, sB[1], { anchor: "middle", fill: C.ink, weight: 600, size: 12 });
+    /* Player A header (left, rotated) */
+    s += "<text x='22' y='" + (top + chh) + "' fill='" + C.demand + "' font-family='Inter, system-ui, sans-serif' font-size='13' font-weight='700' text-anchor='middle' transform='rotate(-90 22 " + (top + chh) + ")'>" + esc(pA + " chooses:") + "</text>";
+    /* Player A strategy labels (row headers) */
+    s += txt(left - 8, top + chh / 2 + 4, sA[0], { anchor: "end", fill: C.ink, weight: 600, size: 12 });
+    s += txt(left - 8, top + chh + chh / 2 + 4, sA[1], { anchor: "end", fill: C.ink, weight: 600, size: 12 });
+    /* draw the 4 cells */
+    for (var r = 0; r < 2; r++) {
+      for (var c = 0; c < 2; c++) {
+        var cx = left + c * cw, cy = top + r * chh;
+        var isHi = spec.highlight && spec.highlight[0] === r && spec.highlight[1] === c;
+        s += "<rect x='" + cx + "' y='" + cy + "' width='" + cw + "' height='" + chh + "' fill='" +
+          (isHi ? "#7c3aed18" : "#f8fafc") + "' stroke='" + (isHi ? C.alt : "#cbd5e1") + "' stroke-width='" + (isHi ? 2.5 : 1) + "'/>";
+        var pair = cells[r][c];
+        /* A's payoff (navy, left) and B's payoff (gold, right) */
+        s += txt(cx + cw / 2, cy + chh / 2 + 6, "", {});
+        s += txt(cx + cw / 2 - 18, cy + chh / 2 + 6, String(pair[0]), { anchor: "middle", fill: C.demand, weight: 700, size: 18 });
+        s += txt(cx + cw / 2, cy + chh / 2 + 6, ",", { anchor: "middle", fill: C.muted, size: 16 });
+        s += txt(cx + cw / 2 + 18, cy + chh / 2 + 6, String(pair[1]), { anchor: "middle", fill: C.supply, weight: 700, size: 18 });
+        if (isHi && spec.highlightLabel) {
+          s += txt(cx + cw / 2, cy + chh - 8, spec.highlightLabel, { anchor: "middle", fill: C.alt, weight: 700, size: 10 });
+        }
+      }
+    }
+    /* legend: which color is which player's payoff */
+    s += txt(left, H - 10, pA + "'s payoff", { fill: C.demand, weight: 600, size: 11 });
+    s += txt(left + cw + 10, H - 10, pB + "'s payoff", { fill: C.supply, weight: 600, size: 11 });
+    return "<svg viewBox='0 0 " + W + " " + H + "' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='payoff matrix' style='max-width:100%;height:auto;'>" + s + "</svg>";
+  }
+
   function renderDiagram(spec) {
     if (!spec || !spec.type) { return ""; }
     switch (spec.type) {
@@ -510,6 +563,7 @@
       case "ppf":           return ppf(spec);
       case "cost_curves":   return costCurves(spec);
       case "monopoly":      return monopoly(spec);
+      case "payoff_matrix":  return payoffMatrix(spec);
       default: return "";
     }
   }

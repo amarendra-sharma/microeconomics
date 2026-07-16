@@ -2085,6 +2085,134 @@
     }
   };
 
+
+  /* ==================== CHAPTER 13 — Oligopoly (payoff-matrix graphical) ============== */
+
+  /* Helper builder: a valid symmetric prisoners' dilemma over Low/High output.
+     Returns payoffs with the classic ordering:
+       Temptation T (defect while rival cooperates) > Reward R (both cooperate)
+       > Punishment P (both defect) > Sucker S (cooperate while rival defects).
+     Row/col 0 = Low (cooperate), 1 = High (defect).
+     cells[r][c] = [A payoff, B payoff]. Nash = both High = [1][1]. */
+  function buildPD(rng) {
+    var R = rng_int(rng, 40, 55);          /* both cooperate (Low) */
+    var P = rng_int(rng, 20, R - 10);      /* both defect (High), below R */
+    var T = R + rng_int(rng, 8, 15);       /* defect alone: highest */
+    var S = P - rng_int(rng, 8, 15);       /* cooperate alone: lowest */
+    return {
+      R: R, P: P, T: T, S: S,
+      cells: [
+        [[R, R], [S, T]],   /* A Low: (B Low)=R,R ; (B High)=S(for A),T(for B) */
+        [[T, S], [P, P]]    /* A High: (B Low)=T(for A),S(for B) ; (B High)=P,P */
+      ]
+    };
+  }
+  function pdSpec(pd, hi, hiLabel) {
+    return {
+      type: "payoff_matrix", playerA: "Firm A", playerB: "Firm B",
+      stratA: ["Low output", "High output"], stratB: ["Low output", "High output"],
+      cells: pd.cells, highlight: hi, highlightLabel: hiLabel
+    };
+  }
+
+  /* Ch13: find the Nash equilibrium from the matrix */
+  GEN["ch13_pd_nash"] = {
+    id: "ch13_pd_nash", chapter: 13, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "Nash equilibrium from a payoff matrix", points: 3,
+    build: function (rng) {
+      var pd = buildPD(rng);
+      var opts = ["Both firms choose High output (" + pd.P + ", " + pd.P + ")",
+        "Both firms choose Low output (" + pd.R + ", " + pd.R + ")",
+        "Firm A High, Firm B Low (" + pd.T + ", " + pd.S + ")",
+        "There is no Nash equilibrium"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "Two firms simultaneously choose Low or High output. The payoff matrix shows each firm's profit (Firm A, Firm B). What is the Nash equilibrium?",
+        diagramSpec: pdSpec(pd, null, null),
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "High is a dominant strategy for each: if the rival plays Low, " + pd.T + " > " + pd.R +
+          "; if the rival plays High, " + pd.P + " > " + pd.S + ". So both play High \u2192 (" + pd.P + ", " + pd.P +
+          "), worse for both than mutual Low (" + pd.R + ", " + pd.R + ")."
+      };
+    }
+  };
+
+  /* Ch13: find the jointly-optimal (cooperative) outcome */
+  GEN["ch13_pd_joint"] = {
+    id: "ch13_pd_joint", chapter: 13, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "cooperative vs Nash outcome", points: 3,
+    build: function (rng) {
+      var pd = buildPD(rng);
+      var bothLow = pd.R + pd.R, bothHigh = pd.P + pd.P, mixed = pd.T + pd.S;
+      var opts = ["Both choose Low output \u2014 joint profit " + bothLow + " (but it is not a Nash equilibrium)",
+        "Both choose High output \u2014 joint profit " + bothHigh,
+        "One High, one Low \u2014 joint profit " + mixed,
+        "Joint profit is the same in every cell"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "Using the payoff matrix, which outcome maximizes the two firms' COMBINED profit \u2014 and is it the outcome they reach by acting in their own self-interest?",
+        diagramSpec: pdSpec(pd, [0, 0], "Joint best"),
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Combined profit is highest when both play Low (" + pd.R + "+" + pd.R + "=" + bothLow +
+          "). But each is tempted to defect to High, so this cooperative outcome is not a Nash equilibrium \u2014 the essence of the dilemma."
+      };
+    }
+  };
+
+  /* Ch13: identify the dominant strategy for a firm */
+  GEN["ch13_pd_dominant"] = {
+    id: "ch13_pd_dominant", chapter: 13, kind: "mc", render: "graphical",
+    difficulty: "hard", concept: "dominant strategy from a matrix", points: 3,
+    build: function (rng) {
+      var pd = buildPD(rng);
+      var opts = ["High output \u2014 it yields a higher payoff no matter what the rival does",
+        "Low output \u2014 it yields a higher payoff no matter what the rival does",
+        "It depends entirely on what the rival does (no dominant strategy)",
+        "Neither firm has any profitable strategy"];
+      var sh = shuffleWithAnswer(rng, opts, 0);
+      return {
+        prompt: "Examine Firm A's payoffs in the matrix. What is Firm A's DOMINANT strategy?",
+        diagramSpec: pdSpec(pd, null, null),
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "Compare Firm A's payoffs column by column: if B plays Low, " + pd.T + " > " + pd.R +
+          "; if B plays High, " + pd.P + " > " + pd.S + ". High output wins in both cases, so it is dominant."
+      };
+    }
+  };
+
+  /* Ch13: what payoff does a firm get if it defects while the other cooperates? (numeric read) */
+  GEN["ch13_pd_temptation"] = {
+    id: "ch13_pd_temptation", chapter: 13, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "reading a payoff matrix (temptation payoff)", points: 3,
+    build: function (rng) {
+      var pd = buildPD(rng);
+      return {
+        prompt: "From the payoff matrix: if Firm A chooses High output while Firm B chooses Low output, what profit does Firm A earn?",
+        diagramSpec: pdSpec(pd, [1, 0], "A defects"),
+        answer: pd.T, tolerance: 0.01,
+        rationale: "Find the cell (Firm A = High row, Firm B = Low column). Firm A's payoff there is " + pd.T +
+          " \u2014 the 'temptation' payoff that makes defecting attractive."
+      };
+    }
+  };
+
+  /* Ch13: gain from unilateral deviation (multi-step numeric) */
+  GEN["ch13_pd_deviation_gain"] = {
+    id: "ch13_pd_deviation_gain", chapter: 13, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "gain from cheating on a cartel (multi-step)", points: 3,
+    build: function (rng) {
+      var pd = buildPD(rng);
+      var gain = pd.T - pd.R;   /* from both-Low, A deviates to High: T - R */
+      return {
+        prompt: "Suppose the two firms have agreed to both produce Low output (a cartel). Using the matrix, how much EXTRA profit would Firm A earn by secretly switching to High output while Firm B keeps producing Low? (Give the increase in Firm A's profit.)",
+        diagramSpec: pdSpec(pd, null, null),
+        answer: gain, tolerance: 0.01,
+        rationale: "At the cartel outcome (both Low), Firm A earns " + pd.R + ". Deviating to High (while B stays Low) raises A's profit to " + pd.T +
+          ". The gain is " + pd.T + " \u2212 " + pd.R + " = " + gain + " \u2014 this temptation is why cartels are unstable."
+      };
+    }
+  };
+
   /* ---- S1..S3: STATIC conceptual / written (no randomization) -----------
      These carry their own fixed content; the engine returns them as-is. */
   var STATIC = [
@@ -3432,18 +3560,6 @@
         "cooperation is always the dominant strategy", "firms always achieve the monopoly outcome",
         "there is never any conflict of interest"], answer: 0,
       rationale: "Each firm's dominant strategy is to produce a high quantity (defect), but when both do, they end up with lower joint profit than if both had cooperated \u2014 the dilemma." },
-    { id: "ch13_dominant_strategy", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "dominant strategy", points: 3,
-      prompt: "A 'dominant strategy' in game theory is one that:",
-      options: ["is best for a player regardless of what the other players do",
-        "is best only if rivals cooperate", "leads to the worst outcome",
-        "requires coordination with rivals"], answer: 0,
-      rationale: "A dominant strategy yields a higher payoff than any alternative no matter what opponents choose. When each player has one, the outcome is predictable (often a dilemma)." },
-    { id: "ch13_nash", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "Nash equilibrium", points: 3,
-      prompt: "A Nash equilibrium is a situation in which:",
-      options: ["each player chooses their best strategy given the strategies chosen by all others",
-        "all players cooperate perfectly", "one player controls the outcome",
-        "no player has any strategy"], answer: 0,
-      rationale: "At a Nash equilibrium no player can gain by unilaterally changing strategy, given what everyone else is doing \u2014 it's self-enforcing but need not be jointly optimal." },
     { id: "ch13_output_effect", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "two effects on oligopolist", points: 3,
       prompt: "When an oligopolist considers raising its output, it weighs the output effect (more units at the price) against the price effect (lower price on all units). Compared with a monopolist, an oligopolist tends to give MORE weight to the output effect because:",
       options: ["it only bears the price-effect loss on its OWN units, not the whole market's",
@@ -3856,17 +3972,6 @@
       rationale: "Looking for the P>MC/excess-capacity inefficiency, the variety benefit, and a balanced conclusion." },
 
     /* --- Ch13 (need 9): payoff-matrix numeric + application --- */
-    { id: "ch13_pd_payoff", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "reading a payoff matrix", points: 3,
-      prompt: "Two firms choose High or Low output. Profits (Firm A, Firm B): both Low = (50, 50); both High = (30, 30); A High/B Low = (60, 20); A Low/B High = (20, 60). What is the Nash equilibrium?",
-      options: ["Both choose High (30, 30)", "Both choose Low (50, 50)",
-        "A High, B Low (60, 20)", "There is no Nash equilibrium"], answer: 0,
-      rationale: "High is a dominant strategy for each (60>50 if rival Low; 30>20 if rival High). So both play High \u2192 (30,30), a Nash equilibrium that is worse for both than mutual Low (50,50)." },
-    { id: "ch13_pd_cooperative", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "cooperative outcome", points: 3,
-      prompt: "In that same game (both Low = 50 each; both High = 30 each), the OUTCOME THAT MAXIMIZES JOINT PROFIT is:",
-      options: ["both choose Low (total 100) \u2014 but it isn't a Nash equilibrium",
-        "both choose High (total 60)", "one High, one Low (total 80)",
-        "there is no way to maximize joint profit"], answer: 0,
-      rationale: "Joint profit is highest when both cooperate at Low (50+50=100). But since each is individually tempted to defect to High, this cooperative outcome isn't self-enforcing in a one-shot game." },
     { id: "ch13_dominant_check", chapter: 13, kind: "mc", render: "text", difficulty: "hard", concept: "identifying dominant strategy", points: 3,
       prompt: "A firm earns more by advertising than not advertising REGARDLESS of what its rival does. For this firm, advertising is:",
       options: ["a dominant strategy", "a dominated strategy",
@@ -3901,11 +4006,6 @@
       answer: null,
       rubric: "Full credit: (1) each firm weighs the output effect (extra units sold at the price) vs the price effect (lower price on its own units); (2) an oligopolist bears the price effect only on its OWN output, not rivals', so it's more willing to expand than a monopoly \u2192 more output; (3) but each still restricts somewhat (unlike price-taking competitors) \u2192 less than competition; (4) so oligopoly output/price lies between. Partial credit per element.",
       rationale: "Looking for the output vs price effect logic and why partial internalization puts oligopoly between monopoly and competition." },
-    { id: "ch13_number_and_price", chapter: 13, kind: "mc", render: "text", difficulty: "med", concept: "entry and oligopoly price", points: 2,
-      prompt: "As more firms enter an oligopolistic market, the equilibrium price tends to:",
-      options: ["fall toward marginal cost", "rise toward the monopoly price",
-        "stay exactly at the monopoly level", "become undefined"], answer: 0,
-      rationale: "More firms means each gives less weight to the price effect, expanding output and pushing price down toward marginal cost \u2014 approaching the competitive outcome." },
 
     /* --- Ch14 (need 6) --- */
     { id: "ch14_compensating_diff", chapter: 14, kind: "mc", render: "text", difficulty: "hard", concept: "compensating differentials", points: 3,

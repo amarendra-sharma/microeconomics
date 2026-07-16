@@ -264,65 +264,114 @@
      Builds a fixed list of items with per-student seeds, collects all answers,
      submits once to the grading Edge Function. Answers are not revealed inline. */
   function quiz(spec, mountEl, cfg) {
-    /* spec: { chapter, items:[genId...], count } OR a server exam definition.
-       For the proof-of-concept we build from the chapter bank. */
+    /* spec supports two shapes:
+       (a) chapter quiz:  { chapter, items:[genId, ...], count }
+           -> draws count generator ids at random, each with a random seed.
+       (b) assembled exam: { title, items:[{generatorId, seed}, ...],
+                             timeLimitMinutes, shuffle, proctored }
+           -> uses the given items and their FIXED seeds verbatim (so the exam is
+              reproducible and every student is graded on what they saw). */
     cfg = cfg || {};
     var G = global.IMGenerators;
     var chapter = spec.chapter;
-    var bank = spec.items || CH_BANK[chapter] || [];
-    var count = spec.count || Math.min(5, bank.length);
+    var isExam = !!(spec.items && spec.items.length && typeof spec.items[0] === "object");
 
-    /* pick count items (no repeat), each with its own seed */
     var pick = [];
-    var pool = bank.slice();
-    for (var i = 0; i < count && pool.length; i++) {
-      var j = Math.floor(Math.random() * pool.length);
-      pick.push({ genId: pool[j], seed: rand32() });
-      pool.splice(j, 1);
+    if (isExam) {
+      /* pre-assembled: keep given order unless shuffle requested */
+      for (var e = 0; e < spec.items.length; e++) {
+        pick.push({ genId: spec.items[e].generatorId, seed: spec.items[e].seed });
+      }
+      if (spec.shuffle !== false) {
+        for (var s = pick.length - 1; s > 0; s--) {
+          var sj = Math.floor(Math.random() * (s + 1));
+          var st = pick[s]; pick[s] = pick[sj]; pick[sj] = st;
+        }
+      }
+    } else {
+      var bank = spec.items || CH_BANK[chapter] || [];
+      var count = spec.count || Math.min(5, bank.length);
+      var pool = bank.slice();
+      for (var i = 0; i < count && pool.length; i++) {
+        var j = Math.floor(Math.random() * pool.length);
+        pick.push({ genId: pool[j], seed: rand32() });
+        pool.splice(j, 1);
+      }
     }
+
     var instances = pick.map(function (p) {
       var q = G.generate(p.genId, p.seed);
       q._genId = p.genId; q._seed = p.seed;
       return q;
     });
 
-    mountEl.innerHTML = "<div style='font-weight:700;color:#0f3d9e;font-size:18px;margin-bottom:6px;'>Chapter " +
-      chapter + " Quiz</div><div style='color:#64748b;font-size:13px;margin-bottom:18px;'>" +
-      instances.length + " questions \u00b7 answers are graded after you submit.</div>";
+    var titleText = isExam ? (spec.title || "Exam") : ("Chapter " + chapter + " Quiz");
+    var subText = instances.length + " questions \u00b7 answers are graded after you submit.";
+    mountEl.innerHTML = "<div style='font-weight:700;color:#0f3d9e;font-size:18px;margin-bottom:6px;'>" +
+      esc(titleText) + "</div><div style='color:#64748b;font-size:13px;margin-bottom:6px;'>" + subText + "</div>";
+
+    /* optional exam timer */
+    var timerBox = null, deadline = null, timerId = null;
+    if (isExam && spec.timeLimitMinutes) {
+      timerBox = el("div", { "style": "display:inline-block;margin-bottom:12px;padding:5px 12px;border-radius:8px;background:#eff4ff;color:#0f3d9e;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;" });
+      mountEl.appendChild(timerBox);
+      deadline = Date.now() + spec.timeLimitMinutes * 60000;
+    }
     var list = el("div"); mountEl.appendChild(list);
 
     var inputs = [];
     instances.forEach(function (q, i) {
       var qbox = el("div"); list.appendChild(qbox);
+      /* show a question number + points for exams */
+      if (isExam) {
+        var meta = el("div", { "style": "font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:2px;" },
+          "Question " + (i + 1) + " of " + instances.length + (q.points ? "  \u00b7  " + q.points + " pt" + (q.points > 1 ? "s" : "") : ""));
+        qbox.appendChild(meta);
+      }
       var ctrl = renderQuestion(q, qbox, { buttonLabel: null, onAnswer: null });
-      /* hide the per-question button in quiz mode (single submit at end) */
       if (ctrl.button) { ctrl.button.style.display = "none"; }
       inputs.push({ q: q, ctrl: ctrl });
     });
 
     var submit = el("button", { "style":
       "margin-top:8px;padding:11px 26px;border:none;border-radius:8px;background:#166534;color:#fff;font-weight:700;font-size:15px;cursor:pointer;" },
-      "Submit quiz");
+      isExam ? "Submit exam" : "Submit quiz");
     var out = el("div", { "style": "margin-top:16px;" });
-    submit.addEventListener("click", function () {
+
+    function doSubmit() {
+      if (submit.disabled) { return; }
       var payload = inputs.map(function (row) {
         return { generator_id: row.q._genId, seed: row.q._seed, submitted: row.ctrl.getValue() };
       });
       submit.disabled = true; submit.style.opacity = "0.5"; submit.textContent = "Grading\u2026";
-      gradeQuiz(chapter, payload, function (result) {
+      if (timerId) { clearInterval(timerId); }
+      var gradeFn = cfg.gradeExam || gradeQuiz;
+      gradeFn(isExam ? (spec.examId || spec.title) : chapter, payload, function (result) {
         if (result && result.ok) {
           out.innerHTML = "<div style='background:#f0fdf4;border:1px solid #166534;border-radius:10px;padding:16px;'>" +
-            "<div style='font-weight:700;color:#166534;font-size:16px;'>Quiz submitted</div>" +
+            "<div style='font-weight:700;color:#166534;font-size:16px;'>" + (isExam ? "Exam submitted" : "Quiz submitted") + "</div>" +
             "<div style='color:#334155;margin-top:6px;'>Score: " + result.score + " / " + result.total +
             (result.pending ? " (" + result.pending + " written answer(s) pending review)" : "") + "</div></div>";
         } else {
           out.innerHTML = "<div style='color:#991b1b;'>" +
             (result && result.error ? esc(result.error) : "Could not submit. Check your connection and try again.") +
             "</div>";
-          submit.disabled = false; submit.style.opacity = "1"; submit.textContent = "Submit quiz";
+          submit.disabled = false; submit.style.opacity = "1"; submit.textContent = isExam ? "Submit exam" : "Submit quiz";
         }
+        if (cfg.onSubmit) { cfg.onSubmit(result); }
       });
-    });
+    }
+    submit.addEventListener("click", doSubmit);
+
+    /* run the timer */
+    if (deadline) {
+      timerId = setInterval(function () {
+        var left = Math.max(0, deadline - Date.now());
+        var mm = Math.floor(left / 60000), ss = Math.floor((left % 60000) / 1000);
+        timerBox.textContent = "\u23f1 " + mm + ":" + (ss < 10 ? "0" : "") + ss + " remaining";
+        if (left <= 0) { clearInterval(timerId); timerBox.textContent = "\u23f1 Time's up \u2014 submitting\u2026"; doSubmit(); }
+      }, 1000);
+    }
     mountEl.appendChild(submit);
     mountEl.appendChild(out);
   }
