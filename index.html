@@ -887,13 +887,32 @@ function renderCourses(host){
       html+='<tr><td>'+esc(c.title)+'</td><td>'+esc(c.term||'-')+'</td><td><span class="pill-code">'+esc(c.join_code)+'</span></td>'+
         '<td>'+(c.requires_payment?'<span class="tag amber">Paid</span>':'<span class="tag green">Free</span>')+'</td>'+
         '<td class="mono">'+w+'</td>'+
-        '<td><button class="btn btn-ghost btn-sm" data-edit="'+c.id+'">Edit</button></td></tr>';
+        '<td><button class="btn btn-ghost btn-sm" data-edit="'+c.id+'">Edit</button>'+
+          '<button class="btn btn-ghost btn-sm" data-clone-course="'+c.id+'" title="Copy this course and its exams for a future term, without any student data">Clone</button></td></tr>';
     });
     html+='</tbody></table></div>';
   }
   host.innerHTML=html;
   $('newCourseBtn').addEventListener('click', function(){ openCourseModal(null); });
   Array.prototype.forEach.call(host.querySelectorAll('[data-edit]'), function(b){ b.addEventListener('click', function(){ openCourseModal(b.getAttribute('data-edit')); }); });
+  Array.prototype.forEach.call(host.querySelectorAll('[data-clone-course]'), function(b){ b.addEventListener('click', function(){ cloneCourse(b.getAttribute('data-clone-course')); }); });
+}
+/* Copy a course (settings, weights, review flags and exams) for a future term.
+   Student data -- enrollments, attempts, grades, accommodations, integrity logs
+   -- is deliberately NOT copied. The exams arrive unpublished with dates clear. */
+function cloneCourse(courseId){
+  var c=findCourse(courseId);
+  var suggested=(c&&c.title)?(c.title+' (copy)'):'Course copy';
+  var title=window.prompt('Title for the new course:', suggested);
+  if(title===null){ return; }
+  title=title.trim(); if(!title){ return; }
+  sb.rpc('im_clone_course',{ p_course_id:courseId, p_new_title:title }).then(function(res){
+    if(res.error){ alert('Clone failed: '+res.error.message); return; }
+    loadCourses().then(function(){
+      rerenderCurrentView();
+      alert('Created "'+title+'". Its exams were copied unpublished, and no student data came across. Set the dates and publish when you are ready.');
+    });
+  }, function(){ alert('Clone failed. Please try again.'); });
 }
 function randomCode(){ var s='strat-'; var a='abcdefghijklmnopqrstuvwxyz0123456789'; for(var i=0;i<5;i++){ s+=a[Math.floor(Math.random()*a.length)]; } return s; }
 function openCourseModal(courseId){
@@ -902,6 +921,7 @@ function openCourseModal(courseId){
   var v={ title:c?c.title:'', term:c?c.term:'', description:c?(c.description||''):'',
     join_code:c?c.join_code:randomCode(), requires_payment:c?c.requires_payment:true,
     access_starts:c?(c.access_starts||''):'', access_ends:c?(c.access_ends||''):'',
+    review_quizzes:c?!!c.review_quizzes:false, review_arenas:c?!!c.review_arenas:false, review_exams:c?!!c.review_exams:false,
     wr:c?c.weight_reading:0.10, wq:c?c.weight_quizzes:0.20, wa:c?c.weight_arenas:0.20, wm:c?c.weight_midterm:0.20, wf:c?c.weight_final:0.30 };
   var m=document.createElement('div'); m.className='modal-bg';
   m.innerHTML='<div class="modal"><h2>'+(isNew?'New course':'Edit course')+'</h2>'+
@@ -912,7 +932,19 @@ function openCourseModal(courseId){
     '<div class="field"><label>Description</label><textarea id="cmDesc" style="min-height:70px;">'+esc(v.description)+'</textarea></div>'+
     '<div class="row2"><div class="field"><label>Access starts</label><input id="cmStart" type="date" value="'+esc(v.access_starts)+'"></div>'+
     '<div class="field"><label>Access ends</label><input id="cmEnd" type="date" value="'+esc(v.access_ends)+'"></div></div>'+
-    '<div class="field"><label><input type="checkbox" id="cmPay" '+(v.requires_payment?'checked':'')+'> Requires paid subscription (uncheck for a free pilot)</label></div>'+
+    // Fee waivers are a super-admin privilege. Instructors see the status but
+    // cannot change it (the database enforces this too, via im_course_guard).
+    (State.role==='admin'
+      ? '<div class="field"><label><input type="checkbox" id="cmPay" '+(v.requires_payment?'checked':'')+'> Requires paid subscription (uncheck for a free pilot)</label></div>'
+      : '<div class="field"><label>Access type</label><div style="font-size:13px;color:var(--text-muted);padding:6px 0;">'+
+        (v.requires_payment?'Requires paid subscription':'Free pilot')+
+        ' <span style="color:var(--text-subtle);">\u2014 only a platform administrator can change this.</span></div></div>')+
+    '<div class="field"><label>Let students review their graded work</label>'+
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;">'+
+      '<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cmRevQ" '+(v.review_quizzes?'checked':'')+'> Quizzes</label>'+
+      '<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cmRevA" '+(v.review_arenas?'checked':'')+'> Arena results</label>'+
+      '<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cmRevE" '+(v.review_exams?'checked':'')+'> Exams</label>'+
+    '</div><div style="font-size:11.5px;color:var(--text-subtle);margin-top:5px;">When on, students can reopen the attempt and see which answers were right. Leave off during an active term.</div></div>'+
     '<div class="field"><label>Grade weights — must sum to 100%</label>'+
     '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">'+
       wInput('cmWr','Reading',v.wr)+wInput('cmWq','Quizzes',v.wq)+wInput('cmWa','Arenas',v.wa)+wInput('cmWm','Midterm',v.wm)+wInput('cmWf','Final',v.wf)+
@@ -938,9 +970,13 @@ function openCourseModal(courseId){
     var sumv=num('cmWr')+num('cmWq')+num('cmWa')+num('cmWm')+num('cmWf');
     if(Math.abs(sumv-1)>0.001){ cmErr('Weights must sum to 100%.'); return; }
     var payload={ title:title, term:$('cmTerm').value.trim(), description:$('cmDesc').value.trim(),
-      join_code:$('cmCode').value.trim(), requires_payment:$('cmPay').checked,
+      join_code:$('cmCode').value.trim(),
       access_starts:$('cmStart').value||null, access_ends:$('cmEnd').value||null,
+      review_quizzes:$('cmRevQ').checked, review_arenas:$('cmRevA').checked, review_exams:$('cmRevE').checked,
       weight_reading:num('cmWr'), weight_quizzes:num('cmWq'), weight_arenas:num('cmWa'), weight_midterm:num('cmWm'), weight_final:num('cmWf') };
+    // Only an admin can set the fee flag; for anyone else we simply do not send
+    // it (and the database guard forces requires_payment=true regardless).
+    if($('cmPay')){ payload.requires_payment=$('cmPay').checked; }
     $('cmSave').disabled=true;
     var op;
     if(isNew){ payload.owner_id=State.user.id; op=sb.from('im_course').insert(payload); }
@@ -1152,19 +1188,72 @@ function openAccommodation(studentId, email, existing){
   var tm = existing?existing.time_multiplier:1.0;
   var ea = existing?existing.extra_attempts:0;
   var note = existing && existing.note?existing.note:'';
-  m.innerHTML='<div class="modal" style="max-width:440px;"><h2>Accommodations</h2>'+
-    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">For <b>'+esc(email||studentId)+'</b> in this course. Applies to every exam in the course.</div>'+
+  m.innerHTML='<div class="modal" style="max-width:520px;"><h2>Accommodations</h2>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">For <b>'+esc(email||studentId)+'</b> in this course.</div>'+
     '<div id="acMsg" class="msg"></div>'+
+    '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Course-wide (applies to every exam)</div>'+
     '<div class="row2"><div class="field"><label>Time multiplier</label><select id="acMult">'+
       '<option value="1">1.0\u00d7 (none)</option><option value="1.25">1.25\u00d7</option><option value="1.5">1.5\u00d7</option><option value="2">2.0\u00d7</option><option value="3">3.0\u00d7</option></select></div>'+
     '<div class="field"><label>Extra attempts</label><input id="acExtra" type="number" min="0" value="'+ea+'"></div></div>'+
     '<div class="field"><label>Note (optional)</label><input id="acNote" value="'+esc(note)+'" placeholder="e.g. DSS letter on file"></div>'+
+    '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0 12px;">'+
+    '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">Missed a specific deadline?</div>'+
+    '<div style="font-size:12px;color:var(--text-subtle);margin-bottom:10px;">Give this student a personal deadline (and optionally an extra attempt) for one quiz, arena, or exam. Leave the type blank if not needed.</div>'+
+    '<div class="row2"><div class="field"><label>Type</label><select id="acKind">'+
+      '<option value="">\u2014 none \u2014</option><option value="exam">Exam</option><option value="quiz">Chapter quiz</option><option value="arena">Arena</option></select></div>'+
+    '<div class="field"><label>Which one</label><select id="acRef"><option value="">Choose a type first</option></select></div></div>'+
+    '<div class="row2"><div class="field"><label>New deadline for this student</label><input id="acDue" type="datetime-local"></div>'+
+    '<div class="field"><label>Extra attempts (this item)</label><input id="acItemExtra" type="number" min="0" value="0"></div></div>'+
+    '<div id="acExisting" style="font-size:12px;color:var(--text-muted);margin:2px 0 8px;"></div>'+
     '<div class="inline-actions" style="justify-content:flex-end;">'+
       (existing?'<button class="btn btn-danger btn-sm" id="acClear">Remove</button>':'')+
       '<button class="btn btn-ghost" id="acCancel">Cancel</button><button class="btn btn-primary" id="acSave">Save</button></div></div>';
   $('modalHost').appendChild(m);
   // set current multiplier
   var sel=$('acMult'); for(var i=0;i<sel.options.length;i++){ if(parseFloat(sel.options[i].value)===Number(tm)){ sel.selectedIndex=i; } }
+
+  // ---- per-assessment (missed deadline) picker ----
+  var courseExams=[];
+  sb.from('im_exam').select('id,title,kind').eq('course_id',State.teachCourseId).order('title').then(function(r){
+    courseExams=r.data?r.data:[]; if($('acKind').value){ fillRefs(); }
+  });
+  function fillRefs(){
+    var kind=$('acKind').value, out='', j;
+    if(kind==='exam'){
+      out='<option value="">Select an exam\u2026</option>';
+      for(j=0;j<courseExams.length;j++){ out+='<option value="'+courseExams[j].id+'">'+esc(courseExams[j].title)+'</option>'; }
+      if(courseExams.length===0){ out='<option value="">No exams in this course yet</option>'; }
+    } else if(kind==='quiz'){
+      out='<option value="">Select a chapter\u2026</option>';
+      for(j=0;j<CHAPTERS.length;j++){ out+='<option value="'+CHAPTERS[j].n+'">Ch '+CHAPTERS[j].n+' \u2014 '+esc(CHAPTERS[j].title)+'</option>'; }
+    } else if(kind==='arena'){
+      out='<option value="">Select an arena\u2026</option>';
+      for(j=0;j<ARENA_SLUGS.length;j++){ out+='<option value="'+ARENA_SLUGS[j]+'">'+esc(ARENA_SLUGS[j])+'</option>'; }
+    } else {
+      out='<option value="">Choose a type first</option>';
+    }
+    $('acRef').innerHTML=out;
+    showExistingItem();
+  }
+  $('acKind').addEventListener('change', fillRefs);
+  $('acRef').addEventListener('change', showExistingItem);
+  // show (and prefill) an accommodation already on file for the chosen item
+  function showExistingItem(){
+    var kind=$('acKind').value, ref=$('acRef').value, box=$('acExisting');
+    if(!kind||!ref){ box.textContent=''; return; }
+    sb.from('im_assessment_accommodation').select('due_override,extra_attempts,note')
+      .eq('course_id',State.teachCourseId).eq('student_id',studentId).eq('kind',kind).eq('ref_id',String(ref))
+      .maybeSingle().then(function(r){
+        if(r.data){
+          var d=r.data.due_override?new Date(r.data.due_override):null;
+          if(d){ $('acDue').value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16); }
+          $('acItemExtra').value=r.data.extra_attempts||0;
+          box.textContent='An accommodation is already on file for this item \u2014 saving will update it.';
+        } else {
+          $('acDue').value=''; $('acItemExtra').value=0; box.textContent='';
+        }
+      });
+  }
   function close(){ $('modalHost').innerHTML=''; }
   $('acCancel').addEventListener('click', close);
   m.addEventListener('click', function(e){ if(e.target===m){ close(); } });
@@ -1176,9 +1265,20 @@ function openAccommodation(studentId, email, existing){
       time_multiplier:parseFloat($('acMult').value), extra_attempts:parseInt($('acExtra').value,10)||0, note:$('acNote').value.trim() };
     $('acSave').disabled=true;
     sb.from('im_accommodation').upsert(payload,{onConflict:'course_id,student_id'}).then(function(res){
-      $('acSave').disabled=false;
-      if(res.error){ var e=$('acMsg'); e.className='msg err'; e.textContent=res.error.message; return; }
-      close(); loadRoster();
+      if(res.error){ $('acSave').disabled=false; var e=$('acMsg'); e.className='msg err'; e.textContent=res.error.message; return; }
+      // optional per-assessment (missed deadline) accommodation
+      var kind=$('acKind').value, ref=$('acRef').value;
+      if(!kind||!ref){ $('acSave').disabled=false; close(); loadRoster(); return; }
+      var dueRaw=$('acDue').value;
+      var item={ course_id:State.teachCourseId, student_id:studentId, kind:kind, ref_id:String(ref),
+        due_override: dueRaw?new Date(dueRaw).toISOString():null,
+        extra_attempts: parseInt($('acItemExtra').value,10)||0,
+        note:$('acNote').value.trim(), created_by:State.user.id };
+      sb.from('im_assessment_accommodation').upsert(item,{onConflict:'course_id,student_id,kind,ref_id'}).then(function(r2){
+        $('acSave').disabled=false;
+        if(r2.error){ var e2=$('acMsg'); e2.className='msg err'; e2.textContent=r2.error.message; return; }
+        close(); loadRoster();
+      });
     });
   });
 }
@@ -2808,25 +2908,23 @@ function ensureProfileAndCourse() {
     State.payCourseId = profRow ? profRow.course_id : (selfRow ? selfRow.course_id : null);
     if (selfRow) { State.selfCourseId = selfRow.course_id; if(!State.payCourseId){ State.payCourseId = selfRow.course_id; } return null; }
     if (anyRow) { State.selfCourseId = anyRow.course_id; if(!State.payCourseId){ State.payCourseId = anyRow.course_id; } return null; }
-    // No ACTIVE enrollment (e.g., dropped from the only course): create / re-use a
-    // personal self-study course so the student still has a working space.
-    var code = 'self-' + uid.slice(0, 8);
-    return sb.from('im_course').insert({
-      owner_id: uid, title: 'Self-Study', term: 'Personal', join_code: code
-    }).select('id').single().then(function(c) {
-      if (c.error || !c.data) {
-        // insert may fail if a self-study course already exists (unique join_code) --
-        // fall back to enrolling/activating in the existing one.
-        return sb.from('im_course').select('id').eq('owner_id', uid).eq('join_code', code).maybeSingle().then(function(ex){
-          if (ex && ex.data) {
-            State.selfCourseId = ex.data.id; State.payCourseId = State.payCourseId || ex.data.id;
-            return sb.from('im_enrollment').upsert({ course_id: ex.data.id, student_id: uid, status: 'active' }, { onConflict: 'course_id,student_id' });
-          }
-          return null;
-        });
+    // No ACTIVE enrollment (e.g., dropped from the only course): put the student
+    // into THE single platform self-study course. There is exactly one, created
+    // and owned by the super-admin (im_course.is_self_study = true, enforced by a
+    // unique index); students are never given a course of their own.
+    return sb.from('im_course').select('id').eq('is_self_study', true).limit(1).maybeSingle().then(function(ss) {
+      if (!ss || !ss.data) {
+        // The admin has not created the self-study course yet. Leave the student
+        // without one rather than inventing a personal course.
+        State.selfCourseId = null;
+        return null;
       }
-      State.selfCourseId = c.data.id; if(!State.payCourseId){ State.payCourseId = c.data.id; }
-      return sb.from('im_enrollment').insert({ course_id: State.selfCourseId, student_id: uid, status: 'active' });
+      State.selfCourseId = ss.data.id;
+      if (!State.payCourseId) { State.payCourseId = ss.data.id; }
+      return sb.from('im_enrollment').upsert(
+        { course_id: ss.data.id, student_id: uid, status: 'active' },
+        { onConflict: 'course_id,student_id' }
+      );
     });
   });
 }
