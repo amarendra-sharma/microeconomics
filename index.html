@@ -1130,9 +1130,115 @@ function renderRoster(host){
   host.innerHTML='<div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">'+
     '<div>Students join with code <span class="pill-code">'+esc(c.join_code)+'</span> in the student app.</div>'+
     '<button class="btn btn-ghost btn-sm" id="addStudentBtn">+ Add student by email</button></div>'+
-    '<div id="rosterBody">'+loadingCard()+'</div>';
+    '<div id="rosterBody">'+loadingCard()+'</div>'+
+    '<div id="staffPanel" style="margin-top:26px;"></div>';
   $('addStudentBtn').addEventListener('click', openAddStudent);
   loadRoster();
+  renderStaffPanel();
+}
+
+/* ---- Course staff (teaching assistants) --------------------------------
+   The course owner adds a TA by email and ticks exactly what that TA may do.
+   Only the owner (or an admin) can add staff or change permissions -- the
+   database enforces this too, so a TA cannot escalate their own access. */
+var STAFF_CAPS = [
+  {k:'can_view_roster',   label:'See the roster'},
+  {k:'can_manage_roster', label:'Add / drop students'},
+  {k:'can_view_grades',   label:'See grades'},
+  {k:'can_grade',         label:'Grade written answers'},
+  {k:'can_edit_exams',    label:'Build & edit exams'},
+  {k:'can_view_integrity',label:'View proctoring logs'},
+  {k:'can_accommodate',   label:'Set accommodations'}
+];
+function capBoxes(prefix, vals){
+  var out='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:6px 14px;margin:6px 0 2px;">', i, k, on;
+  for(i=0;i<STAFF_CAPS.length;i++){
+    k=STAFF_CAPS[i].k;
+    on = vals ? !!vals[k] : (k==='can_view_roster'||k==='can_view_grades'||k==='can_grade');
+    out+='<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="'+prefix+k+'" '+(on?'checked':'')+'> '+STAFF_CAPS[i].label+'</label>';
+  }
+  return out+'</div>';
+}
+function renderStaffPanel(){
+  var host=$('staffPanel'); if(!host){ return; }
+  host.innerHTML='<div class="card" style="max-width:760px;"><h3>Course staff (teaching assistants)</h3>'+
+    '<div id="stMsg" class="msg"></div>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Give a TA access to this course and choose exactly what they can do. They do not need an account already \u2014 one is created if needed. Only you (the course owner) can change these permissions.</div>'+
+    '<div class="row2"><div class="field"><label>TA email</label><input id="stEmail" type="email" placeholder="ta@university.edu"></div>'+
+    '<div class="field"><label>Name (optional)</label><input id="stName" type="text" placeholder="Alex Kim"></div></div>'+
+    '<div class="field"><label>Role</label><select id="stRole"><option value="ta">Teaching assistant</option><option value="co_instructor">Co-instructor</option></select></div>'+
+    '<div class="field"><label>This person may:</label>'+capBoxes('stNew',null)+'</div>'+
+    '<div class="inline-actions" style="justify-content:flex-end;"><button class="btn btn-primary" id="stAdd">Add to course</button></div>'+
+    '<div id="stList" style="margin-top:16px;">'+loadingCard()+'</div></div>';
+  $('stAdd').addEventListener('click', addStaff);
+  loadStaffList();
+}
+function loadStaffList(){
+  sb.functions.invoke('im-admin-roster',{ body:{ action:'list_staff', course_id:State.teachCourseId } }).then(function(res){
+    var d=res.data, box=$('stList'); if(!box){ return; }
+    if(!d || d.error){ box.innerHTML='<div class="card empty">Could not load course staff.</div>'; return; }
+    var staff=d.staff?d.staff:[];
+    if(staff.length===0){ box.innerHTML='<div class="card empty">No teaching assistants on this course yet.</div>'; return; }
+    var html='', i, s;
+    for(i=0;i<staff.length;i++){
+      s=staff[i];
+      html+='<div class="card" style="margin-bottom:10px;padding:12px 14px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">'+
+          '<div><b>'+esc(s.email||s.user_id)+'</b> <span class="tag dim">'+(s.staff_role==='co_instructor'?'co-instructor':'TA')+'</span></div>'+
+          '<div class="inline-actions"><button class="btn btn-ghost btn-sm" data-savestaff="'+esc(s.user_id)+'">Save permissions</button>'+
+          '<button class="btn btn-danger btn-sm" data-delstaff="'+esc(s.user_id)+'">Remove</button></div>'+
+        '</div>'+capBoxes('st_'+s.user_id+'_', s)+'</div>';
+    }
+    box.innerHTML=html;
+    Array.prototype.forEach.call(box.querySelectorAll('[data-savestaff]'), function(b){
+      b.addEventListener('click', function(){ saveStaffPerms(b.getAttribute('data-savestaff')); });
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-delstaff]'), function(b){
+      b.addEventListener('click', function(){ removeStaff(b.getAttribute('data-delstaff'), b); });
+    });
+  });
+}
+function collectCaps(prefix){
+  var out={}, i, k, el;
+  for(i=0;i<STAFF_CAPS.length;i++){ k=STAFF_CAPS[i].k; el=$(prefix+k); if(el){ out[k]=el.checked; } }
+  return out;
+}
+function addStaff(){
+  var e=$('stMsg'), email=$('stEmail').value.trim().toLowerCase();
+  if(!email){ e.textContent='Enter the TA\u2019s email.'; e.className='msg err'; return; }
+  var payload=collectCaps('stNew');
+  payload.action='add_staff'; payload.course_id=State.teachCourseId; payload.email=email;
+  payload.full_name=$('stName').value.trim(); payload.staff_role=$('stRole').value;
+  e.textContent='Working\u2026'; e.className='msg';
+  sb.functions.invoke('im-admin-roster',{ body:payload }).then(function(res){
+    var d=res.data;
+    if(!d || d.error){ e.textContent=(d&&d.error)?d.error:'Could not add that person.'; e.className='msg err'; return; }
+    e.textContent = d.created
+      ? ('Created an account for '+email+'. Temporary password: '+d.temp_password+' \u2014 copy it now; it is not shown again.')
+      : ('Added '+email+' to this course.');
+    e.className='msg ok';
+    $('stEmail').value=''; $('stName').value='';
+    loadStaffList();
+  }, function(){ e.textContent='Could not reach the roster service.'; e.className='msg err'; });
+}
+function saveStaffPerms(userId){
+  var e=$('stMsg'), payload=collectCaps('st_'+userId+'_');
+  payload.action='set_staff_perms'; payload.course_id=State.teachCourseId; payload.user_id=userId;
+  sb.functions.invoke('im-admin-roster',{ body:payload }).then(function(res){
+    var d=res.data;
+    if(!d || d.error){ e.textContent=(d&&d.error)?d.error:'Could not save permissions.'; e.className='msg err'; return; }
+    e.textContent='Permissions updated.'; e.className='msg ok';
+  });
+}
+function removeStaff(userId, btn){
+  if(!window.confirm('Remove this person from the course staff? They will lose all access to this course.')){ return; }
+  btn.disabled=true;
+  sb.functions.invoke('im-admin-roster',{ body:{ action:'remove_staff', course_id:State.teachCourseId, user_id:userId } }).then(function(res){
+    var d=res.data, e=$('stMsg');
+    if(!d || d.error){ btn.disabled=false; e.textContent=(d&&d.error)?d.error:'Could not remove.'; e.className='msg err'; return; }
+    e.textContent='Removed from course staff.'; e.className='msg ok';
+    loadStaffList();
+  });
 }
 function loadRoster(){
   Promise.all([
@@ -3890,12 +3996,18 @@ function renderMyGrades(host, exams, examScore, asgs, subBy, summary){
   html+='<div class="card" style="margin-bottom:16px;"><h3 style="font-size:15px;margin-bottom:10px;">Exams</h3>';
   if(exams.length===0){ html+='<div style="font-size:13px;color:var(--text-subtle);">No exams yet.</div>'; }
   else {
-    html+='<table class="data-table"><caption class="sr-only">Your exam scores</caption><thead><tr><th scope="col">Exam</th><th scope="col">Score</th><th scope="col">Status</th></tr></thead><tbody>';
+    html+='<table class="data-table"><caption class="sr-only">Your exam scores</caption><thead><tr><th scope="col">Exam</th><th scope="col">Score</th><th scope="col">Status</th><th scope="col">Review</th></tr></thead><tbody>';
     exams.forEach(function(e){
       var taken = examScore.hasOwnProperty(e.id);
       var score = taken ? (fmtPts(examScore[e.id])+' / '+e.total_points) : '\u2014';
       var status = taken ? 'Graded' : 'Not taken yet';
-      html+='<tr><th scope="row" style="font-weight:500;">'+esc(e.title||e.kind)+'</th><td>'+score+'</td><td>'+status+'</td></tr>';
+      // Review opens only after the deadline, and only if the instructor
+      // released it; the server re-checks both, so this button is just a
+      // convenience. Students see the questions they got wrong.
+      var rev = taken
+        ? '<button class="btn btn-ghost btn-sm" data-review-exam="'+esc(e.id)+'" data-review-title="'+esc(e.title||e.kind)+'">Review mistakes</button>'
+        : '<span style="color:var(--text-subtle);">\u2014</span>';
+      html+='<tr><th scope="row" style="font-weight:500;">'+esc(e.title||e.kind)+'</th><td>'+score+'</td><td>'+status+'</td><td>'+rev+'</td></tr>';
     });
     html+='</tbody></table>';
   }
@@ -3917,6 +4029,65 @@ function renderMyGrades(host, exams, examScore, asgs, subBy, summary){
   }
   html+='</div>';
   host.innerHTML=html;
+  Array.prototype.forEach.call(host.querySelectorAll('[data-review-exam]'), function(b){
+    b.addEventListener('click', function(){
+      openExamReview(b.getAttribute('data-review-exam'), b.getAttribute('data-review-title'));
+    });
+  });
+}
+
+/* Student review of a graded exam. Shows ONLY the questions the student got
+   wrong, and only once the instructor has released review AND the exam's
+   deadline has passed. Both conditions are re-checked on the server, so this
+   screen cannot be opened early by fiddling with the page. */
+function openExamReview(examId, title){
+  var courseId = State.payCourseId || State.selfCourseId;
+  var m=document.createElement('div'); m.className='modal-bg';
+  m.innerHTML='<div class="modal" style="max-width:720px;"><h2>Review \u2014 '+esc(title||'Exam')+'</h2>'+
+    '<div id="revBody">'+loadingCard()+'</div>'+
+    '<div class="inline-actions" style="justify-content:flex-end;margin-top:14px;">'+
+    '<button class="btn btn-ghost" id="revClose">Close</button></div></div>';
+  $('modalHost').appendChild(m);
+  function closeR(){ $('modalHost').innerHTML=''; }
+  $('revClose').addEventListener('click', closeR);
+  m.addEventListener('click', function(e){ if(e.target===m){ closeR(); } });
+
+  sb.functions.invoke('im-grade-attempt',{ body:{ action:'review', exam_id:examId, course_id:courseId } }).then(function(res){
+    var d=res.data, box=$('revBody'); if(!box){ return; }
+    if(!d || d.error){
+      box.innerHTML='<div class="card empty">'+esc((d&&d.error)?d.error:'Could not load your review.')+'</div>'; return;
+    }
+    if(!d.open){
+      box.innerHTML='<div class="card empty">Review is not open for this exam yet. It becomes available after the deadline, once your instructor releases it.</div>'; return;
+    }
+    var items=d.items?d.items:[];
+    if(items.length===0){
+      box.innerHTML='<div class="card" style="text-align:center;padding:22px;">You did not get any questions wrong on this exam. Nothing to review.</div>'; return;
+    }
+    var html='<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Showing the '+items.length+' question'+(items.length===1?'':'s')+' you answered incorrectly.</div>';
+    var i, it, yours, correct;
+    for(i=0;i<items.length;i++){
+      it=items[i];
+      yours = (it.your_answer===null||it.your_answer==='') ? '(no answer)' : String(it.your_answer);
+      correct = String(it.correct_answer);
+      // for multiple choice, show the option text rather than the index
+      if(it.item_type==='multiple_choice' && it.options){
+        var yi=parseInt(yours,10), ci=parseInt(correct,10);
+        if(!isNaN(yi) && it.options[yi]!==undefined){ yours=it.options[yi]; }
+        if(!isNaN(ci) && it.options[ci]!==undefined){ correct=it.options[ci]; }
+      }
+      html+='<div class="card" style="margin-bottom:12px;padding:14px;">'+
+        '<div style="font-weight:500;margin-bottom:8px;">'+esc(it.prompt)+'</div>'+
+        (it.figure?renderFigure(it.figure):'')+
+        '<div style="font-size:13px;margin-top:8px;"><span style="color:var(--rose);">Your answer:</span> '+esc(yours)+'</div>'+
+        '<div style="font-size:13px;"><span style="color:var(--green);">Correct answer:</span> '+esc(correct)+'</div>'+
+        (it.rationale?('<div style="font-size:12.5px;color:var(--text-muted);margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">'+esc(it.rationale)+'</div>'):'')+
+      '</div>';
+    }
+    box.innerHTML=html;
+  }, function(){
+    var box=$('revBody'); if(box){ box.innerHTML='<div class="card empty">Could not reach the review service.</div>'; }
+  });
 }
 
 function loadMyExams() {
