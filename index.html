@@ -572,8 +572,35 @@ function doAuth(){
       if(jc){ meta = { join_code: jc }; }
     }
     sb.auth.signUp({email:email,password:pw,options:{data:meta}}).then(function(res){
+      if(res.error){
+        // One MacroNations account per email (shared across Micro/Macro/Econometrics).
+        // If the email already exists, this isn't a dead end: sign them into their
+        // existing account with the password they typed, then they can join a micro
+        // course (or pay) to unlock Intro Micro. Detect the "already registered" case
+        // by message/status rather than treating it as a hard failure.
+        var msg=(res.error.message||'').toLowerCase();
+        var exists = res.error.status===422 || msg.indexOf('already')>=0 || msg.indexOf('registered')>=0 || msg.indexOf('exists')>=0;
+        if(exists){
+          setAuthMsg('You already have a MacroNations account with this email \u2014 signing you in\u2026','');
+          sb.auth.signInWithPassword({email:email,password:pw}).then(function(si){
+            $('authSubmit').disabled=false;
+            if(si.error){
+              // account exists but the password didn't match
+              setAuthMsg('You already have a MacroNations account with this email (from Macro or Econometrics). Enter your existing password and click Sign in, or use \u201CForgot password?\u201D to reset it. Once signed in, join your Intro Micro course to get access.','err');
+              State.signup=false; hide($('signupRole'));
+              return;
+            }
+            // signed into the existing account; carry any join code they typed so
+            // they land enrolled in the micro course
+            var jc = $('authJoinCode') ? $('authJoinCode').value.trim() : '';
+            if(jc){ try{ localStorage.setItem('im_pending_join', jc); }catch(e){} }
+            onSignedIn(si.data.session.user);
+          });
+          return;
+        }
+        $('authSubmit').disabled=false; setAuthMsg(res.error.message,'err'); return;
+      }
       $('authSubmit').disabled=false;
-      if(res.error){ setAuthMsg(res.error.message,'err'); return; }
       if(res.data && res.data.session){ onSignedIn(res.data.session.user); }
       else {
         var extra = (SIGNUP_ROLE==='professor') ? ' Your professor request will be reviewed after you confirm and sign in.' : '';
@@ -2643,10 +2670,16 @@ function renderSubscribePrompt(whatLabel) {
 /* ---- If the user entered a join code at signup, enroll them (once) ---- */
 function maybeJoinFromSignup() {
   var u = State.user;
-  if (!u || !u.user_metadata || !u.user_metadata.join_code) { return; }
-  var code = u.user_metadata.join_code;
-  // only attempt if not already enrolled somewhere as a student in a prof course
+  var code = (u && u.user_metadata && u.user_metadata.join_code) ? u.user_metadata.join_code : null;
+  // existing-account path (email already registered on another MacroNations
+  // product): the join code was stashed in localStorage at sign-in instead of
+  // in signup metadata.
+  if (!code) {
+    try { code = localStorage.getItem('im_pending_join'); } catch (e) { code = null; }
+  }
+  if (!u || !code) { return; }
   joinCourseByCode(code, function(err, course) {
+    try { localStorage.removeItem('im_pending_join'); } catch (e) {}
     if (!err && course) { ensureProfileAndCourse(); if(currentView==='home'){ loadHome(); } }
   });
 }
