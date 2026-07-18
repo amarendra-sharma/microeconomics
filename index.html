@@ -2521,16 +2521,52 @@ function savePlatform(patch, okMsg){
 function renderPeople(host){
   if(State.role!=='admin'){ host.innerHTML='<div class="card empty">Administrator access required.</div>'; return; }
   host.innerHTML='<div id="reqQueue">'+loadingCard()+'</div>'+
-    '<div class="card" style="max-width:680px;margin:18px 0 16px;"><h3>Grant access manually</h3><div id="pplMsg" class="msg"></div>'+
-    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Promote an existing account directly (it must have signed up first).</div>'+
+    '<div class="card" style="max-width:680px;margin:18px 0 16px;"><h3>Add or promote a person</h3><div id="pplMsg" class="msg"></div>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Enter an email and choose an action. The person does <b>not</b> need to have signed up first &mdash; if they have no MacroNations account one is created and a temporary password is shown. If they already have an account (from Macro or Econometrics) it is linked and given Intro Micro access.</div>'+
     '<div class="field"><label>Email</label><input id="pplEmail" type="email" placeholder="professor@university.edu"></div>'+
-    '<div class="inline-actions"><button class="btn btn-primary" id="pplGrant">Make instructor</button><button class="btn btn-ghost" id="pplAdmin">Make admin</button><button class="btn btn-danger" id="pplRevoke">Revoke to student</button></div></div>'+
+    '<div class="field"><label>Full name (optional, used when creating a new account)</label><input id="pplName" type="text" placeholder="Jane Doe"></div>'+
+    '<div class="inline-actions" style="margin-bottom:10px;">'+
+      '<button class="btn btn-primary" id="pplAddStudent">Add as student</button>'+
+      '<button class="btn btn-primary" id="pplAddProf">Add as instructor</button>'+
+    '</div>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin:14px 0 8px;">Change the role of an existing account:</div>'+
+    '<div class="inline-actions"><button class="btn btn-ghost" id="pplGrant">Make instructor</button><button class="btn btn-ghost" id="pplAdmin">Make admin</button><button class="btn btn-danger" id="pplRevoke">Revoke to student</button></div></div>'+
     '<div id="pplList">'+loadingCard()+'</div>';
+  $('pplAddStudent').addEventListener('click', function(){ addPerson('student'); });
+  $('pplAddProf').addEventListener('click', function(){ addPerson('professor'); });
   $('pplGrant').addEventListener('click', function(){ setRole('professor'); });
   $('pplAdmin').addEventListener('click', function(){ setRole('admin'); });
   $('pplRevoke').addEventListener('click', function(){ setRole('student'); });
   loadRequests();
   loadStaff();
+}
+/* Create-or-link an account via the im-admin-roster edge function. Works even
+   when the person has never signed up (the function creates the auth user with
+   the service role, which the browser client cannot do). */
+function addPerson(role){
+  var e=$('pplMsg');
+  var email=$('pplEmail').value.trim().toLowerCase();
+  if(!email){ e.textContent='Enter an email address.'; e.className='msg err'; return; }
+  var fullName=$('pplName')?$('pplName').value.trim():'';
+  e.textContent='Working\u2026'; e.className='msg';
+  var payload={ action:'add_user', email:email, role:role };
+  if(fullName){ payload.full_name=fullName; }
+  if(State.teachCourseId){ payload.course_id=State.teachCourseId; }
+  sb.functions.invoke('im-admin-roster',{ body:payload }).then(function(res){
+    var d=res.data, err=res.error;
+    if(err || !d || d.error){
+      e.textContent=(d&&d.error)?d.error:(err&&err.message?err.message:'Could not add that person.');
+      e.className='msg err'; return;
+    }
+    var msg='';
+    if(d.created){
+      msg='Created a new account for '+email+' as '+(role==='professor'?'instructor':'student')+'. Temporary password: '+d.temp_password+' \u2014 copy it now and share it; it is not shown again.';
+    } else {
+      msg='Linked the existing MacroNations account for '+email+' and set it to '+(role==='professor'?'instructor':'student')+'.';
+    }
+    e.textContent=msg; e.className='msg ok';
+    loadStaff();
+  }, function(){ e.textContent='Could not reach the roster service.'; e.className='msg err'; });
 }
 function loadRequests(){
   sb.from('im_access_request').select('*').eq('status','pending').order('created_at',{ascending:true}).then(function(res){
@@ -2568,16 +2604,26 @@ function denyRequest(reqId){
   sb.from('im_access_request').update({ status:'denied', decided_at:new Date().toISOString(), decided_by:State.user.id }).eq('id', reqId).then(function(){ loadRequests(); });
 }
 function setRole(role){
+  var e=$('pplMsg');
   var email=$('pplEmail').value.trim().toLowerCase();
-  if(!email){ return; }
-  sb.from('im_person').select('user_id').eq('email',email).maybeSingle().then(function(res){
-    var e=$('pplMsg');
-    if(res.error||!res.data){ e.textContent='No account with that email.'; e.className='msg err'; return; }
-    sb.from('im_person').update({role:role}).eq('user_id',res.data.user_id).then(function(u){
-      if(u.error){ e.textContent=u.error.message; e.className='msg err'; return; }
-      e.textContent='Updated '+email+' to '+role+'.'; e.className='msg ok'; loadStaff();
-    });
-  });
+  if(!email){ e.textContent='Enter an email address.'; e.className='msg err'; return; }
+  e.textContent='Working\u2026'; e.className='msg';
+  // Go through the roster edge function rather than writing im_person directly.
+  // Auth is shared across Micro/Macro/Econometrics, so the person may have an
+  // account but no Intro Micro profile row yet; the function resolves them from
+  // auth.users and creates the profile, which the browser client cannot do.
+  sb.functions.invoke('im-admin-roster',{ body:{ action:'set_role', email:email, role:role } }).then(function(res){
+    var d=res.data, err=res.error;
+    if(err || !d || d.error){
+      var m=(d&&d.error)?d.error:(err&&err.message?err.message:'Could not update that account.');
+      if(String(m).toLowerCase().indexOf('not found')>=0){
+        m='No MacroNations account exists with that email. Use "Add as student" or "Add as instructor" above to create one.';
+      }
+      e.textContent=m; e.className='msg err'; return;
+    }
+    e.textContent='Updated '+email+' to '+(role==='professor'?'instructor':role)+'.'; e.className='msg ok';
+    loadStaff();
+  }, function(){ e.textContent='Could not reach the roster service.'; e.className='msg err'; });
 }
 function loadStaff(){
   sb.from('im_person').select('email,full_name,role').in('role',['professor','admin']).order('role').then(function(res){
