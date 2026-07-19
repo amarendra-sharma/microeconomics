@@ -2365,11 +2365,33 @@ function openExamEditor(examId){
       html+='<div class="card" style="margin-bottom:8px;background:var(--bg2);">'+
         '<div style="display:flex;justify-content:space-between;gap:10px;">'+
           '<div style="flex:1;"><div style="font-size:11px;color:var(--text-subtle);">'+(idx+1)+'. '+esc(id)+' '+typeBadge+' \u00b7 '+esc((it.difficulty||''))+' \u00b7 '+((it.points||1))+'pt</div>'+
-          '<div style="font-size:13.5px;color:var(--text-bright);margin-top:3px;">'+esc(it.prompt||'(question text unavailable)')+'</div>'+opts+'</div>'+
+          '<div style="font-size:13.5px;color:var(--text-bright);margin-top:3px;">'+esc(it.prompt||'(question text unavailable)')+'</div>'+opts+
+          '<button class="btn btn-ghost btn-sm" data-fig="'+id+'" style="margin-top:6px;">Show sample &amp; diagram</button>'+
+          '<div id="edfig_'+id+'" style="display:none;"></div></div>'+
           '<button class="btn btn-danger btn-sm" data-rm="'+id+'" style="align-self:flex-start;">Remove</button>'+
         '</div></div>';
     });
     host.innerHTML=html;
+    // Diagrams and payoff tables are generated per student, so the bank row has
+    // no picture. Fetch one rendered sample on demand.
+    Array.prototype.forEach.call(host.querySelectorAll('[data-fig]'), function(b){
+      b.addEventListener('click', function(){
+        var id=b.getAttribute('data-fig'), box=$('edfig_'+id);
+        if(!box){ return; }
+        if(box.style.display!=='none'){ box.style.display='none'; return; }
+        box.style.display='block';
+        box.innerHTML='<div style="font-size:12px;color:var(--text-subtle);margin-top:6px;">Loading sample\u2026</div>';
+        sb.functions.invoke('im-grade-attempt',{ body:{ action:'preview', item_id:id } }).then(function(res){
+          var d=res.data;
+          if(!d || d.error){ box.innerHTML='<div style="font-size:12px;color:var(--text-subtle);margin-top:6px;">(sample unavailable)</div>'; return; }
+          var o='';
+          if(d.options && d.options.length){ o='<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Options: '+d.options.map(function(x){return esc(x);}).join(' \u00b7 ')+'</div>'; }
+          box.innerHTML='<div style="margin-top:8px;padding:10px;border-radius:8px;background:rgba(124,92,255,.08);border:1px solid rgba(124,92,255,.2);font-size:13px;">'+
+            esc(d.prompt)+(d.figure?('<div style="margin-top:8px;">'+renderFigure(d.figure)+'</div>'):'')+o+
+            '<div style="margin-top:6px;font-size:11.5px;color:var(--text-subtle);">Sample values \u2014 each student receives a different version.</div></div>';
+        }, function(){ box.innerHTML='<div style="font-size:12px;color:var(--text-subtle);margin-top:6px;">(sample unavailable)</div>'; });
+      });
+    });
     Array.prototype.forEach.call(host.querySelectorAll('[data-rm]'), function(b){ b.addEventListener('click', function(){
       var id=b.getAttribute('data-rm');
       EDIT_IDS=EDIT_IDS.filter(function(x){ return x!==id; });
@@ -2594,9 +2616,34 @@ function openAssembler(){
       } else if(it.item_type==='free_response'){
         opt='<div style="margin-top:6px;font-size:12px;color:var(--amber);">Short answer · students type a written response · graded by you (or AI-assisted)</div>';
       }
-      box.innerHTML='<div style="margin-top:8px;padding:10px;border-radius:8px;background:rgba(124,92,255,.08);border:1px solid rgba(124,92,255,.2);font-size:13px;color:var(--text);">'+esc(it.prompt)+opt+'</div>';
+      box.innerHTML='<div id="pvw_'+esc(id)+'" style="margin-top:8px;padding:10px;border-radius:8px;background:rgba(124,92,255,.08);border:1px solid rgba(124,92,255,.2);font-size:13px;color:var(--text);">'+esc(it.prompt)+opt+'<div style="margin-top:6px;font-size:12px;color:var(--text-subtle);">Loading sample\u2026</div></div>';
       box.style.display='block';
+      previewWithFigure(id, opt);
     } else { box.style.display='none'; }
+  }
+  /* The bank stores prompt text only -- any diagram or payoff table is built by
+     the generator at issue time. Ask the server for one rendered instance so the
+     instructor can see the actual figure while building the exam. */
+  function previewWithFigure(id, opt){
+    sb.functions.invoke('im-grade-attempt',{ body:{ action:'preview', item_id:id } }).then(function(res){
+      var d=res.data, host=$('pvw_'+id), it0=bankCache[id];
+      if(!host){ return; }
+      if(!d || d.error){
+        host.innerHTML=esc(it0.prompt)+opt+'<div style="margin-top:6px;font-size:12px;color:var(--text-subtle);">(sample unavailable)</div>';
+        return;
+      }
+      var optHtml=opt;
+      if(d.options && d.options.length){
+        optHtml='<div style="margin-top:6px;font-size:12px;color:var(--text-muted);">Options: '+d.options.map(function(o){ return esc(o); }).join(' \u00b7 ')+'</div>';
+      }
+      host.innerHTML=esc(d.prompt)+
+        (d.figure?('<div style="margin-top:8px;">'+renderFigure(d.figure)+'</div>'):'')+
+        optHtml+
+        '<div style="margin-top:6px;font-size:11.5px;color:var(--text-subtle);">Sample values \u2014 each student receives a different version.</div>';
+    }, function(){
+      var host2=$('pvw_'+id), it1=bankCache[id];
+      if(host2){ host2.innerHTML=esc(it1.prompt)+opt+'<div style="margin-top:6px;font-size:12px;color:var(--text-subtle);">(sample unavailable)</div>'; }
+    });
   }
   function renderSelected(){
     var ids=Object.keys(assemblerSel);
