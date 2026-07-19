@@ -1861,13 +1861,14 @@ function renderGrading(host){
 function renderWorkBrowser(){
   var card=$('workBrowser'); if(!card){ return; }
   card.innerHTML='<h3 style="font-size:15px;margin-bottom:8px;">Student work</h3>'+
-    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">See everything a student answered on an exam and adjust any score. Changes keep the original grade on record.</div>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">See everything a student answered on an exam, chapter quiz, or arena, and adjust any score. Changes keep the original grade on record.</div>'+
     '<div id="wbMsg" class="msg"></div>'+
     '<div class="row2"><div class="field"><label>Student</label><select id="wbStudent"><option value="">Loading\u2026</option></select></div>'+
-    '<div class="field"><label>Exam</label><select id="wbExam"><option value="">Loading\u2026</option></select></div></div>'+
+    '<div class="field"><label>Type</label><select id="wbType">'+
+      '<option value="exam">Exam</option><option value="quiz">Chapter quiz</option><option value="arena">Arena</option></select></div></div>'+
+    '<div class="field"><label id="wbWhichLabel">Which exam</label><select id="wbWhich"><option value="">Loading\u2026</option></select></div>'+
     '<div class="inline-actions" style="justify-content:flex-end;"><button class="btn btn-primary btn-sm" id="wbLoad">Open work</button></div>'+
     '<div id="wbBody" style="margin-top:14px;"></div>';
-  // populate the two pickers
   sb.from('im_enrollment').select('student_id,im_person(email,full_name)').eq('course_id',State.teachCourseId).then(function(r){
     var rows=r.data?r.data:[], out='<option value="">Choose a student\u2026</option>', i, p;
     for(i=0;i<rows.length;i++){
@@ -1877,59 +1878,122 @@ function renderWorkBrowser(){
     if(rows.length===0){ out='<option value="">No students enrolled</option>'; }
     if($('wbStudent')){ $('wbStudent').innerHTML=out; }
   });
-  sb.from('im_exam').select('id,title,kind').eq('course_id',State.teachCourseId).order('title').then(function(r){
-    var rows=r.data?r.data:[], out='<option value="">Choose an exam\u2026</option>', i;
-    for(i=0;i<rows.length;i++){ out+='<option value="'+esc(rows[i].id)+'">'+esc(rows[i].title||rows[i].kind)+'</option>'; }
-    if(rows.length===0){ out='<option value="">No exams yet</option>'; }
-    if($('wbExam')){ $('wbExam').innerHTML=out; }
-  });
+  $('wbType').addEventListener('change', fillWhich);
   $('wbLoad').addEventListener('click', loadStudentWork);
+  fillWhich();
+}
+/* Populate the third dropdown to match the chosen work type. */
+function fillWhich(){
+  var t=$('wbType').value, lbl=$('wbWhichLabel'), sel=$('wbWhich'), i, out;
+  if(t==='exam'){
+    lbl.textContent='Which exam';
+    sel.innerHTML='<option value="">Loading\u2026</option>';
+    sb.from('im_exam').select('id,title,kind').eq('course_id',State.teachCourseId).order('title').then(function(r){
+      var rows=r.data?r.data:[]; out='<option value="">Choose an exam\u2026</option>';
+      for(i=0;i<rows.length;i++){ out+='<option value="'+esc(rows[i].id)+'">'+esc(rows[i].title||rows[i].kind)+'</option>'; }
+      if(rows.length===0){ out='<option value="">No exams yet</option>'; }
+      sel.innerHTML=out;
+    });
+  } else if(t==='quiz'){
+    lbl.textContent='Which chapter';
+    out='<option value="">All chapters</option>';
+    for(i=0;i<CHAPTERS.length;i++){ out+='<option value="'+CHAPTERS[i].n+'">Ch '+CHAPTERS[i].n+' \u2014 '+esc(CHAPTERS[i].title)+'</option>'; }
+    sel.innerHTML=out;
+  } else {
+    lbl.textContent='Which arena';
+    out='<option value="">Choose an arena\u2026</option>';
+    for(i=0;i<ARENA_SLUGS.length;i++){ out+='<option value="'+esc(ARENA_SLUGS[i])+'">'+esc(ARENA_SLUGS[i])+'</option>'; }
+    sel.innerHTML=out;
+  }
 }
 function loadStudentWork(){
-  var e=$('wbMsg'), sid=$('wbStudent').value, eid=$('wbExam').value;
-  if(!sid || !eid){ e.textContent='Choose both a student and an exam.'; e.className='msg err'; return; }
+  var e=$('wbMsg'), sid=$('wbStudent').value, t=$('wbType').value, which=$('wbWhich').value;
+  if(!sid){ e.textContent='Choose a student.'; e.className='msg err'; return; }
+  if(t!=='quiz' && !which){ e.textContent='Choose which '+(t==='exam'?'exam':'arena')+'.'; e.className='msg err'; return; }
   e.textContent=''; e.className='msg';
   $('wbBody').innerHTML=loadingCard();
-  sb.functions.invoke('im-grade-attempt',{ body:{ action:'student_work', exam_id:eid, student_id:sid } }).then(function(res){
+  var body;
+  if(t==='exam'){ body={ action:'student_work', exam_id:which, student_id:sid }; }
+  else if(t==='quiz'){ body={ action:'quiz_work', course_id:State.teachCourseId, student_id:sid }; if(which){ body.chapter=parseInt(which,10); } }
+  else { body={ action:'arena_work', course_id:State.teachCourseId, student_id:sid, arena_slug:which }; }
+  sb.functions.invoke('im-grade-attempt',{ body:body }).then(function(res){
     var d=res.data, box=$('wbBody'); if(!box){ return; }
-    if(!d || d.error){ box.innerHTML='<div class="card empty">'+esc((d&&d.error)?d.error:'Could not load that student\u2019s work.')+'</div>'; return; }
+    if(!d || d.error){ box.innerHTML='<div class="card empty">'+esc((d&&d.error)?d.error:'Could not load that work.')+'</div>'; return; }
     var items=d.items?d.items:[];
-    if(items.length===0){ box.innerHTML='<div class="card empty">This student has not taken that exam.</div>'; return; }
-    var html='', i, it, yours, correct, mark;
-    for(i=0;i<items.length;i++){
-      it=items[i];
-      yours=(it.your_answer===null||it.your_answer==='')?'(no answer)':String(it.your_answer);
-      correct=(it.correct_answer===null)?'\u2014':String(it.correct_answer);
-      if(it.item_type==='multiple_choice' && it.options){
-        var yi=parseInt(yours,10), ci=parseInt(correct,10);
-        if(!isNaN(yi) && it.options[yi]!==undefined){ yours=it.options[yi]; }
-        if(!isNaN(ci) && it.options[ci]!==undefined){ correct=it.options[ci]; }
-      }
-      mark = it.is_correct===true ? '<span class="tag green">correct</span>'
-           : (it.is_correct===false ? '<span class="tag rose">incorrect</span>'
-           : '<span class="tag dim">needs marking</span>');
-      html+='<div class="card" style="margin-bottom:12px;padding:14px;">'+
-        '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">'+
-          '<div style="font-weight:500;">Q'+(i+1)+'</div><div>'+mark+'</div></div>'+
-        '<div style="margin-bottom:8px;">'+esc(it.prompt)+'</div>'+
-        (it.figure?renderFigure(it.figure):'')+
-        '<div style="font-size:13px;margin-top:6px;"><b>Student answered:</b> '+esc(yours)+'</div>'+
-        '<div style="font-size:13px;"><b>Correct answer:</b> '+esc(correct)+'</div>'+
-        (it.rationale?('<div style="font-size:12.5px;color:var(--text-muted);margin-top:6px;">'+esc(it.rationale)+'</div>'):'')+
-        (it.regraded_at?('<div style="font-size:12px;color:var(--amber);margin-top:6px;">Regraded \u2014 originally '+esc(String(it.original_points))+' pt'+(Number(it.original_points)===1?'':'s')+(it.regrade_note?(' \u2014 '+esc(it.regrade_note)):'')+'</div>'):'')+
-        '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">'+
-          '<div class="field" style="margin:0;width:110px;"><label>Points</label><input id="wp_'+esc(it.attempt_id)+'" type="number" step="0.5" min="0" max="'+esc(String(it.max_points))+'" value="'+esc(String(it.points_earned===null?0:it.points_earned))+'"></div>'+
-          '<div class="field" style="margin:0;flex:1;min-width:160px;"><label>Reason (optional)</label><input id="wn_'+esc(it.attempt_id)+'" placeholder="e.g. alternative valid method"></div>'+
-          '<button class="btn btn-ghost btn-sm" data-regrade="'+esc(it.attempt_id)+'" data-max="'+esc(String(it.max_points))+'">Save score</button>'+
-        '</div></div>';
-    }
-    box.innerHTML=html;
-    Array.prototype.forEach.call(box.querySelectorAll('[data-regrade]'), function(b){
-      b.addEventListener('click', function(){ regradeAttempt(b.getAttribute('data-regrade'), parseFloat(b.getAttribute('data-max')), b); });
-    });
+    if(items.length===0){ box.innerHTML='<div class="card empty">Nothing recorded for that selection yet.</div>'; return; }
+    box.innerHTML = (t==='arena') ? arenaWorkHtml(items, sid, which) : questionWorkHtml(items, t, sid);
+    wireWorkButtons(box, t, sid, which);
   }, function(){ $('wbBody').innerHTML='<div class="card empty">Could not reach the grading service.</div>'; });
 }
-function regradeAttempt(attemptId, maxPts, btn){
+/* Exam + quiz share a layout: full question, both answers, points editor. */
+function questionWorkHtml(items, t, sid){
+  var html='', i, it, yours, correct, mark;
+  for(i=0;i<items.length;i++){
+    it=items[i];
+    yours=(it.your_answer===null||it.your_answer==='')?'(no answer)':String(it.your_answer);
+    correct=(it.correct_answer===null||it.correct_answer===undefined)?'\u2014':String(it.correct_answer);
+    if(it.item_type==='multiple_choice' && it.options){
+      var yi=parseInt(yours,10), ci=parseInt(correct,10);
+      if(!isNaN(yi) && it.options[yi]!==undefined){ yours=it.options[yi]; }
+      if(!isNaN(ci) && it.options[ci]!==undefined){ correct=it.options[ci]; }
+    }
+    mark = it.is_correct===true ? '<span class="tag green">correct</span>'
+         : (it.is_correct===false ? '<span class="tag rose">incorrect</span>'
+         : '<span class="tag dim">needs marking</span>');
+    html+='<div class="card" style="margin-bottom:12px;padding:14px;">'+
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">'+
+        '<div style="font-weight:500;">Q'+(i+1)+(it.chapter?(' \u00b7 Ch '+it.chapter):'')+'</div><div>'+mark+'</div></div>'+
+      '<div style="margin-bottom:8px;">'+esc(it.prompt)+'</div>'+
+      (it.figure?renderFigure(it.figure):'')+
+      '<div style="font-size:13px;margin-top:6px;"><b>Student answered:</b> '+esc(yours)+'</div>'+
+      '<div style="font-size:13px;"><b>Correct answer:</b> '+esc(correct)+'</div>'+
+      (it.rationale?('<div style="font-size:12.5px;color:var(--text-muted);margin-top:6px;">'+esc(it.rationale)+'</div>'):'')+
+      (it.regraded_at?('<div style="font-size:12px;color:var(--amber);margin-top:6px;">Regraded \u2014 originally '+esc(String(it.original_points))+' pt'+(Number(it.original_points)===1?'':'s')+(it.regrade_note?(' \u2014 '+esc(it.regrade_note)):'')+'</div>'):'')+
+      '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">'+
+        '<div class="field" style="margin:0;width:110px;"><label>Points</label><input id="wp_'+esc(it.attempt_id)+'" type="number" step="0.5" min="0" max="'+esc(String(it.max_points))+'" value="'+esc(String(it.points_earned===null?0:it.points_earned))+'"></div>'+
+        '<div class="field" style="margin:0;flex:1;min-width:160px;"><label>Reason (optional)</label><input id="wn_'+esc(it.attempt_id)+'" placeholder="e.g. alternative valid method"></div>'+
+        '<button class="btn btn-ghost btn-sm" data-regrade="'+esc(it.attempt_id)+'" data-max="'+esc(String(it.max_points))+'"'+(it.chapter?(' data-chapter="'+esc(String(it.chapter))+'"'):'')+'>Save score</button>'+
+      '</div></div>';
+  }
+  return html;
+}
+/* Arenas are pass/fail per case, so the control is a correct/incorrect toggle. */
+function arenaWorkHtml(items, sid, slug){
+  var html='<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Each row is one logged submission. Marking a case correct or incorrect recalculates the student\u2019s arena percentage.</div>';
+  var i, it, mark;
+  for(i=0;i<items.length;i++){
+    it=items[i];
+    mark = it.is_correct ? '<span class="tag green">correct</span>' : '<span class="tag rose">incorrect</span>';
+    html+='<div class="card" style="margin-bottom:10px;padding:12px 14px;">'+
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'+
+        '<div><b>Case '+((it.case_index===null||it.case_index===undefined)?'\u2014':(it.case_index+1))+'</b>'+
+        '<span style="color:var(--text-subtle);font-size:12px;margin-left:8px;">'+esc(it.attempted_at?new Date(it.attempted_at).toLocaleDateString():'')+'</span></div>'+
+        '<div>'+mark+'</div></div>'+
+      '<div style="font-size:13px;margin-top:6px;"><b>Student answered:</b> '+esc(it.your_answer===null?'(no answer)':String(it.your_answer))+'</div>'+
+      '<div style="font-size:13px;"><b>Expected:</b> '+esc(it.correct_answer===null?'\u2014':String(it.correct_answer))+'</div>'+
+      (it.regraded_at?('<div style="font-size:12px;color:var(--amber);margin-top:6px;">Regraded \u2014 originally marked '+(it.original_correct?'correct':'incorrect')+(it.regrade_note?(' \u2014 '+esc(it.regrade_note)):'')+'</div>'):'')+
+      '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">'+
+        '<div class="field" style="margin:0;width:150px;"><label>Mark as</label><select id="wa_'+esc(String(it.attempt_id))+'">'+
+          '<option value="true"'+(it.is_correct?' selected':'')+'>Correct</option>'+
+          '<option value="false"'+(it.is_correct?'':' selected')+'>Incorrect</option></select></div>'+
+        '<div class="field" style="margin:0;flex:1;min-width:160px;"><label>Reason (optional)</label><input id="wn_'+esc(String(it.attempt_id))+'" placeholder="e.g. accepted alternate code"></div>'+
+        '<button class="btn btn-ghost btn-sm" data-arenaregrade="'+esc(String(it.attempt_id))+'">Save</button>'+
+      '</div></div>';
+  }
+  return html;
+}
+function wireWorkButtons(box, t, sid, which){
+  Array.prototype.forEach.call(box.querySelectorAll('[data-regrade]'), function(b){
+    b.addEventListener('click', function(){
+      regradeAttempt(b.getAttribute('data-regrade'), parseFloat(b.getAttribute('data-max')), b,
+        t, sid, b.getAttribute('data-chapter'));
+    });
+  });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-arenaregrade]'), function(b){
+    b.addEventListener('click', function(){ regradeArena(b.getAttribute('data-arenaregrade'), b, sid, which); });
+  });
+}
+function regradeAttempt(attemptId, maxPts, btn, kind, sid, chapter){
   var e=$('wbMsg');
   var pts=parseFloat($('wp_'+attemptId).value);
   if(isNaN(pts) || pts<0){ e.textContent='Enter a valid point value.'; e.className='msg err'; return; }
@@ -1939,11 +2003,35 @@ function regradeAttempt(attemptId, maxPts, btn){
   var patch={ points_earned:pts, is_correct:(!isNaN(maxPts) && pts>=maxPts) };
   if(note){ patch.regrade_note=note; }
   sb.from('im_exam_attempt').update(patch).eq('id',attemptId).then(function(res){
+    if(res.error){ btn.disabled=false; e.textContent='Could not save: '+res.error.message; e.className='msg err'; return; }
+    // a quiz regrade changes the chapter's recorded score, so rebuild it
+    if(kind==='quiz' && chapter){
+      sb.rpc('im_recompute_quiz_score',{ p_student:sid, p_course:State.teachCourseId, p_chapter:parseInt(chapter,10) }).then(function(){
+        btn.disabled=false; e.textContent='Score updated and the chapter quiz score recalculated.'; e.className='msg ok'; loadStudentWork();
+      }, function(){ btn.disabled=false; e.textContent='Score saved, but the chapter total could not be recalculated.'; e.className='msg err'; loadStudentWork(); });
+      return;
+    }
     btn.disabled=false;
-    if(res.error){ e.textContent='Could not save: '+res.error.message; e.className='msg err'; return; }
     e.textContent='Score updated. The original grade is kept on record.'; e.className='msg ok';
     loadStudentWork();
   }, function(){ btn.disabled=false; e.textContent='Could not save the new score.'; e.className='msg err'; });
+}
+function regradeArena(attemptId, btn, sid, slug){
+  var e=$('wbMsg');
+  var val=$('wa_'+attemptId).value==='true';
+  var note=$('wn_'+attemptId).value.trim();
+  btn.disabled=true;
+  var patch={ is_correct:val };
+  if(note){ patch.regrade_note=note; }
+  sb.from('im_attempt').update(patch).eq('id',attemptId).then(function(res){
+    if(res.error){ btn.disabled=false; e.textContent='Could not save: '+res.error.message; e.className='msg err'; return; }
+    sb.rpc('im_recompute_arena_score',{ p_user:sid, p_arena:slug }).then(function(r2){
+      btn.disabled=false;
+      var pct=(r2 && r2.data!==null && r2.data!==undefined)?(' New arena score: '+r2.data+'%.'):'';
+      e.textContent='Updated.'+pct; e.className='msg ok';
+      loadStudentWork();
+    }, function(){ btn.disabled=false; e.textContent='Saved, but the arena percentage could not be recalculated.'; e.className='msg err'; loadStudentWork(); });
+  }, function(){ btn.disabled=false; e.textContent='Could not save.'; e.className='msg err'; });
 }
 
 function renderGraderKeyCard(){
