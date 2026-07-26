@@ -524,10 +524,42 @@ function setAuthMsg(t,k){ var m=$('authMsg'); m.textContent=t||''; m.className='
 $('authToggle').addEventListener('click', function(){ State.signup=!State.signup; $('authSubmit').textContent=State.signup?'Create account':'Sign in'; $('authToggle').innerHTML=State.signup?'Already registered? <b>Sign in</b>':'No account yet? <b>Create one</b>'; setAuthMsg('',''); if(State.signup){ show($('signupRole')); } else { hide($('signupRole')); } });
 $('authSubmit').addEventListener('click', doAuth);
 if($('guestBrowseBtn')){ $('guestBrowseBtn').addEventListener('click', function(){
-  // Open the public curriculum sampler; free chapters (1-3) and the Market Sandbox
-  // Dilemma arena are accessible without an account.
-  window.open('intro-micro-textbook.html', '_blank');
+  enterGuest();
 }); }
+// Guest mode: no account. Show the app with only Chapters and Arenas, gated to
+// the free tier -- free chapters (1-3) and the free arena (Market Sandbox) are
+// playable; everything else prompts to subscribe / sign up. This is what lets a
+// visitor actually try the first arena, not just read the book.
+function enterGuest(){
+  State.user = null;
+  State.role = 'guest';
+  State.guest = true;
+  State.hasAccess = false;
+  hide($('authScreen'));
+  show($('appScreen'));
+  if($('sideUser')){ $('sideUser').textContent = 'Guest'; }
+  if($('sideRole')){ $('sideRole').textContent = 'Browsing free preview'; }
+  hide($('teachGroup')); hide($('adminGroup'));
+  // hide every nav item a guest can't use; keep home, textbook (chapters), arenas
+  var guestViews = { home:1, chapters:1, arenas:1 };
+  Array.prototype.forEach.call(document.querySelectorAll('.nav-item'), function(n){
+    var v=n.getAttribute('data-view');
+    if(v && !guestViews[v]){ n.style.display='none'; } else { n.style.display=''; }
+  });
+  // the "Track" nav group has no guest-usable items; hide its label too
+  Array.prototype.forEach.call(document.querySelectorAll('.nav-group'), function(grp){
+    var anyVisible=false;
+    Array.prototype.forEach.call(grp.querySelectorAll('.nav-item'), function(n){ if(n.style.display!=='none'){ anyVisible=true; } });
+    grp.style.display = anyVisible ? '' : 'none';
+  });
+  loadPlatformSettings().then(function(){
+    renderChapters(); renderArenas();
+    switchView('home');
+  }, function(){
+    renderChapters(); renderArenas();
+    switchView('home');
+  });
+}
 if($('forgotLink')){ $('forgotLink').addEventListener('click', function(ev){
   ev.preventDefault();
   var email=$('authEmail').value.trim();
@@ -616,7 +648,14 @@ function doAuth(){
   }
 }
 $('signOutBtn').addEventListener('click', signOut);
-function signOut(){ sb.auth.signOut().then(function(){ State.user=null; hide($('appScreen')); hide($('denyScreen')); show($('authScreen')); }); }
+function signOut(){
+  if(State.guest){
+    State.guest=false; State.role=null; State.hasAccess=false;
+    hide($('appScreen')); hide($('denyScreen')); show($('authScreen'));
+    return;
+  }
+  sb.auth.signOut().then(function(){ State.user=null; hide($('appScreen')); hide($('denyScreen')); show($('authScreen')); });
+}
 
 /* ====================================================================
    BOOTSTRAP
@@ -636,6 +675,10 @@ function onSignedIn(user){
 // Everyone enters as a student. Instructors/admins get extra nav groups.
 function enterApp(user){
   show($('appScreen'));
+  State.guest = false;
+  // restore any nav items a prior guest session hid
+  Array.prototype.forEach.call(document.querySelectorAll('.nav-item'), function(n){ n.style.display=''; });
+  Array.prototype.forEach.call(document.querySelectorAll('.nav-group'), function(g){ if(g.id!=='teachGroup' && g.id!=='adminGroup'){ g.style.display=''; } });
   $('sideUser').textContent=user.email;
   var role=State.role;
   $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : 'Student');
@@ -754,6 +797,8 @@ function isStudentView(v){ for(var i=0;i<STUDENT_VIEWS.length;i++){ if(STUDENT_V
 var INSTRUCTOR_VIEWS = ['dashboard','courses','roster','materials','announce','gradebook','analytics','exams','assignments','grading'];
 var ADMIN_VIEWS = ['platform','people','subscriptions','diagnostics'];
 function viewAllowed(view){
+  // A guest (no account) may only browse the free preview: home, chapters, arenas.
+  if(State.guest){ return (view==='home' || view==='chapters' || view==='arenas'); }
   if(isStudentView(view)){ return true; }
   if(ADMIN_VIEWS.indexOf(view)>=0){ return State.role==='admin'; }
   if(INSTRUCTOR_VIEWS.indexOf(view)>=0){ return State.role==='professor' || State.role==='admin'; }
@@ -3356,6 +3401,31 @@ function renderArenas() {
 }
 
 function loadHome() {
+  if (State.guest) {
+    if($('welcomeTitle')){ $('welcomeTitle').textContent = 'Welcome — free preview'; }
+    var hs=$('homeStats'); if(hs){ hs.innerHTML=''; }
+    var hq=$('homeQuick');
+    if(hq){
+      hq.innerHTML =
+        '<div class="card launch" id="guestGoChapters"><div class="c-eyebrow">Read</div>'+
+        '<div class="c-title">Free chapters</div>'+
+        '<div class="c-meta">Chapters 1–3 are open — no account needed.</div>'+
+        '<div class="pill">Open chapters →</div></div>'+
+        '<div class="card launch" id="guestGoArenas"><div class="c-eyebrow">Play</div>'+
+        '<div class="c-title">Try the first arena</div>'+
+        '<div class="c-meta">The Market Sandbox arena is free to play.</div>'+
+        '<div class="pill">Open arenas →</div></div>'+
+        '<div class="card launch" id="guestGoSignup"><div class="c-eyebrow">Unlock</div>'+
+        '<div class="c-title">Create an account</div>'+
+        '<div class="c-meta">Sign up or join a course to unlock every chapter and all 12 arenas.</div>'+
+        '<div class="pill">Sign up →</div></div>';
+      if($('guestGoChapters')){ $('guestGoChapters').addEventListener('click', function(){ switchView('chapters'); }); }
+      if($('guestGoArenas')){ $('guestGoArenas').addEventListener('click', function(){ switchView('arenas'); }); }
+      if($('guestGoSignup')){ $('guestGoSignup').addEventListener('click', function(){ signOut(); }); }
+    }
+    var hc=$('homeCourses'); if(hc){ hc.innerHTML=''; }
+    return;
+  }
   if (!State.user) { return; }
   var uid = State.user.id;
   // counts: graded attempts, correct, arenas played
@@ -5113,6 +5183,49 @@ sb.auth.onAuthStateChange(function(event, session){
   }
 });
 try { console.log('%cIntro Micro build: ' + SA_BUILD + ' | tree renderer present: ' + (typeof renderTreeFigure !== 'undefined') + ' | matrix renderer present: ' + (typeof renderMatrixFigure !== 'undefined'), 'color:#7c6df2;font-weight:bold'); } catch(e){}
+</script>
+<!-- =====================================================================
+     Microeconomics — visit tracking for MacroNations Analytics.
+     Logs one "visit" per page load into the shared page_views table, tagged
+     course:'microeconomics', so "Microeconomics Visits (app)" populates in the
+     super-admin Analytics → Traffic by Course panel, like Game Theory and
+     Econometrics. Fire-and-forget; never blocks the page. Same shared Supabase
+     project, so no new keys are needed.
+     ===================================================================== -->
+<script>
+(function () {
+  var SUPA_URL  = 'https://rtaiivegcqqmdchpguzn.supabase.co';
+  var SUPA_ANON = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
+  try {
+    // Reuse the portal session id (passed as ?mn_sid=... when a student clicks
+    // the course card) so the visit ties to the same funnel; else make one.
+    var sid = null;
+    try { sid = sessionStorage.getItem('mn_sid'); } catch (e) {}
+    var q = null;
+    try { q = new URLSearchParams(window.location.search).get('mn_sid'); } catch (e) {}
+    if (q) { sid = q; try { sessionStorage.setItem('mn_sid', sid); } catch (e) {} }
+    if (!sid) {
+      sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      try { sessionStorage.setItem('mn_sid', sid); } catch (e) {}
+    }
+    fetch(SUPA_URL + '/rest/v1/page_views', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'apikey':        SUPA_ANON,
+        'Authorization': 'Bearer ' + SUPA_ANON
+      },
+      body: JSON.stringify({
+        session_id: sid,
+        user_id:    null,
+        referrer:   document.referrer ? document.referrer.slice(0, 500) : null,
+        visited_at: new Date().toISOString(),
+        course:     'microeconomics',
+        event_type: 'visit'
+      })
+    }).catch(function () {});
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>
