@@ -3238,24 +3238,16 @@ function maybeCreateProfRequest() {
 function joinCourseByCode(code, cb) {
   code = (code || '').trim();
   if (!code) { if (cb) { cb('Enter a join code.'); } return; }
-  var uid = State.user.id;
-  sb.from('im_course').select('id,title,owner_id,requires_payment').eq('join_code', code).maybeSingle().then(function(res) {
-    if (res.error || !res.data) { if (cb) { cb('No course found with that code.'); } return; }
-    var course = res.data;
-    if (course.owner_id === uid) { if (cb) { cb('That is your own course.'); } return; }
-    // enroll (RLS enroll_self_insert: student_id = self)
-    sb.from('im_enrollment').upsert({ course_id: course.id, student_id: uid, status: 'active' }, { onConflict: 'course_id,student_id' }).then(function(ins) {
-      if (ins.error) { if (cb) { cb(ins.error.message); } return; }
-      // create a pending subscription if the course requires payment (student can't self-activate)
-      if (course.requires_payment) {
-        sb.from('im_enrollment').upsert({ student_id: uid, course_id: course.id, status: 'pending', source: 'self_report' }, { onConflict: 'student_id,course_id' }).then(function() {
-          if (cb) { cb(null, course); }
-        });
-      } else {
-        if (cb) { cb(null, course); }
-      }
-    });
-  });
+  // A not-yet-enrolled student cannot SELECT the course row (RLS only reveals
+  // courses you own/admin/are enrolled in), so a direct lookup by code always
+  // came back empty -> "course doesn't exist". This RPC resolves the code and
+  // enrolls the student in one trusted step.
+  sb.rpc('im_join_course_by_code', { p_code: code }).then(function(res) {
+    if (res.error) { if (cb) { cb(res.error.message); } return; }
+    var d = res.data || {};
+    if (!d.ok) { if (cb) { cb(d.error || 'Could not join with that code.'); } return; }
+    if (cb) { cb(null, { id: d.course_id, title: d.title, requires_payment: d.requires_payment }); }
+  }, function() { if (cb) { cb('Could not reach the server to join.'); } });
 }
 
 function maybeHandleInboundCourse() {
