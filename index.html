@@ -1890,12 +1890,52 @@ var ExamRecipe=null;
 function renderGrading(host){
   if(!needCourse(host)){ return; }
   host.innerHTML =
+    '<div class="inline-actions" style="margin-bottom:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="itemStatsBtn">Item analysis</button></div>' +
     '<div class="card" id="graderKeyCard" style="margin-bottom:16px;"></div>' +
     '<div class="card" id="workBrowser" style="margin-bottom:16px;"></div>' +
     '<div id="gradingBody">' + loadingCard() + '</div>';
+  if($('itemStatsBtn')){ $('itemStatsBtn').addEventListener('click', function(){ openItemStats(State.teachCourseId); }); }
   renderGraderKeyCard();
   renderWorkBrowser();
   loadPendingWritten();
+}
+
+/* Item analysis: how the class did on each graded question, hardest first.
+   Ported from the Game Theory course. Reads im_instructor_item_stats, which is
+   gated to staff who may view this course's grades. */
+function openItemStats(courseId){
+  if(!courseId){ return; }
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  ov.innerHTML='<div class="modal" style="max-width:860px;"><h3 style="margin-bottom:4px;">Item analysis</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">How the class performed on each graded question, hardest first. A question almost everyone misses is usually a problem with the question, not the students \u2014 worth re-reading before you defend the key.</p>'+
+    '<div id="isBody" style="max-height:60vh;overflow:auto;">'+loadingCard()+'</div>'+
+    '<div class="inline-actions" style="margin-top:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="isClose">Close</button></div></div>';
+  document.body.appendChild(ov);
+  function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
+  $('isClose').addEventListener('click', shut);
+  ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
+
+  sb.rpc('im_instructor_item_stats',{ p_course_id:courseId }).then(function(res){
+    var body=$('isBody'); if(!body){ return; }
+    if(res.error){ body.innerHTML='<div class="card empty">Item analysis is not available yet. If this persists, the im_instructor_item_stats function may need to be deployed.</div>'; return; }
+    var rows=res.data?res.data:[];
+    if(rows.length===0){ body.innerHTML='<div class="card empty">No graded questions yet. Once students complete quizzes or exams, question-level statistics appear here.</div>'; return; }
+    var html='<table class="data-table"><thead><tr><th scope="col">Question</th><th scope="col">Ch</th><th scope="col">Answered</th><th scope="col">Correct</th><th scope="col">% correct</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var p=(r.pct_correct===null||r.pct_correct===undefined)?null:Number(r.pct_correct);
+      var flag = (p!==null&&p<40) ? ' <span class="tag rose" title="Most of the class missed this. Re-read the wording and the key.">review</span>' : '';
+      var short=String(r.prompt||''); if(short.length>120){ short=short.slice(0,120)+'\u2026'; }
+      html+='<tr><th scope="row" style="font-weight:400;"><div style="font-size:11px;color:var(--text-subtle);">'+esc(String(r.item_id||''))+flag+'</div><div style="font-size:12.5px;">'+esc(short)+'</div></th>'+
+        '<td>'+esc(String(r.chapter===null||r.chapter===undefined?'':r.chapter))+'</td>'+
+        '<td>'+esc(String(r.n_answered))+'</td>'+
+        '<td>'+esc(String(r.n_correct))+'</td>'+
+        '<td style="font-weight:600;color:'+(p!==null&&p<40?'var(--rose)':'var(--text-bright)')+';">'+(p===null?'\u2014':(p+'%'))+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    body.innerHTML=html;
+  }, function(){
+    var body=$('isBody'); if(body){ body.innerHTML='<div class="card empty">Could not load item analysis.</div>'; }
+  });
 }
 
 /* ---- Student work browser + regrade -------------------------------------
@@ -3267,37 +3307,47 @@ function ensureProfileAndCourse() {
   // profile row already upserted in onSignedIn (without role, so admin/instructor
   // roles are never clobbered). Resolve the student's course from ACTIVE enrollments
   // only -- a DROPPED enrollment must not drive progress, grades, or the exam list.
-  return sb.from('im_enrollment').select('course_id, status, im_course(owner_id)').eq('student_id', uid).eq('status', 'active').then(function(enr) {
+  return sb.from('im_enrollment').select('course_id, status').eq('student_id', uid).eq('status', 'active').then(function(enr) {
     var rows = enr.data ? enr.data : [];
-    // Prefer a self-study course (one the student owns); else any active enrollment.
-    var selfRow = null, anyRow = null, profRow = null, i;
-    for (i = 0; i < rows.length; i++) {
-      anyRow = rows[i];
-      var oc = rows[i].im_course ? rows[i].im_course.owner_id : null;
-      if (oc === uid) { selfRow = rows[i]; }
-      else if (oc) { if (!profRow) { profRow = rows[i]; } }   // a professor's course
-    }
-    // The course a payment should be attributed to: a professor course if joined, else self-study.
-    State.payCourseId = profRow ? profRow.course_id : (selfRow ? selfRow.course_id : null);
-    if (selfRow) { State.selfCourseId = selfRow.course_id; if(!State.payCourseId){ State.payCourseId = selfRow.course_id; } return null; }
-    if (anyRow) { State.selfCourseId = anyRow.course_id; if(!State.payCourseId){ State.payCourseId = anyRow.course_id; } return null; }
-    // No ACTIVE enrollment (e.g., dropped from the only course): put the student
-    // into THE single platform self-study course. There is exactly one, created
-    // and owned by the super-admin (im_course.is_self_study = true, enforced by a
-    // unique index); students are never given a course of their own.
-    return sb.from('im_course').select('id').eq('is_self_study', true).limit(1).maybeSingle().then(function(ss) {
-      if (!ss || !ss.data) {
-        // The admin has not created the self-study course yet. Leave the student
-        // without one rather than inventing a personal course.
-        State.selfCourseId = null;
-        return null;
+    var cids = rows.map(function(r){ return r.course_id; });
+    // Fetch owners separately instead of an im_course(owner_id) embed. The embed
+    // enforces im_course RLS through PostgREST and was returning empty on live
+    // data, which broke course resolution the same way it broke the exam list.
+    var ownerP = cids.length
+      ? sb.from('im_course').select('id,owner_id').in('id', cids)
+      : Promise.resolve({ data: [] });
+    return ownerP.then(function(cr){
+      var ownerById = {}; (cr.data||[]).forEach(function(c){ ownerById[c.id] = c.owner_id; });
+      // Prefer a self-study course (one the student owns); else any active enrollment.
+      var selfRow = null, anyRow = null, profRow = null, i;
+      for (i = 0; i < rows.length; i++) {
+        anyRow = rows[i];
+        var oc = ownerById[rows[i].course_id] || null;
+        if (oc === uid) { selfRow = rows[i]; }
+        else if (oc) { if (!profRow) { profRow = rows[i]; } }   // a professor's course
       }
-      State.selfCourseId = ss.data.id;
-      if (!State.payCourseId) { State.payCourseId = ss.data.id; }
-      return sb.from('im_enrollment').upsert(
-        { course_id: ss.data.id, student_id: uid, status: 'active' },
-        { onConflict: 'course_id,student_id' }
-      );
+      // The course a payment should be attributed to: a professor course if joined, else self-study.
+      State.payCourseId = profRow ? profRow.course_id : (selfRow ? selfRow.course_id : null);
+      if (selfRow) { State.selfCourseId = selfRow.course_id; if(!State.payCourseId){ State.payCourseId = selfRow.course_id; } return null; }
+      if (anyRow) { State.selfCourseId = anyRow.course_id; if(!State.payCourseId){ State.payCourseId = anyRow.course_id; } return null; }
+      // No ACTIVE enrollment (e.g., dropped from the only course): put the student
+      // into THE single platform self-study course. There is exactly one, created
+      // and owned by the super-admin (im_course.is_self_study = true, enforced by a
+      // unique index); students are never given a course of their own.
+      return sb.from('im_course').select('id').eq('is_self_study', true).limit(1).maybeSingle().then(function(ss) {
+        if (!ss || !ss.data) {
+          // The admin has not created the self-study course yet. Leave the student
+          // without one rather than inventing a personal course.
+          State.selfCourseId = null;
+          return null;
+        }
+        State.selfCourseId = ss.data.id;
+        if (!State.payCourseId) { State.payCourseId = ss.data.id; }
+        return sb.from('im_enrollment').upsert(
+          { course_id: ss.data.id, student_id: uid, status: 'active' },
+          { onConflict: 'course_id,student_id' }
+        );
+    });
     });
   });
 }
@@ -3522,19 +3572,25 @@ function openJoinCourse() {
 function loadMyCourses() {
   if (!$('homeCourses')) { return; }
   var uid = State.user.id;
-  sb.from('im_enrollment').select('status, im_course(id,title,term,owner_id,requires_payment)').eq('student_id', uid).eq('status','active').then(function(res){
+  // Plain enrollment read + separate course fetch (no im_course(...) embed,
+  // which failed through PostgREST on live data).
+  sb.from('im_enrollment').select('course_id,status').eq('student_id', uid).eq('status','active').then(function(res){
     var rows = res.data ? res.data : [];
-    // only professor courses (not the student's own self-study)
-    var prof = rows.filter(function(r){ return r.im_course && r.im_course.owner_id !== uid; });
-    if (prof.length === 0) { $('homeCourses').innerHTML = ''; return; }
-    var html = '<h3 style="font-size:20px;margin:26px 0 12px;">My courses</h3><div class="grid grid-3">';
-    prof.forEach(function(r){
-      var c = r.im_course;
-      html += '<div class="card"><div class="c-eyebrow">'+esc(c.term||'Course')+'</div><div class="c-title">'+esc(c.title)+'</div>' +
-        '<div class="c-meta">'+(c.requires_payment?'Paid access':'Free')+'</div></div>';
+    var cids = rows.map(function(r){ return r.course_id; });
+    if (cids.length === 0) { $('homeCourses').innerHTML = ''; return; }
+    sb.from('im_course').select('id,title,term,owner_id,requires_payment').in('id', cids).then(function(cr){
+      var courses = cr.data ? cr.data : [];
+      // only professor courses (not the student's own self-study)
+      var prof = courses.filter(function(c){ return c.owner_id !== uid; });
+      if (prof.length === 0) { $('homeCourses').innerHTML = ''; return; }
+      var html = '<h3 style="font-size:20px;margin:26px 0 12px;">My courses</h3><div class="grid grid-3">';
+      prof.forEach(function(c){
+        html += '<div class="card"><div class="c-eyebrow">'+esc(c.term||'Course')+'</div><div class="c-title">'+esc(c.title)+'</div>' +
+          '<div class="c-meta">'+(c.requires_payment?'Paid access':'Free')+'</div></div>';
+      });
+      html += '</div>';
+      $('homeCourses').innerHTML = html;
     });
-    html += '</div>';
-    $('homeCourses').innerHTML = html;
   });
 }
 
