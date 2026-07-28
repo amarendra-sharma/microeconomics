@@ -4475,6 +4475,14 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
       // arenas are surfaced elsewhere, so exclude only those.
       exams = exams.filter(function(e){ return e.kind !== 'quiz' && e.kind !== 'arena'; });
       var attempts = r[1].data ? r[1].data : [];
+      // Unfinished sittings: attempts issued but never answered (graded_at null
+      // AND no submitted value). These let a student resume an interrupted exam.
+      var resumeCount = {};
+      attempts.forEach(function(a){
+        if(a.graded_at===null && (a.submitted_value===null||a.submitted_value===undefined)){
+          resumeCount[a.exam_id]=(resumeCount[a.exam_id]||0)+1;
+        }
+      });
       var accoms = r[2].data ? r[2].data : [];
       var accomByCourse = {}; accoms.forEach(function(a){ accomByCourse[a.course_id]=a; });
       if (exams.length === 0) { host.innerHTML = '<div class="card empty">No exams have been assigned yet.</div>'; return; }
@@ -4530,6 +4538,12 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
           statusHtml='<span class="tag green">Completed</span>'; action='<button class="btn btn-ghost btn-sm" disabled>No attempts left</button>'+reviewBtn;
         }
         else { statusHtml='<span class="tag amber">'+(sittings>0?('Attempt '+(sittings+1)):'Not taken')+'</span>'; action='<button class="btn btn-primary btn-sm" data-start="'+e.id+'">'+(sittings>0?'Retake':'Start exam')+'</button>'; }
+        // A reopened/unfinished sitting takes priority: the student is finishing
+        // work already in progress, not starting a new attempt.
+        if(resumeCount[e.id]>0){
+          statusHtml='<span class="tag amber">Unfinished</span>';
+          action='<button class="btn btn-primary btn-sm" data-resume="'+e.id+'">Finish '+resumeCount[e.id]+' remaining question'+(resumeCount[e.id]===1?'':'s')+'</button>';
+        }
         var meta = nItems + ' questions · ' + (e.total_points||0) + ' pts';
         if (tmin) { meta += ' · ' + tmin + ' min' + (acc && Number(acc.time_multiplier)!==1 ? ' (incl. your accommodation)' : ''); }
         meta += ' · attempts left: ' + attemptsLeft;
@@ -4549,6 +4563,14 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
           var exam = null; for (var i=0;i<exams.length;i++){ if(exams[i].id===eid){ exam=exams[i]; break; } }
           var acc = exam?accomByCourse[exam.course_id]:null;
           if (exam) { startExam(exam, acc); }
+        });
+      });
+      Array.prototype.forEach.call(host.querySelectorAll('[data-resume]'), function(b) {
+        b.addEventListener('click', function() {
+          var eid = b.getAttribute('data-resume');
+          var exam = null; for (var i=0;i<exams.length;i++){ if(exams[i].id===eid){ exam=exams[i]; break; } }
+          var acc = exam?accomByCourse[exam.course_id]:null;
+          if (exam) { resumeExam(exam, acc); }
         });
       });
     });
@@ -4618,6 +4640,43 @@ function proceedStartExam(exam, accom) {
     return;
   }
   reallyStartExam(exam, accom);
+}
+
+/* Resume an interrupted exam: load the questions the student was issued but
+   never answered (server regenerates them from the stored seed) and drop the
+   student straight back into taking them. Ported from the Game Theory course. */
+function resumeExam(exam, accom){
+  var host=$('myExamsBody');
+  ExamState = { exam:exam, items:[], answers:{}, idx:0, courseId:exam.course_id, submitting:false, finished:false, timer:null, deadline:null, _consented:true, _resume:true };
+  host.innerHTML='<div class="card"><span class="spinner"></span> &nbsp;Loading your remaining questions\u2026</div>';
+  sb.functions.invoke('im-grade-attempt',{ body:{ action:'resume', exam_id:exam.id } }).then(function(fn){
+    if(fn.error || (fn.data && fn.data.error)){
+      host.innerHTML=errCard('Could not load your remaining questions: '+((fn.data&&fn.data.error)?fn.data.error:(fn.error?fn.error.message:'unknown'))+'. Please tell your instructor.');
+      return;
+    }
+    var items=(fn.data && fn.data.items)?fn.data.items:[];
+    if(items.length===0){
+      host.innerHTML='<div class="card empty">Nothing left to finish on this exam.</div>';
+      setTimeout(loadMyExams, 1200);
+      return;
+    }
+    ExamState.items=items;
+    // Fresh time allowance for the remainder, scaled by any accommodation.
+    if(exam.time_limit_minutes && exam.time_limit_minutes>0){
+      var mult=(accom && Number(accom.time_multiplier))?Number(accom.time_multiplier):1;
+      var total=(exam.item_ids?exam.item_ids.length:items.length)||items.length;
+      var share=Math.max(5, Math.round(exam.time_limit_minutes*mult*(items.length/Math.max(1,total))));
+      ExamState.deadline=Date.now()+share*60000;
+    }
+    startExamTimer();
+    renderExamQuestion();
+    if(typeof MNProctor!=='undefined'){
+      MNProctor.onAutoSubmit(function(){ if(!ExamState.finished && !ExamState.submitting){ gradeExam(true); } });
+      MNProctor.start(exam, State.user);
+    }
+  }, function(){
+    host.innerHTML=errCard('Could not load your remaining questions. Please tell your instructor.');
+  });
 }
 
 function reallyStartExam(exam, accom) {
