@@ -4398,7 +4398,11 @@ function loadMyExams() {
       sb.from('im_accommodation').select('course_id,time_multiplier,extra_attempts').eq('student_id', uid)
     ]).then(function(r) {
       var exams = r[0].data ? r[0].data : [];
-      exams = exams.filter(function(e){ return e.kind==='midterm' || e.kind==='final'; });
+      // Show anything that is a real exam. Previously this kept only
+      // kind==='midterm'||'final', which silently hid a published, enrolled,
+      // listed exam whose kind was anything else (e.g. 'exam'). Quizzes and
+      // arenas are surfaced elsewhere, so exclude only those.
+      exams = exams.filter(function(e){ return e.kind !== 'quiz' && e.kind !== 'arena'; });
       var attempts = r[1].data ? r[1].data : [];
       var accoms = r[2].data ? r[2].data : [];
       var accomByCourse = {}; accoms.forEach(function(a){ accomByCourse[a.course_id]=a; });
