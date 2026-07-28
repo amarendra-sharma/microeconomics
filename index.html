@@ -4387,11 +4387,26 @@ function loadMyExams() {
   if (!State.user) { host.innerHTML = '<div class="card empty">Sign in to see your exams.</div>'; return; }
   host.innerHTML = loadingCard();
   var uid = State.user.id;
-  sb.from('im_enrollment').select('course_id, im_course(title)').eq('student_id', uid).eq('status','active').then(function(enr) {
+  // Read enrollments WITHOUT an embedded im_course join. The embed enforces
+  // im_course RLS too, and that cross-table policy evaluation was returning
+  // empty through PostgREST even though the row exists -- which showed the
+  // student "not enrolled" despite a valid active enrollment. We fetch the row
+  // plainly, then look up course titles in a second query.
+  sb.from('im_enrollment').select('course_id,student_id,user_id,status').eq('student_id', uid).eq('status','active').then(function(enr) {
     var rows = enr.data ? enr.data : [];
     var courseIds = rows.map(function(r){ return r.course_id; });
-    var titleById = {}; rows.forEach(function(r){ titleById[r.course_id] = r.im_course ? r.im_course.title : 'Course'; });
     if (courseIds.length === 0) { host.innerHTML = '<div class="card empty">You are not enrolled in a course with exams yet. Join a course from Home.</div>'; return; }
+    var titleById = {};
+    // best-effort course titles; if this fails the exams still render
+    sb.from('im_course').select('id,title').in('id', courseIds).then(function(cr){
+      var crows = cr.data ? cr.data : [];
+      crows.forEach(function(c){ titleById[c.id] = c.title; });
+      loadMyExamsFor(host, uid, courseIds, titleById);
+    }, function(){ loadMyExamsFor(host, uid, courseIds, titleById); });
+  });
+}
+function loadMyExamsFor(host, uid, courseIds, titleById) {
+  {
     Promise.all([
       sb.from('im_exam').select('id,course_id,kind,title,total_points,time_limit_minutes,instructions,item_ids,is_published,max_attempts,shuffle_questions,attempt_scoring,opens_at,closes_at,proctored,camera_mode,random_per_student,random_recipe').in('course_id', courseIds).eq('is_published', true).order('created_at',{ascending:true}),
       sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,graded_at,submitted_value').eq('student_id', uid).not('exam_id','is',null),
@@ -4481,7 +4496,7 @@ function loadMyExams() {
         });
       });
     });
-  });
+  }
 }
 
 // An exam is ready to take if it has a fixed item list OR a per-student recipe.
