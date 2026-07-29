@@ -353,6 +353,7 @@
         <select class="sel" id="practiceChapter"></select>
         <button class="btn btn-primary" id="newQuestionBtn" style="width:auto;">New question</button>
         <button class="btn btn-ghost" id="takeQuizBtn" style="width:auto;" title="A short graded quiz for this chapter. Counts toward your grade. Answers are never shown.">Take graded quiz</button>
+        <button class="btn btn-ghost" id="reviewQuizBtn" style="width:auto;" title="After the quiz deadline, review the questions you missed on this chapter's graded quiz.">Review missed questions</button>
       </div>
       <div id="practiceArea"></div>
     </section>
@@ -1916,10 +1917,67 @@ function openSubmissions(asgId, title, points){
 
 function renderExams(host){
   if(!needCourse(host)){ return; }
-  host.innerHTML='<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-primary" id="newExamBtn">+ Assemble exam</button><button class="btn btn-ghost" id="libBtn">\uD83D\uDCDA Use a ready-made exam</button></div><div id="examList">'+loadingCard()+'</div>';
+  host.innerHTML='<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-primary" id="newExamBtn">+ Assemble exam</button><button class="btn btn-ghost" id="libBtn">\uD83D\uDCDA Use a ready-made exam</button><button class="btn btn-ghost" id="qdlBtn">\u23F0 Quiz deadlines</button></div><div id="examList">'+loadingCard()+'</div>';
   $('newExamBtn').addEventListener('click', function(){ openAssembler(); });
   $('libBtn').addEventListener('click', function(){ openExamLibrary(); });
+  $('qdlBtn').addEventListener('click', function(){ openQuizDeadlines(); });
   loadExams();
+}
+
+/* Instructor: set a close date/time per chapter quiz. After the deadline the
+   quiz closes and students can review the questions they missed. Ported from
+   the Game Theory course. */
+function openQuizDeadlines(){
+  if(!State.teachCourseId){ alert('Select a course first.'); return; }
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  ov.innerHTML='<div class="modal" style="max-width:560px;"><h3 style="margin-bottom:6px;">Graded-quiz deadlines</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Set a close date and time for each chapter\u2019s graded quiz. After the deadline students can review the questions they missed. Leave a chapter blank for no deadline (no review for that quiz).</p>'+
+    '<div id="qdlBody">'+loadingCard()+'</div>'+
+    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="qdlClose">Close</button><button class="btn btn-primary btn-sm" id="qdlSave">Save deadlines</button></div></div>';
+  document.body.appendChild(ov);
+  function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
+  $('qdlClose').addEventListener('click', shut);
+  ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
+  function notInstalled(){
+    $('qdlBody').innerHTML='<div class="msg err" style="display:block;">Quiz deadlines aren\u2019t installed yet. Run <b>im_25_quiz_deadlines.sql</b> in the SQL editor, then reopen this window.</div>';
+    var sv=$('qdlSave'); if(sv){ sv.disabled=true; }
+  }
+  sb.from('im_quiz_deadline').select('chapter,closes_at').eq('course_id',State.teachCourseId).then(function(res){
+    if(res && res.error){ notInstalled(); return; }
+    var have={}; ((res && res.data)?res.data:[]).forEach(function(r){ have[r.chapter]=r.closes_at; });
+    var rowsHtml='';
+    STUDENT_CHAPTERS.forEach(function(c){
+      var val='';
+      if(have[c.n]){
+        var d=new Date(have[c.n]); var pad=function(x){ return (x<10?'0':'')+x; };
+        val=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+      }
+      rowsHtml+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><label style="flex:1;font-size:13px;">Ch '+c.n+' \u00b7 '+esc(c.title)+'</label>'+
+        '<input type="datetime-local" data-qdl-ch="'+c.n+'" value="'+val+'" style="font-size:13px;padding:5px 8px;"></div>';
+    });
+    $('qdlBody').innerHTML=rowsHtml;
+  }, function(){ notInstalled(); });
+  $('qdlSave').addEventListener('click', function(){
+    var inputs=ov.querySelectorAll('[data-qdl-ch]');
+    if(!inputs || inputs.length===0){ shut(); return; }
+    var ups=[], dels=[];
+    Array.prototype.forEach.call(inputs, function(inp){
+      var ch=parseInt(inp.getAttribute('data-qdl-ch'),10);
+      var v=inp.value;
+      if(v){ ups.push({ course_id:State.teachCourseId, chapter:ch, closes_at:new Date(v).toISOString(), updated_at:new Date().toISOString() }); }
+      else { dels.push(ch); }
+    });
+    var btn=$('qdlSave'); btn.disabled=true; btn.textContent='Saving\u2026';
+    var work=[];
+    if(ups.length){ work.push(sb.from('im_quiz_deadline').upsert(ups,{ onConflict:'course_id,chapter' })); }
+    if(dels.length){ work.push(sb.from('im_quiz_deadline').delete().eq('course_id',State.teachCourseId).in('chapter',dels)); }
+    Promise.all(work).then(function(rs){
+      btn.disabled=false; btn.textContent='Save deadlines';
+      var failed=false; rs.forEach(function(r){ if(r && r.error){ failed=true; } });
+      if(failed){ alert('Some deadlines could not be saved.'); return; }
+      shut();
+    }, function(){ btn.disabled=false; btn.textContent='Save deadlines'; alert('Could not save deadlines.'); });
+  });
 }
 function loadExams(){
   sb.from('im_exam').select('*').eq('course_id',State.teachCourseId).order('created_at',{ascending:false}).then(function(res){
@@ -3727,6 +3785,61 @@ function fillPracticeChapters() {
     qbtn.setAttribute('data-wired', '1');
     qbtn.addEventListener('click', function(){ startGradedQuiz(parseInt($('practiceChapter').value, 10)); });
   }
+  var rvbtn = $('reviewQuizBtn');
+  if (rvbtn && !rvbtn.getAttribute('data-wired')) {
+    rvbtn.setAttribute('data-wired', '1');
+    rvbtn.addEventListener('click', function(){ openQuizReview(parseInt($('practiceChapter').value, 10)); });
+  }
+}
+
+/* Student: review the graded-quiz questions you missed on a chapter, once the
+   instructor's deadline for that quiz has passed. The edge function regenerates
+   each missed question from its stored seed and returns the correct answer;
+   it enforces the deadline gate server-side. Ported from the Game Theory course. */
+function openQuizReview(chapter){
+  if(!chapter){ return; }
+  var area=$('practiceArea'); if(!area){ return; }
+  var courseId=State.payCourseId || State.selfCourseId;
+  if(!courseId){ area.innerHTML=errCard('Please sign in to review your quiz.'); return; }
+  area.innerHTML='<div class="q-card"><span class="spinner"></span> &nbsp;Loading review\u2026</div>';
+  function backBar(){ return '<button class="btn btn-ghost btn-sm" id="qrvBack" style="margin-top:8px;">Back to practice</button>'; }
+  function wireBack(){ if($('qrvBack')){ $('qrvBack').addEventListener('click', function(){ area.innerHTML=''; loadNewQuestion(); }); } }
+  function notReady(msg){ area.innerHTML='<div class="q-card" style="max-width:620px;margin:0 auto;"><p style="color:var(--text-muted);margin-bottom:10px;">'+esc(msg)+'</p>'+backBar()+'</div>'; wireBack(); }
+
+  sb.functions.invoke('im-grade-attempt',{ body:{ action:'quiz_review', course_id:courseId, chapter:chapter } }).then(function(fn){
+    if(fn.error || (fn.data && fn.data.error)){
+      notReady('Quiz review isn\u2019t available right now. Your instructor turns it on by setting a deadline for this chapter\u2019s quiz; once that deadline passes you can review the questions you missed.');
+      return;
+    }
+    var d=fn.data||{};
+    if(!d.open){ notReady((d.note)?d.note:'Quiz review isn\u2019t open for this chapter yet. It opens after the quiz deadline your instructor set.'); return; }
+    var rows=d.items?d.items:[];
+    var html='<div class="q-card" style="max-width:720px;margin:0 auto;text-align:left;">';
+    html+='<h2 style="font-size:20px;margin-bottom:4px;">Chapter '+chapter+' quiz \u2014 questions to revisit</h2>';
+    html+='<p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">The graded-quiz questions you missed, with the correct answer. Use them to study.</p>';
+    if(rows.length===0){
+      html+='<p style="color:var(--text-bright);">Nothing to review here \u2014 you didn\u2019t miss any auto-graded questions on this quiz.</p>';
+    } else {
+      rows.forEach(function(r){
+        var yours=(r.your_answer===null||r.your_answer==='')?'<span style="color:var(--text-subtle);">(blank)</span>':esc(String(r.your_answer));
+        var correct=String(r.correct_answer);
+        if(r.options && r.options.length){
+          var yi=parseInt(r.your_answer,10), ci=parseInt(correct,10);
+          if(!isNaN(yi) && r.options[yi]!==undefined){ yours=esc(r.options[yi]); }
+          if(!isNaN(ci) && r.options[ci]!==undefined){ correct=r.options[ci]; }
+        }
+        html+='<div class="q-card" style="margin-bottom:10px;background:var(--bg2);text-align:left;">'+
+          '<div style="font-size:14px;color:var(--text-bright);margin:0 0 6px;">'+esc(r.prompt||'')+'</div>'+
+          (r.figure?('<div style="margin:6px 0;">'+renderFigure(r.figure)+'</div>'):'')+
+          '<div style="font-size:13px;"><b>Your answer:</b> '+yours+'</div>'+
+          '<div style="font-size:13px;color:var(--green);"><b>Correct answer:</b> '+esc(correct)+'</div>'+
+          (r.rationale?('<div style="font-size:12.5px;color:var(--text-muted);margin-top:4px;"><b>Why:</b> '+esc(r.rationale)+'</div>'):'')+
+        '</div>';
+      });
+    }
+    html+=backBar()+'</div>';
+    area.innerHTML=html; wireBack();
+  }, function(){ notReady('Could not load your quiz review. Please try again in a moment.'); });
 }
 
 /* ====================================================================
