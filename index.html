@@ -1940,10 +1940,11 @@ function openSubmissions(asgId, title, points){
 
 function renderExams(host){
   if(!needCourse(host)){ return; }
-  host.innerHTML='<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-primary" id="newExamBtn">+ Assemble exam</button><button class="btn btn-ghost" id="libBtn">\uD83D\uDCDA Use a ready-made exam</button><button class="btn btn-ghost" id="qdlBtn">\u23F0 Quiz deadlines</button></div><div id="examList">'+loadingCard()+'</div>';
+  host.innerHTML='<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-primary" id="newExamBtn">+ Assemble exam</button><button class="btn btn-ghost" id="libBtn">\uD83D\uDCDA Use a ready-made exam</button><button class="btn btn-ghost" id="qdlBtn">\u23F0 Quiz deadlines</button><button class="btn btn-ghost" id="rlBtn">\uD83D\uDCCB Reschedules</button></div><div id="examList">'+loadingCard()+'</div>';
   $('newExamBtn').addEventListener('click', function(){ openAssembler(); });
   $('libBtn').addEventListener('click', function(){ openExamLibrary(); });
   $('qdlBtn').addEventListener('click', function(){ openQuizDeadlines(); });
+  if($('rlBtn')){ $('rlBtn').addEventListener('click', function(){ openRescheduleList(State.teachCourseId); }); }
   loadExams();
 }
 
@@ -2002,6 +2003,44 @@ function openQuizDeadlines(){
     }, function(){ btn.disabled=false; btn.textContent='Save deadlines'; alert('Could not save deadlines.'); });
   });
 }
+/* Instructor: every per-student deadline change / extra attempt in the course,
+   in one place. Reads im_list_overrides (staff-gated). To change or remove one,
+   use the Accommodations button on the student's roster row. Ported from the
+   Game Theory course. */
+function openRescheduleList(courseId){
+  if(!courseId){ return; }
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  ov.innerHTML='<div class="modal" style="max-width:760px;"><h3 style="margin-bottom:4px;">Reschedules in this course</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Every deadline change and extra attempt you have granted to an individual student. To change or remove one, open that student\u2019s Accommodations from the Roster.</p>'+
+    '<div id="rlBody" style="max-height:60vh;overflow:auto;">'+loadingCard()+'</div>'+
+    '<div class="inline-actions" style="margin-top:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="rlClose">Close</button></div></div>';
+  document.body.appendChild(ov);
+  function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
+  $('rlClose').addEventListener('click', shut);
+  ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
+  sb.rpc('im_list_overrides',{ p_course_id:courseId }).then(function(r){
+    var body=$('rlBody'); if(!body){ return; }
+    if(r && r.error){ body.innerHTML='<div class="msg err" style="display:block;">Reschedules aren\u2019t installed yet. Run <b>im_27_list_overrides.sql</b> in the SQL editor, then reopen this window.</div>'; return; }
+    var rows=(r && r.data)?r.data:[];
+    if(rows.length===0){ body.innerHTML='<div class="card empty">Nothing has been rescheduled in this course yet.</div>'; return; }
+    var h='<table class="data-table"><thead><tr><th scope="col">Student</th><th scope="col">What</th><th scope="col">New deadline</th><th scope="col">Extra</th><th scope="col">Note</th></tr></thead><tbody>';
+    rows.forEach(function(o){
+      var when=o.closes_at?new Date(o.closes_at):null;
+      var overdue = when && when.getTime() < Date.now();
+      var kindTag = o.kind==='exam' ? '<span class="tag violet">exam</span> ' : (o.kind==='arena' ? '<span class="tag">arena</span> ' : '<span class="tag dim">quiz</span> ');
+      h+='<tr>'+
+        '<th scope="row" style="font-weight:400;font-size:12.5px;">'+esc(o.email||o.student_id||'')+'</th>'+
+        '<td style="font-size:12.5px;">'+kindTag+esc(o.label||'')+'</td>'+
+        '<td style="font-size:12.5px;'+(overdue?'color:var(--rose);':'')+'">'+(when?(esc(when.toLocaleString())+(overdue?' (passed)':'')):'\u2014')+'</td>'+
+        '<td style="font-size:12.5px;">'+((o.extra_attempts&&Number(o.extra_attempts)>0)?('+'+o.extra_attempts):'\u2014')+'</td>'+
+        '<td style="font-size:12px;color:var(--text-muted);">'+esc(o.reason||'')+'</td>'+
+      '</tr>';
+    });
+    h+='</tbody></table>';
+    body.innerHTML=h;
+  }, function(){ var body=$('rlBody'); if(body){ body.innerHTML='<div class="card empty">Could not load reschedules.</div>'; } });
+}
+
 function loadExams(){
   sb.from('im_exam').select('*').eq('course_id',State.teachCourseId).order('created_at',{ascending:false}).then(function(res){
     var rows=res.data?res.data:[];
