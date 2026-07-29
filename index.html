@@ -1479,7 +1479,30 @@ function renderGradebook(host){
     var midterm=exams.filter(function(e){return e.kind==='midterm';})[0];
     var fin=exams.filter(function(e){return e.kind==='final';})[0];
     var examIds=[]; if(midterm){examIds.push(midterm.id);} if(fin){examIds.push(fin.id);}
-    var examAttemptsP = examIds.length? sb.from('im_exam_attempt').select('student_id,exam_id,item_id,points_earned,created_at').in('exam_id',examIds).not('graded_at','is',null) : Promise.resolve({data:[]});
+    // Page through the attempts. Without paging this query silently returned a
+    // truncated set once a course grew past the server's ~1000-row cap, so every
+    // student whose rows fell outside it was under-counted in the gradebook.
+    function fetchAllExamAttempts(ids){
+      if(!ids.length){ return Promise.resolve({data:[]}); }
+      var all=[], PAGE=1000;
+      function page(from){
+        return sb.from('im_exam_attempt')
+          .select('student_id,exam_id,item_id,points_earned,created_at')
+          .in('exam_id', ids).not('graded_at','is',null)
+          .order('created_at',{ascending:true})
+          .range(from, from+PAGE-1)
+          .then(function(res){
+            if(res && res.error){ return { data: all, error: res.error }; }
+            var got=(res && res.data)?res.data:[];
+            all=all.concat(got);
+            if(got.length < PAGE){ return { data: all }; }
+            if(from > 200000){ return { data: all }; }   // hard stop
+            return page(from + PAGE);
+          });
+      }
+      return page(0);
+    }
+    var examAttemptsP = fetchAllExamAttempts(examIds);
     examAttemptsP.then(function(ea){
       var attempts=ea.data?ea.data:[];
       var scoringOf={}; if(midterm){scoringOf[midterm.id]=midterm.attempt_scoring||'highest';} if(fin){scoringOf[fin.id]=fin.attempt_scoring||'highest';}
