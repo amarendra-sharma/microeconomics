@@ -1576,7 +1576,7 @@ function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overr
       '<td>'+pct(g.computed)+'</td>'+
       '<td><label class="sr-only" for="ovr-'+g.sid+'">Override percent for '+esc(g.name||g.email)+'</label><input id="ovr-'+g.sid+'" type="number" min="0" max="100" step="0.1" placeholder="\u2014" value="'+(g.override?g.override.pct:'')+'" style="width:64px;"></td>'+
       '<td style="font-weight:600;color:var(--text-bright);">'+pct(g.finalPct)+(g.override?' <span class="tag violet" title="manual override">ovr</span>':'')+'</td>'+
-      '<td><button class="btn btn-ghost btn-sm" data-saveovr="'+g.sid+'">Save</button></td></tr>';
+      '<td><button class="btn btn-ghost btn-sm" data-saveovr="'+g.sid+'">Save</button> <button class="btn btn-ghost btn-sm" data-breakdown="'+g.sid+'" data-bdname="'+esc(g.name||g.email||'')+'">Detail</button></td></tr>';
   });
   html+='</tbody></table></div>';
   host.innerHTML=html;
@@ -1590,8 +1590,85 @@ function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overr
     else { var pctv=parseFloat(v); if(isNaN(pctv)){ b.disabled=false; b.textContent='Save'; return; }
       sb.from('im_grade_override').upsert({ course_id:State.teachCourseId, student_id:sid, override_pct:pctv, set_by:State.user.id, updated_at:new Date().toISOString() }, { onConflict:'course_id,student_id' }).then(done); }
   }); });
+  Array.prototype.forEach.call(host.querySelectorAll('[data-breakdown]'), function(b){
+    b.addEventListener('click', function(){
+      var sid=b.getAttribute('data-breakdown');
+      var gObj=null; for(var i=0;i<computed.length;i++){ if(computed[i].sid===sid){ gObj=computed[i]; break; } }
+      openGradeBreakdown(State.teachCourseId, sid, b.getAttribute('data-bdname'), gObj, weights);
+    });
+  });
 }
-function subTag(s){ if(s==='active'){return '<span class="tag green">active</span>';} if(s==='pending'){return '<span class="tag amber">pending</span>';} if(s==='expired'){return '<span class="tag rose">expired</span>';} if(s==='comped'){return '<span class="tag violet">comped</span>';} return '<span class="tag dim">'+esc(s)+'</span>'; }
+
+/* Per-student score detail: the weighted-grade calculation that yields the final
+   percentage, followed by correct counts per exam and chapter quiz. The weighted
+   section uses the SAME figures the gradebook row shows, so the two always agree.
+   Ported from and extended beyond the Game Theory course. */
+function openGradeBreakdown(courseId, studentId, studentName, g, weights){
+  if(!courseId || !studentId){ return; }
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  ov.innerHTML='<div class="modal" style="max-width:760px;"><h3 style="margin-bottom:4px;">Score detail \u2014 '+esc(studentName||'student')+'</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">The weighted calculation that produces this student\u2019s final grade, then the correct-answer counts behind each component. Practice questions are not counted.</p>'+
+    '<div id="bdWeighted"></div>'+
+    '<div id="bdBody" style="margin-top:14px;">'+loadingCard()+'</div>'+
+    '<div class="inline-actions" style="margin-top:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="bdClose">Close</button></div></div>';
+  document.body.appendChild(ov);
+  function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
+  $('bdClose').addEventListener('click', shut);
+  ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
+
+  // ---- weighted calculation (from the same numbers the gradebook computed) ----
+  var wbox=$('bdWeighted');
+  if(g && weights){
+    function fpct(x){ return (x===null||x===undefined)?null:(Math.round(x*1000)/10); }
+    // components present for THIS student, renormalized exactly like the gradebook
+    var comps=[
+      { key:'Reading',   frac:g.reading,  w:weights.reading },
+      { key:'Quizzes',   frac:g.quizzes,  w:weights.quizzes },
+      { key:'Arenas',    frac:g.arenas,   w:weights.arenas }
+    ];
+    if(g.midterm!==null && g.midterm!==undefined){ comps.push({ key:'Midterm', frac:g.midterm, w:weights.midterm }); }
+    if(g.final!==null && g.final!==undefined){ comps.push({ key:'Final exam', frac:g.final, w:weights.final }); }
+    var wsum=comps.reduce(function(s,x){ return s+(x.w||0); },0);
+    var html='<table class="data-table"><thead><tr><th scope="col">Component</th><th scope="col">Score</th><th scope="col">Weight</th><th scope="col">Effective weight</th><th scope="col">Contribution</th></tr></thead><tbody>';
+    comps.forEach(function(x){
+      var eff = wsum>0?(x.w/wsum):0;                 // renormalized weight
+      var contrib = (x.frac||0)*eff;                 // its share of the final
+      html+='<tr><th scope="row" style="font-weight:400;">'+esc(x.key)+'</th>'+
+        '<td>'+(fpct(x.frac)===null?'\u2014':(fpct(x.frac)+'%'))+'</td>'+
+        '<td>'+Math.round((x.w||0)*100)+'%</td>'+
+        '<td>'+Math.round(eff*1000)/10+'%</td>'+
+        '<td>'+Math.round(contrib*1000)/10+'%</td></tr>';
+    });
+    html+='</tbody><tfoot><tr><th scope="row" style="font-weight:600;">Weighted total</th><td></td><td></td><td></td><td style="font-weight:700;">'+(fpct(g.computed)===null?'\u2014':(fpct(g.computed)+'%'))+'</td></tr>';
+    if(g.override){
+      html+='<tr><th scope="row" style="color:var(--amber);">Manual override</th><td></td><td></td><td></td><td style="font-weight:700;color:var(--amber);">'+ (Math.round(Number(g.override.pct)*10)/10) +'%</td></tr>';
+    }
+    html+='<tr><th scope="row" style="font-weight:700;">Final grade</th><td></td><td></td><td></td><td style="font-weight:800;color:var(--navy);">'+(fpct(g.finalPct)===null?'\u2014':(fpct(g.finalPct)+'%'))+'</td></tr></tfoot></table>';
+    var note='<div style="font-size:11.5px;color:var(--text-subtle);margin-top:6px;">Effective weights renormalize over the components that exist so far (they sum to 100%). '+
+      (g.override?'A manual override replaces the weighted total for the final grade.':'The final grade equals the weighted total unless a manual override is set.')+'</div>';
+    wbox.innerHTML='<h4 style="font-size:13px;margin:0 0 6px;">Weighted grade</h4>'+html+note;
+  } else {
+    wbox.innerHTML='';
+  }
+
+  // ---- correct-answer counts per exam / quiz (server-side, matches gradebook) ----
+  sb.rpc('im_grade_breakdown',{ p_course_id:courseId, p_student_id:studentId }).then(function(r){
+    var b=$('bdBody'); if(!b){ return; }
+    if(r && r.error){ b.innerHTML='<div class="card empty">Correct-answer detail is not available yet. If this persists, im_24_grade_tools.sql may need to be deployed.</div>'; return; }
+    var rows=(r && r.data)?r.data:[];
+    if(rows.length===0){ b.innerHTML='<div class="card empty" style="margin-top:0;">No graded exam or quiz answers for this student yet.</div>'; return; }
+    var html='<h4 style="font-size:13px;margin:0 0 6px;">Correct answers by component</h4><table class="data-table"><thead><tr><th scope="col">Component</th><th scope="col">Answered</th><th scope="col">Correct</th><th scope="col">Points</th></tr></thead><tbody>';
+    rows.forEach(function(row){
+      var tag = row.kind==='exam' ? '<span class="tag violet">exam</span>' : '<span class="tag dim">quiz</span>';
+      html+='<tr><th scope="row" style="font-weight:400;">'+tag+' '+esc(row.ref_title||'')+'</th>'+
+        '<td>'+esc(String(row.answered))+'</td>'+
+        '<td>'+esc(String(row.correct))+'</td>'+
+        '<td>'+esc(String(row.points))+' / '+esc(String(row.max_points))+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    b.innerHTML=html;
+  }, function(){ var b=$('bdBody'); if(b){ b.innerHTML='<div class="card empty">Could not load correct-answer detail.</div>'; } });
+}
 function exportCSV(c,rows){
   var head=['Student','Email','Subscription','Reading%','Quizzes%','Arenas%','Assignments%','Midterm%','Final exam%','Weighted%','Override%','Final grade%'];
   var lines=[head.join(',')];
@@ -2195,6 +2272,33 @@ function renderGraderKeyCard(){
   });
 }
 
+/* Score every genuinely-blank written answer as 0, in one click. Only empty
+   answers are touched; anything a student actually wrote is left for review, and
+   any score can still be changed afterward. Ported from the Game Theory course. */
+function zeroAllBlanks(){
+  var btn=$('zeroBlanks'); if(!btn){ return; }
+  btn.disabled=true; btn.textContent='Checking\u2026';
+  sb.rpc('im_count_blank_written',{ p_course_id: State.teachCourseId }).then(function(c){
+    btn.disabled=false; btn.textContent='Score blanks 0';
+    if(c && c.error){
+      alert(String(c.error.message||'').indexOf('function')>=0
+        ? 'Not installed yet \u2014 run im_24_grade_tools.sql, then try again.'
+        : ('Could not check: '+c.error.message));
+      return;
+    }
+    var row=(c && c.data && c.data[0])?c.data[0]:null;
+    var n=row?Number(row.blank_pending):0;
+    if(n===0){ alert('No unanswered written questions are waiting.'); return; }
+    if(!window.confirm('Score '+n+' unanswered written question'+(n===1?'':'s')+' as 0?\n\nOnly genuinely blank answers are affected. Anything a student actually wrote is left alone, and you can still change any score afterwards.')){ return; }
+    btn.disabled=true; btn.textContent='Scoring\u2026';
+    sb.rpc('im_grade_blanks_zero',{ p_course_id: State.teachCourseId }).then(function(r){
+      btn.disabled=false; btn.textContent='Score blanks 0';
+      if(r && r.error){ alert('Failed: '+r.error.message); return; }
+      loadPendingWritten();
+    }, function(e){ btn.disabled=false; btn.textContent='Score blanks 0'; alert('Failed: '+String(e&&e.message?e.message:e)); });
+  }, function(e){ btn.disabled=false; btn.textContent='Score blanks 0'; alert('Could not check: '+String(e&&e.message?e.message:e)); });
+}
+
 function loadPendingWritten(){
   var body=$('gradingBody'); if(!body){ return; }
   body.innerHTML=loadingCard();
@@ -2228,7 +2332,7 @@ function loadPendingWritten(){
             var pendingAI=attempts.filter(function(a){ return !a.ai_graded_at; }).length;
             var head='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">' +
               '<div style="font-size:13px;color:var(--text-muted);">' + attempts.length + ' written ' + (attempts.length===1?'answer':'answers') + ' awaiting review' + (pendingAI>0?(' \u00b7 ' + pendingAI + ' not yet AI-graded'):'') + '</div>' +
-              '<div class="inline-actions"><button class="btn btn-ghost btn-sm" id="aiAll">Run AI grading on all</button><button class="btn btn-primary btn-sm" id="finAll">Finalize all reviewed</button></div></div>';
+              '<div class="inline-actions"><button class="btn btn-ghost btn-sm" id="zeroBlanks">Score blanks 0</button><button class="btn btn-ghost btn-sm" id="aiAll">Run AI grading on all</button><button class="btn btn-primary btn-sm" id="finAll">Finalize all reviewed</button></div></div>';
             var rows='';
             attempts.forEach(function(a){
               var it=itemById[a.item_id]||{}; var maxP=it.points||1;
@@ -2255,6 +2359,7 @@ function loadPendingWritten(){
                 '</div>';
             });
             body.innerHTML=head+rows;
+            if($('zeroBlanks')){ $('zeroBlanks').addEventListener('click', zeroAllBlanks); }
             $('aiAll').addEventListener('click', function(){ runAIGrade(null); });
             if($('finAll')){ $('finAll').addEventListener('click', function(){
               if(!confirm('Finalize all answers that have an AI suggestion, accepting the AI score? You can still re-grade individuals afterward.')){ return; }
