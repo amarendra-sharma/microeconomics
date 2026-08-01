@@ -1500,7 +1500,9 @@ function renderGradebook(host){
   if(!needCourse(host)){ return; }
   host.innerHTML=loadingCard();
   var c=findCourse(State.teachCourseId);
-  var weights={reading:c.weight_reading,quizzes:c.weight_quizzes,arenas:c.weight_arenas,midterm:c.weight_midterm,final:c.weight_final};
+  if(!c){ host.innerHTML='<div class="card empty">Could not find this course. Try reselecting it from your course list.</div>'; return; }
+  function wnum(v, d){ return (v===null||v===undefined||isNaN(Number(v)))?d:Number(v); }
+  var weights={reading:wnum(c.weight_reading,0.1),quizzes:wnum(c.weight_quizzes,0.2),arenas:wnum(c.weight_arenas,0.1),midterm:wnum(c.weight_midterm,0.3),final:wnum(c.weight_final,0.3)};
   // 1) gradebook view rows, 2) published exams, 3) exam attempts, + assignments/overrides
   // Guard every stage with a timeout so a hung query names itself instead of
   // spinning forever.
