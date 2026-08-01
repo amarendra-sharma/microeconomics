@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-07-gradebook-fix-c';
+var SA_BUILD = 'intro-micro-portal-2026-07-gradebook-fix-d';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1514,7 +1514,7 @@ function renderGradebook(host){
   }
   withTimeout(Promise.all([
     sb.from('im_gradebook_v').select('*').eq('course_id',State.teachCourseId),
-    sb.from('im_exam').select('id,kind,total_points,is_published,attempt_scoring').eq('course_id',State.teachCourseId).eq('is_published',true)
+    sb.from('im_exam').select('id,kind,total_points,item_ids,is_published,attempt_scoring').eq('course_id',State.teachCourseId).eq('is_published',true)
   ]), 'the gradebook view', 20000).then(function(r){
     if(r[0] && r[0].error){ host.innerHTML='<div class="card empty">The gradebook list could not load: '+esc(r[0].error.message)+'</div>'; return; }
     var rows=r[0].data?r[0].data:[];
@@ -1646,8 +1646,13 @@ function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overr
     var reading=r.chapters_read/14;
     var quizzes=(r.avg_quiz_score!==null&&r.avg_quiz_score!==undefined&&r.avg_quiz_score>0)?Number(r.avg_quiz_score):(r.quizzes_passed/14);
     var arenas=(arenaScoreOf[r.student_id]!==undefined)?arenaScoreOf[r.student_id]:0;
-    var midScore=(midterm&&midterm.total_points)?((examScore[r.student_id]&&examScore[r.student_id].midterm?examScore[r.student_id].midterm:0)/midterm.total_points):null;
-    var finScore=(fin&&fin.total_points)?((examScore[r.student_id]&&examScore[r.student_id].final?examScore[r.student_id].final:0)/fin.total_points):null;
+    // Effective point total: use total_points, but if that's 0/missing on a
+    // published exam that has questions, fall back to the question count (each
+    // question = 1 point) so a mis-saved exam still shows a real % instead of --.
+    function examPts(e){ if(!e){ return 0; } if(e.total_points && Number(e.total_points)>0){ return Number(e.total_points); } return (e.item_ids && e.item_ids.length) ? e.item_ids.length : 0; }
+    var midPts=examPts(midterm), finPts=examPts(fin);
+    var midScore=(midterm&&midPts)?((examScore[r.student_id]&&examScore[r.student_id].midterm?examScore[r.student_id].midterm:0)/midPts):null;
+    var finScore=(fin&&finPts)?((examScore[r.student_id]&&examScore[r.student_id].final?examScore[r.student_id].final:0)/finPts):null;
     // renormalize weights over available components
     var comps=[['reading',reading,weights.reading],['quizzes',quizzes,weights.quizzes],['arenas',arenas,weights.arenas]];
     if(midScore!==null){ comps.push(['midterm',midScore,weights.midterm]); }
