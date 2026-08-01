@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-07';
+var SA_BUILD = 'intro-micro-portal-2026-07-gradebook-fix-b';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1635,6 +1635,7 @@ function renderGradebook(host){
   });
 }
 function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overrideOf,arenaScoreOf){
+  try {
   asgScore = asgScore || {}; overrideOf = overrideOf || {}; arenaScoreOf = arenaScoreOf || {};
   if(rows.length===0){ host.innerHTML='<div class="card empty">No enrolled students yet. Share the join code <span class="pill-code">'+esc(c.join_code)+'</span> so students can join.</div>'; return; }
   var computed=rows.map(function(r){
@@ -1690,6 +1691,9 @@ function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overr
       openGradeBreakdown(State.teachCourseId, sid, b.getAttribute('data-bdname'), gObj, weights);
     });
   });
+  } catch(err){
+    host.innerHTML='<div class="card empty">The gradebook could not be built: '+esc(String(err&&err.message?err.message:err))+'. Please tell support this exact message.</div>';
+  }
 }
 
 /* Per-student score detail: the weighted-grade calculation that yields the final
