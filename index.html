@@ -1352,11 +1352,18 @@ function openAccommodation(studentId, email, existing){
     '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">Missed a specific deadline?</div>'+
     '<div style="font-size:12px;color:var(--text-subtle);margin-bottom:10px;">Give this student a personal deadline (and optionally an extra attempt) for one quiz, arena, or exam. Leave the type blank if not needed.</div>'+
     '<div class="row2"><div class="field"><label>Type</label><select id="acKind">'+
-      '<option value="">\u2014 none \u2014</option><option value="exam">Exam</option><option value="quiz">Chapter quiz</option><option value="arena">Arena</option></select></div>'+
+      '<option value="">\u2014 none \u2014</option><option value="exam">Exam</option><option value="quiz">Chapter quiz</option><option value="arena">Arena</option><option value="assignment">Assignment</option></select></div>'+
     '<div class="field"><label>Which one</label><select id="acRef"><option value="">Choose a type first</option></select></div></div>'+
     '<div class="row2"><div class="field"><label>New deadline for this student</label><input id="acDue" type="datetime-local"></div>'+
     '<div class="field"><label>Extra attempts (this item)</label><input id="acItemExtra" type="number" min="0" value="0"></div></div>'+
     '<div id="acExisting" style="font-size:12px;color:var(--text-muted);margin:2px 0 8px;"></div>'+
+    '<div style="border-top:1px solid var(--border);margin:12px 0 8px;padding-top:10px;">'+
+      '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">Reopen an auto-submitted exam</div>'+
+      '<div style="font-size:11.5px;color:var(--text-muted);margin-bottom:6px;">If a technical glitch force-submitted this student\u2019s exam, reopen it so they can finish where it cut off. Questions they already answered are kept; only the unfinished ones reopen.</div>'+
+      '<div class="row2"><div class="field"><label>Which exam</label><select id="acReopenExam"><option value="">Select an exam\u2026</option></select></div>'+
+      '<div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" id="acReopenBtn" style="width:100%;">Reopen for this student</button></div></div>'+
+      '<div id="acReopenMsg" class="msg" style="margin-top:4px;"></div>'+
+    '</div>'+
     '<div class="inline-actions" style="justify-content:flex-end;">'+
       (existing?'<button class="btn btn-danger btn-sm" id="acClear">Remove</button>':'')+
       '<button class="btn btn-ghost" id="acCancel">Cancel</button><button class="btn btn-primary" id="acSave">Save</button></div></div>';
@@ -1366,8 +1373,20 @@ function openAccommodation(studentId, email, existing){
 
   // ---- per-assessment (missed deadline) picker ----
   var courseExams=[];
+  var courseAssignments=[];
   sb.from('im_exam').select('id,title,kind').eq('course_id',State.teachCourseId).order('title').then(function(r){
     courseExams=r.data?r.data:[]; if($('acKind').value){ fillRefs(); }
+    // populate the reopen-exam picker too
+    var rp=$('acReopenExam');
+    if(rp){
+      var o='<option value="">Select an exam\u2026</option>', k;
+      for(k=0;k<courseExams.length;k++){ o+='<option value="'+courseExams[k].id+'">'+esc(courseExams[k].title)+'</option>'; }
+      if(courseExams.length===0){ o='<option value="">No exams in this course yet</option>'; }
+      rp.innerHTML=o;
+    }
+  });
+  sb.from('im_assignment').select('id,title').eq('course_id',State.teachCourseId).order('title').then(function(r){
+    courseAssignments=r.data?r.data:[]; if($('acKind').value==='assignment'){ fillRefs(); }
   });
   function fillRefs(){
     var kind=$('acKind').value, out='', j;
@@ -1381,6 +1400,10 @@ function openAccommodation(studentId, email, existing){
     } else if(kind==='arena'){
       out='<option value="">Select an arena\u2026</option>';
       for(j=0;j<ARENA_SLUGS.length;j++){ out+='<option value="'+ARENA_SLUGS[j]+'">'+esc(ARENA_SLUGS[j])+'</option>'; }
+    } else if(kind==='assignment'){
+      out='<option value="">Select an assignment\u2026</option>';
+      for(j=0;j<courseAssignments.length;j++){ out+='<option value="'+courseAssignments[j].id+'">'+esc(courseAssignments[j].title)+'</option>'; }
+      if(courseAssignments.length===0){ out='<option value="">No assignments in this course yet</option>'; }
     } else {
       out='<option value="">Choose a type first</option>';
     }
@@ -1408,6 +1431,20 @@ function openAccommodation(studentId, email, existing){
   }
   function close(){ $('modalHost').innerHTML=''; }
   $('acCancel').addEventListener('click', close);
+  if($('acReopenBtn')){ $('acReopenBtn').addEventListener('click', function(){
+    var exId=$('acReopenExam')?$('acReopenExam').value:'';
+    var msg=$('acReopenMsg');
+    if(!exId){ if(msg){ msg.className='msg err'; msg.textContent='Choose an exam first.'; } return; }
+    if(!window.confirm('Reopen this exam for the student so they can finish the unfinished questions?\n\nAnswers they already submitted are kept. They will need to re-enter the exam from their Exams page.')){ return; }
+    var btn=$('acReopenBtn'); btn.disabled=true; btn.textContent='Reopening\u2026';
+    sb.rpc('im_reopen_attempt',{ p_course:State.teachCourseId, p_exam:exId, p_student:studentId, p_note:'instructor reopened after auto-submit' }).then(function(r){
+      btn.disabled=false; btn.textContent='Reopen for this student';
+      if(r && r.error){ msg.className='msg err'; msg.textContent=(String(r.error.message||'').indexOf('function')>=0?'Not installed yet \u2014 run im_28_reschedule_and_reopen.sql.':r.error.message); return; }
+      var n=(r && typeof r.data==='number')?r.data:(r && r.data);
+      msg.className='msg ok';
+      msg.textContent=(Number(n)>0)?('Reopened '+n+' question'+(Number(n)===1?'':'s')+'. The student can now finish from their Exams page.'):'Nothing needed reopening \u2014 this student has no unfinished questions on that exam.';
+    }, function(e){ btn.disabled=false; btn.textContent='Reopen for this student'; msg.className='msg err'; msg.textContent='Failed: '+String(e&&e.message?e.message:e); });
+  }); }
   m.addEventListener('click', function(e){ if(e.target===m){ close(); } });
   if(existing && $('acClear')){ $('acClear').addEventListener('click', function(){
     sb.from('im_accommodation').delete().eq('course_id',State.teachCourseId).eq('student_id',studentId).then(function(){ close(); loadRoster(); });
@@ -1418,19 +1455,20 @@ function openAccommodation(studentId, email, existing){
     $('acSave').disabled=true;
     sb.from('im_accommodation').upsert(payload,{onConflict:'course_id,student_id'}).then(function(res){
       if(res.error){ $('acSave').disabled=false; var e=$('acMsg'); e.className='msg err'; e.textContent=res.error.message; return; }
-      // optional per-assessment (missed deadline) accommodation
+      // optional per-assessment (missed deadline) reschedule -- any type
       var kind=$('acKind').value, ref=$('acRef').value;
       if(!kind||!ref){ $('acSave').disabled=false; close(); loadRoster(); return; }
       var dueRaw=$('acDue').value;
-      var item={ course_id:State.teachCourseId, student_id:studentId, kind:kind, ref_id:String(ref),
-        due_override: dueRaw?new Date(dueRaw).toISOString():null,
-        extra_attempts: parseInt($('acItemExtra').value,10)||0,
-        note:$('acNote').value.trim(), created_by:State.user.id };
-      sb.from('im_assessment_accommodation').upsert(item,{onConflict:'course_id,student_id,kind,ref_id'}).then(function(r2){
+      sb.rpc('im_set_reschedule',{
+        p_course:State.teachCourseId, p_kind:kind, p_ref:String(ref), p_student:studentId,
+        p_closes_at: dueRaw?new Date(dueRaw).toISOString():null,
+        p_extra: parseInt($('acItemExtra').value,10)||0,
+        p_note: $('acNote').value.trim()
+      }).then(function(r2){
         $('acSave').disabled=false;
-        if(r2.error){ var e2=$('acMsg'); e2.className='msg err'; e2.textContent=r2.error.message; return; }
+        if(r2 && r2.error){ var e2=$('acMsg'); e2.className='msg err'; e2.textContent = (String(r2.error.message||'').indexOf('function')>=0? 'Rescheduling isn\u2019t installed yet \u2014 run im_28_reschedule_and_reopen.sql.' : r2.error.message); return; }
         close(); loadRoster();
-      });
+      }, function(e2){ $('acSave').disabled=false; var el=$('acMsg'); el.className='msg err'; el.textContent='Could not save: '+String(e2&&e2.message?e2.message:e2); });
     });
   });
 }
@@ -4746,7 +4784,8 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
     Promise.all([
       sb.from('im_exam').select('id,course_id,kind,title,total_points,time_limit_minutes,instructions,item_ids,is_published,max_attempts,shuffle_questions,attempt_scoring,opens_at,closes_at,proctored,camera_mode,random_per_student,random_recipe').in('course_id', courseIds).eq('is_published', true).order('created_at',{ascending:true}),
       sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,graded_at,submitted_value').eq('student_id', uid).not('exam_id','is',null),
-      sb.from('im_accommodation').select('course_id,time_multiplier,extra_attempts').eq('student_id', uid)
+      sb.from('im_accommodation').select('course_id,time_multiplier,extra_attempts').eq('student_id', uid),
+      sb.from('im_assessment_accommodation').select('ref_id,due_override').eq('student_id', uid).eq('kind','exam')
     ]).then(function(r) {
       var exams = r[0].data ? r[0].data : [];
       // Show anything that is a real exam. Previously this kept only
@@ -4765,6 +4804,9 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
       });
       var accoms = r[2].data ? r[2].data : [];
       var accomByCourse = {}; accoms.forEach(function(a){ accomByCourse[a.course_id]=a; });
+      // per-exam deadline overrides for THIS student (a reschedule wins over closes_at)
+      var examDueOverride = {};
+      (r[3] && r[3].data ? r[3].data : []).forEach(function(o){ if(o.due_override){ examDueOverride[o.ref_id]=new Date(o.due_override).getTime(); } });
       if (exams.length === 0) { host.innerHTML = '<div class="card empty">No exams have been assigned yet.</div>'; return; }
       // count graded SITTINGS per exam = graded attempts on that exam's first item
       var sittingsBy = {}; var lastPts = {};
@@ -4804,8 +4846,10 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
         var baseAtt = (e.max_attempts===null||e.max_attempts===undefined)?1:Number(e.max_attempts);
         var allowed = baseAtt===0 ? 0 : baseAtt + (acc?Number(acc.extra_attempts):0);
         var now = Date.now();
+        // A per-student reschedule (override) replaces the exam's own close time.
+        var effClose = (examDueOverride[e.id]!==undefined) ? examDueOverride[e.id] : (e.closes_at ? new Date(e.closes_at).getTime() : null);
         var notOpen = e.opens_at && now < new Date(e.opens_at).getTime();
-        var closed = e.closes_at && now > new Date(e.closes_at).getTime();
+        var closed = effClose && now > effClose;
         var attemptsLeft = (allowed===0) ? 'unlimited' : Math.max(0, allowed - sittings);
         var tmin = e.time_limit_minutes ? (acc && Number(acc.time_multiplier)!==1 ? Math.round(e.time_limit_minutes*Number(acc.time_multiplier)) : e.time_limit_minutes) : null;
         var statusHtml, action;
