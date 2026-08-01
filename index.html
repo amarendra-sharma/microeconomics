@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-07-gradebook-fix-b';
+var SA_BUILD = 'intro-micro-portal-2026-07-gradebook-fix-c';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1634,6 +1634,10 @@ function renderGradebook(host){
     host.innerHTML='<div class="card empty">Could not load the gradebook: '+esc(String(err&&err.message?err.message:err))+'. Please reload the page.</div>';
   });
 }
+/* Renders a subscription-status pill. (Restored: this was accidentally removed
+   during earlier work, which made the gradebook and roster crash.) */
+function subTag(s){ if(s==='active'){return '<span class="tag green">active</span>';} if(s==='pending'){return '<span class="tag amber">pending</span>';} if(s==='expired'){return '<span class="tag rose">expired</span>';} if(s==='comped'){return '<span class="tag violet">comped</span>';} return '<span class="tag dim">'+esc(s)+'</span>'; }
+
 function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overrideOf,arenaScoreOf){
   try {
   asgScore = asgScore || {}; overrideOf = overrideOf || {}; arenaScoreOf = arenaScoreOf || {};
