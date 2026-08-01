@@ -1508,10 +1508,19 @@ function renderGradebook(host){
   var c=findCourse(State.teachCourseId);
   var weights={reading:c.weight_reading,quizzes:c.weight_quizzes,arenas:c.weight_arenas,midterm:c.weight_midterm,final:c.weight_final};
   // 1) gradebook view rows, 2) published exams, 3) exam attempts, + assignments/overrides
-  Promise.all([
+  // Guard every stage with a timeout so a hung query names itself instead of
+  // spinning forever.
+  function withTimeout(p, label, ms){
+    return Promise.race([
+      Promise.resolve(p),
+      new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timed out loading '+label)); }, ms||20000); })
+    ]);
+  }
+  withTimeout(Promise.all([
     sb.from('im_gradebook_v').select('*').eq('course_id',State.teachCourseId),
     sb.from('im_exam').select('id,kind,total_points,is_published,attempt_scoring').eq('course_id',State.teachCourseId).eq('is_published',true)
-  ]).then(function(r){
+  ]), 'the gradebook view', 20000).then(function(r){
+    if(r[0] && r[0].error){ host.innerHTML='<div class="card empty">The gradebook list could not load: '+esc(r[0].error.message)+'</div>'; return; }
     var rows=r[0].data?r[0].data:[];
     var exams=r[1].data?r[1].data:[];
     var midterm=exams.filter(function(e){return e.kind==='midterm';})[0];
@@ -1541,7 +1550,7 @@ function renderGradebook(host){
       return page(0);
     }
     var examAttemptsP = fetchAllExamAttempts(examIds);
-    examAttemptsP.then(function(ea){
+    withTimeout(examAttemptsP, 'exam attempts', 20000).then(function(ea){
       var attempts=ea.data?ea.data:[];
       var scoringOf={}; if(midterm){scoringOf[midterm.id]=midterm.attempt_scoring||'highest';} if(fin){scoringOf[fin.id]=fin.attempt_scoring||'highest';}
       // group: student -> exam -> item -> [points...] (in time order)
@@ -1571,12 +1580,12 @@ function renderGradebook(host){
         });
       });
       // assignment averages + manual overrides + arena performance
-      Promise.all([
+      withTimeout(Promise.all([
         sb.from('im_assignment').select('id,points').eq('course_id',State.teachCourseId).eq('is_published',true),
         sb.from('im_submission').select('assignment_id,student_id,score').eq('course_id',State.teachCourseId),
         sb.from('im_grade_override').select('student_id,override_pct,note').eq('course_id',State.teachCourseId),
-        sb.from('im_score').select('user_id,arena_slug,score_pct,updated_at')
-      ]).then(function(ar){
+        sb.from('im_attempt').select('student_id,arena_slug,score,played_at').eq('course_id',State.teachCourseId)
+      ]), 'assignments and arenas', 20000).then(function(ar){
         var aRows=ar[0].data?ar[0].data:[];
         var subs=ar[1].data?ar[1].data:[];
         var ovr=ar[2].data?ar[2].data:[];
@@ -1585,8 +1594,8 @@ function renderGradebook(host){
         // and keep only rows for students enrolled in THIS course.
         var enrolledIds={}; rows.forEach(function(r){ enrolledIds[r.student_id]=true; });
         var arenaRows=(ar[3].data?ar[3].data:[])
-          .filter(function(r){ return enrolledIds[r.user_id]; })
-          .map(function(r){ return { student_id:r.user_id, arena_slug:r.arena_slug, score:Number(r.score_pct), played_at:r.updated_at }; });
+          .filter(function(r){ return enrolledIds[r.student_id]; })
+          .map(function(r){ return { student_id:r.student_id, arena_slug:r.arena_slug, score:(r.score!==null&&r.score!==undefined?Number(r.score):0), played_at:r.played_at }; });
         // group arena results per student, then compute performance-based score each
         var arenaByStudent={};
         arenaRows.forEach(function(r){ if(!arenaByStudent[r.student_id]){ arenaByStudent[r.student_id]=[]; } arenaByStudent[r.student_id].push(r); });
@@ -3703,7 +3712,7 @@ function renderArenas() {
     });
   }
   if (uid) {
-    var q = sb.from('im_score').select('arena_slug').eq('student_id', uid);
+    var q = sb.from('im_attempt').select('arena_slug').eq('student_id', uid);
     if (courseId) { q = q.eq('course_id', courseId); }
     q.then(function(res){
       var rows = res.data ? res.data : [];
@@ -3746,7 +3755,7 @@ function loadHome() {
   // counts: graded attempts, correct, arenas played
   Promise.all([
     sb.from('im_exam_attempt').select('is_correct', { count: 'exact' }).eq('student_id', uid).not('graded_at','is',null),
-    sb.from('im_score').select('id', { count: 'exact' }).eq('student_id', uid),
+    sb.from('im_attempt').select('id', { count: 'exact' }).eq('student_id', uid),
     sb.from('im_chapter_progress').select('chapter', { count: 'exact' }).eq('student_id', uid).eq('reading_done', true)
   ]).then(function(r) {
     var attempts = (r[0].data ? r[0].data : []);
@@ -4555,7 +4564,7 @@ function computeWeightedGrade(callback){
   Promise.all([
     sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
-    sb.from('im_score').select('arena_slug,score,played_at').eq('student_id', uid).eq('course_id', courseId),
+    sb.from('im_attempt').select('arena_slug,score,played_at').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,total_points,attempt_scoring').eq('course_id', courseId).eq('is_published', true)
   ]).then(function(r){
     var course = r[0].data; if (!course) { callback(null); return; }
@@ -5253,7 +5262,7 @@ function loadProgress() {
       if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="dim" style="color:var(--text-subtle);">No attempts yet — try the Practice tab.</td></tr>'; }
     });
   // arena results
-  sb.from('im_score').select('arena_slug, outcome, score, played_at')
+  sb.from('im_attempt').select('arena_slug, outcome, score, played_at')
     .eq('student_id', uid).order('played_at', { ascending: false }).limit(20)
     .then(function(res) {
       var rows = res.data ? res.data : [];
@@ -5279,7 +5288,7 @@ function loadBadges() {
   var uid = State.user.id;
   Promise.all([
     sb.from('im_chapter_progress').select('chapter,quiz_passed,quiz_score').eq('student_id', uid),
-    sb.from('im_score').select('arena_slug,outcome').eq('student_id', uid)
+    sb.from('im_attempt').select('arena_slug,outcome').eq('student_id', uid)
   ]).then(function(r) {
     var prog = r[0].data ? r[0].data : [];
     var arenas = r[1].data ? r[1].data : [];
@@ -5335,7 +5344,7 @@ function loadCompletion() {
   Promise.all([
     sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
-    sb.from('im_score').select('arena_slug,score,played_at').eq('student_id', uid).eq('course_id', courseId),
+    sb.from('im_attempt').select('arena_slug,score,played_at').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,total_points,attempt_scoring').eq('course_id', courseId).eq('is_published', true)
   ]).then(function(r) {
     var course = r[0].data; if (!course) { host.innerHTML=''; return; }
