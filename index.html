@@ -1625,6 +1625,8 @@ function renderGradebook(host){
       }, function(err){
         host.innerHTML='<div class="card empty">Could not load parts of the gradebook ('+esc(String(err&&err.message?err.message:err))+'). Exam and quiz scores may still be shown \u2014 try reloading.</div>';
       });
+    }, function(err){
+      host.innerHTML='<div class="card empty">Could not load exam attempts: '+esc(String(err&&err.message?err.message:err))+'. Try reloading.</div>';
     });
   }, function(err){
     host.innerHTML='<div class="card empty">Could not load the gradebook: '+esc(String(err&&err.message?err.message:err))+'. Please reload the page.</div>';
