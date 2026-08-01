@@ -1575,12 +1575,18 @@ function renderGradebook(host){
         sb.from('im_assignment').select('id,points').eq('course_id',State.teachCourseId).eq('is_published',true),
         sb.from('im_submission').select('assignment_id,student_id,score').eq('course_id',State.teachCourseId),
         sb.from('im_grade_override').select('student_id,override_pct,note').eq('course_id',State.teachCourseId),
-        sb.from('im_score').select('student_id,arena_slug,score,played_at').eq('course_id',State.teachCourseId)
+        sb.from('im_score').select('user_id,arena_slug,score_pct,updated_at')
       ]).then(function(ar){
         var aRows=ar[0].data?ar[0].data:[];
         var subs=ar[1].data?ar[1].data:[];
         var ovr=ar[2].data?ar[2].data:[];
-        var arenaRows=ar[3].data?ar[3].data:[];
+        // im_score is keyed by user_id (platform-wide) with score_pct/updated_at.
+        // Normalize to the shape computeArenaScore expects (student_id/score/played_at),
+        // and keep only rows for students enrolled in THIS course.
+        var enrolledIds={}; rows.forEach(function(r){ enrolledIds[r.student_id]=true; });
+        var arenaRows=(ar[3].data?ar[3].data:[])
+          .filter(function(r){ return enrolledIds[r.user_id]; })
+          .map(function(r){ return { student_id:r.user_id, arena_slug:r.arena_slug, score:Number(r.score_pct), played_at:r.updated_at }; });
         // group arena results per student, then compute performance-based score each
         var arenaByStudent={};
         arenaRows.forEach(function(r){ if(!arenaByStudent[r.student_id]){ arenaByStudent[r.student_id]=[]; } arenaByStudent[r.student_id].push(r); });
@@ -1599,8 +1605,12 @@ function renderGradebook(host){
         Object.keys(earn).forEach(function(sid){ asgScore[sid]= poss[sid]>0 ? (earn[sid]/poss[sid]) : null; });
         var overrideOf={}; ovr.forEach(function(o){ overrideOf[o.student_id]={ pct:o.override_pct, note:o.note }; });
         buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overrideOf,arenaScoreOf);
+      }, function(err){
+        host.innerHTML='<div class="card empty">Could not load parts of the gradebook ('+esc(String(err&&err.message?err.message:err))+'). Exam and quiz scores may still be shown \u2014 try reloading.</div>';
       });
     });
+  }, function(err){
+    host.innerHTML='<div class="card empty">Could not load the gradebook: '+esc(String(err&&err.message?err.message:err))+'. Please reload the page.</div>';
   });
 }
 function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overrideOf,arenaScoreOf){
