@@ -386,7 +386,7 @@
       <h3 style="font-size:22px;margin:10px 0 12px;">Recent practice attempts</h3>
       <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="attemptsTbl"><thead><tr><th>Item</th><th>Chapter</th><th>Result</th><th>Points</th><th>When</th></tr></thead><tbody></tbody></table></div>
       <h3 style="font-size:22px;margin:24px 0 12px;">Arena results</h3>
-      <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="arenaTbl"><thead><tr><th>Arena</th><th>Outcome</th><th>Score</th><th>When</th></tr></thead><tbody></tbody></table></div>
+      <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="arenaTbl"><thead><tr><th>Arena</th><th>Result</th><th>When</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     </div>
@@ -473,34 +473,28 @@ var ARENA_MAX_ATTEMPTS = 2;   // only the first N attempts per arena count towar
 // partial completion earns partial credit and quality (not just participation)
 // drives the score. Result is 0..1.
 function computeArenaScore(rows){
+  // Accepts rows from im_attempt (one PER CASE: arena_slug, is_correct) OR
+  // pre-aggregated rows carrying a 0..1 `score` per arena. Each arena's score is
+  // the fraction of its cases the student got right. Overall = average across
+  // ALL arenas, so unplayed arenas count as 0.
   rows = rows ? rows : [];
   var byArena = {};
   rows.forEach(function(r){
     if(!r || !r.arena_slug){ return; }
-    if(!byArena[r.arena_slug]){ byArena[r.arena_slug] = []; }
-    byArena[r.arena_slug].push(r);
+    if(!byArena[r.arena_slug]){ byArena[r.arena_slug] = { c:0, n:0, presScore:null }; }
+    var g = byArena[r.arena_slug];
+    if(r.score!==null && r.score!==undefined){ g.presScore = Number(r.score); }   // pre-aggregated
+    g.n++; if(r.is_correct){ g.c++; }
   });
   var sum = 0;
   for(var i=0;i<ARENA_SLUGS.length;i++){
-    var slug = ARENA_SLUGS[i];
-    var attempts = byArena[slug];
-    if(!attempts || attempts.length===0){ continue; }   // unplayed -> contributes 0
-    // order by played_at ascending, take the first ARENA_MAX_ATTEMPTS
-    attempts.sort(function(a,b){ return new Date(a.played_at) - new Date(b.played_at); });
-    var take = Math.min(ARENA_MAX_ATTEMPTS, attempts.length);
-    var s = 0, cnt = 0;
-    for(var k=0;k<take;k++){
-      var sc = attempts[k].score;
-      // a missing score counts as 0 for that attempt (an attempt with no measured
-      // performance still consumes one of the two counted tries)
-      s += (sc!==null && sc!==undefined) ? Number(sc) : 0;
-      cnt++;
-    }
-    var arenaPerf = cnt>0 ? (s/cnt) : 0;
-    if(arenaPerf > 1){ arenaPerf = 1; } if(arenaPerf < 0){ arenaPerf = 0; }
-    sum += arenaPerf;
+    var g = byArena[ARENA_SLUGS[i]];
+    if(!g){ continue; }   // unplayed -> contributes 0
+    var perf = (g.presScore!==null) ? g.presScore : (g.n>0 ? g.c/g.n : 0);
+    if(perf > 1){ perf = 1; } if(perf < 0){ perf = 0; }
+    sum += perf;
   }
-  return sum / ARENA_SLUGS.length;   // divide by 13; unplayed already counted as 0
+  return sum / ARENA_SLUGS.length;
 }
 var ARENA_TITLE = {
   'market-sandbox':'Market Sandbox','elasticity-explorer':'Elasticity Explorer','policy-lab':'Policy Lab',
@@ -1584,18 +1578,32 @@ function renderGradebook(host){
         sb.from('im_assignment').select('id,points').eq('course_id',State.teachCourseId).eq('is_published',true),
         sb.from('im_submission').select('assignment_id,student_id,score').eq('course_id',State.teachCourseId),
         sb.from('im_grade_override').select('student_id,override_pct,note').eq('course_id',State.teachCourseId),
-        sb.from('im_attempt').select('student_id,arena_slug,score,played_at').eq('course_id',State.teachCourseId)
+        sb.from('im_attempt').select('user_id,arena_slug,is_correct,created_at').eq('course_id',State.teachCourseId)
       ]), 'assignments and arenas', 20000).then(function(ar){
         var aRows=ar[0].data?ar[0].data:[];
         var subs=ar[1].data?ar[1].data:[];
         var ovr=ar[2].data?ar[2].data:[];
-        // im_score is keyed by user_id (platform-wide) with score_pct/updated_at.
-        // Normalize to the shape computeArenaScore expects (student_id/score/played_at),
-        // and keep only rows for students enrolled in THIS course.
+        // im_attempt is one row PER CASE (user_id, arena_slug, is_correct, created_at).
+        // An arena's score for a student = fraction of that arena's cases correct.
+        // Collapse per (student, arena) into one normalized row that
+        // computeArenaScore can consume (score in 0..1, played_at = latest case).
         var enrolledIds={}; rows.forEach(function(r){ enrolledIds[r.student_id]=true; });
-        var arenaRows=(ar[3].data?ar[3].data:[])
-          .filter(function(r){ return enrolledIds[r.student_id]; })
-          .map(function(r){ return { student_id:r.student_id, arena_slug:r.arena_slug, score:(r.score!==null&&r.score!==undefined?Number(r.score):0), played_at:r.played_at }; });
+        var agg={};  // student -> arena -> {c:correct, n:total, last:ts}
+        (ar[3].data?ar[3].data:[]).forEach(function(r){
+          if(!enrolledIds[r.user_id]){ return; }
+          if(!agg[r.user_id]){ agg[r.user_id]={}; }
+          if(!agg[r.user_id][r.arena_slug]){ agg[r.user_id][r.arena_slug]={c:0,n:0,last:r.created_at}; }
+          var g=agg[r.user_id][r.arena_slug];
+          g.n++; if(r.is_correct){ g.c++; }
+          if(new Date(r.created_at) > new Date(g.last)){ g.last=r.created_at; }
+        });
+        var arenaRows=[];
+        Object.keys(agg).forEach(function(sid){
+          Object.keys(agg[sid]).forEach(function(slug){
+            var g=agg[sid][slug];
+            arenaRows.push({ student_id:sid, arena_slug:slug, score:(g.n>0?g.c/g.n:0), played_at:g.last });
+          });
+        });
         // group arena results per student, then compute performance-based score each
         var arenaByStudent={};
         arenaRows.forEach(function(r){ if(!arenaByStudent[r.student_id]){ arenaByStudent[r.student_id]=[]; } arenaByStudent[r.student_id].push(r); });
@@ -3712,7 +3720,7 @@ function renderArenas() {
     });
   }
   if (uid) {
-    var q = sb.from('im_attempt').select('arena_slug').eq('student_id', uid);
+    var q = sb.from('im_attempt').select('arena_slug').eq('user_id', uid);
     if (courseId) { q = q.eq('course_id', courseId); }
     q.then(function(res){
       var rows = res.data ? res.data : [];
@@ -3755,7 +3763,7 @@ function loadHome() {
   // counts: graded attempts, correct, arenas played
   Promise.all([
     sb.from('im_exam_attempt').select('is_correct', { count: 'exact' }).eq('student_id', uid).not('graded_at','is',null),
-    sb.from('im_attempt').select('id', { count: 'exact' }).eq('student_id', uid),
+    sb.from('im_attempt').select('id', { count: 'exact' }).eq('user_id', uid),
     sb.from('im_chapter_progress').select('chapter', { count: 'exact' }).eq('student_id', uid).eq('reading_done', true)
   ]).then(function(r) {
     var attempts = (r[0].data ? r[0].data : []);
@@ -4564,7 +4572,7 @@ function computeWeightedGrade(callback){
   Promise.all([
     sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
-    sb.from('im_attempt').select('arena_slug,score,played_at').eq('student_id', uid).eq('course_id', courseId),
+    sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,total_points,attempt_scoring').eq('course_id', courseId).eq('is_published', true)
   ]).then(function(r){
     var course = r[0].data; if (!course) { callback(null); return; }
@@ -5262,17 +5270,18 @@ function loadProgress() {
       if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="dim" style="color:var(--text-subtle);">No attempts yet — try the Practice tab.</td></tr>'; }
     });
   // arena results
-  sb.from('im_attempt').select('arena_slug, outcome, score, played_at')
-    .eq('student_id', uid).order('played_at', { ascending: false }).limit(20)
+  sb.from('im_attempt').select('arena_slug, is_correct, created_at')
+    .eq('user_id', uid).order('created_at', { ascending: false }).limit(20)
     .then(function(res) {
       var rows = res.data ? res.data : [];
       var tb = $('arenaTbl').querySelector('tbody'); tb.innerHTML = '';
       rows.forEach(function(r) {
         var t = ARENA_TITLE[r.arena_slug] ? ARENA_TITLE[r.arena_slug] : r.arena_slug;
-        var when = r.played_at ? new Date(r.played_at).toLocaleString() : '';
-        tb.innerHTML += '<tr><td>' + esc(t) + '</td><td>' + esc(r.outcome) + '</td><td>' + esc(r.score) + '</td><td>' + esc(when) + '</td></tr>';
+        var when = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+        var result = r.is_correct ? '<span class="tag green">correct</span>' : '<span class="tag rose">incorrect</span>';
+        tb.innerHTML += '<tr><td>' + esc(t) + '</td><td>' + result + '</td><td>' + when + '</td></tr>';
       });
-      if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="4" style="color:var(--text-subtle);">No arena sessions recorded yet.</td></tr>'; }
+      if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="3" style="color:var(--text-subtle);">No arena sessions recorded yet.</td></tr>'; }
     });
   loadBadges();
   loadCompletion();
@@ -5288,7 +5297,7 @@ function loadBadges() {
   var uid = State.user.id;
   Promise.all([
     sb.from('im_chapter_progress').select('chapter,quiz_passed,quiz_score').eq('student_id', uid),
-    sb.from('im_attempt').select('arena_slug,outcome').eq('student_id', uid)
+    sb.from('im_attempt').select('arena_slug,is_correct').eq('user_id', uid)
   ]).then(function(r) {
     var prog = r[0].data ? r[0].data : [];
     var arenas = r[1].data ? r[1].data : [];
@@ -5299,7 +5308,7 @@ function loadBadges() {
     }
     var nPassed = 0; for (var k in passed) { if (passed.hasOwnProperty(k)) { nPassed++; } }
     var arenaWins = 0, arenaPlayed = arenas.length;
-    for (i = 0; i < arenas.length; i++) { if (arenas[i].outcome === 'win') { arenaWins++; } }
+    for (i = 0; i < arenas.length; i++) { if (arenas[i].is_correct) { arenaWins++; } }
 
     var html = '';
     // 14 chapter badges
@@ -5344,7 +5353,7 @@ function loadCompletion() {
   Promise.all([
     sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
-    sb.from('im_attempt').select('arena_slug,score,played_at').eq('student_id', uid).eq('course_id', courseId),
+    sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,total_points,attempt_scoring').eq('course_id', courseId).eq('is_published', true)
   ]).then(function(r) {
     var course = r[0].data; if (!course) { host.innerHTML=''; return; }
