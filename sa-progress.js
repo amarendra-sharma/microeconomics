@@ -37,6 +37,7 @@
   }
 
   var sb = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  try { console.log('%cim-progress build: micro-2026-08 | project: ' + SUPABASE_URL, 'color:#0f3d9e;font-weight:bold'); } catch (e) {}
 
   // Cached identity, resolved once.
   var ready = null;          // a Promise resolving to { user, courseId } or null
@@ -85,14 +86,24 @@
   // Upsert reading completion for a chapter.
   function markReadingDone(chapter) {
     return resolveContext().then(function (c) {
-      if (!c || !c.courseId) { return null; }
+      if (!c || !c.courseId) {
+        try { console.warn('im-progress: reading NOT saved for ch ' + chapter + ' -- no logged-in student or no resolved course.'); } catch (e) {}
+        return null;
+      }
       return sb.from('im_chapter_progress').upsert({
         student_id: c.user.id,
         course_id: c.courseId,
         chapter: chapter,
         reading_done: true
-      }, { onConflict: 'student_id,course_id,chapter' });
-    }).catch(function () { return null; });
+      }, { onConflict: 'student_id,course_id,chapter' }).then(function (r) {
+        if (r && r.error) { try { console.warn('im-progress: reading save FAILED for ch ' + chapter + ': ' + r.error.message); } catch (e) {} }
+        else { try { console.log('im-progress: reading saved for ch ' + chapter + ' (course ' + c.courseId + ')'); } catch (e) {} }
+        return r;
+      });
+    }).catch(function (e) {
+      try { console.warn('im-progress: reading save threw for ch ' + chapter + ': ' + (e && e.message ? e.message : e)); } catch (er) {}
+      return null;
+    });
   }
 
   // Record a quiz result (score is 0..100 percent here; stored as 0..1 fraction).
@@ -111,12 +122,44 @@
     }).catch(function () { return null; });
   }
 
-  // Record an arena session. In Intro Micro, arenas persist their own per-case
-  // results (im_attempt) through their game code, so this reporter does NOT write
-  // arena rows -- it would target a table shape this project doesn't use. Kept as
-  // a safe no-op so any arena that calls it still works.
+  // Record ONE arena case (a single scored question) to im_attempt. This is the
+  // shape the instructor gradebook reads: one row per case, with is_correct, so a
+  // student's arena score = fraction of that arena's cases they got right.
+  // Columns match the live im_attempt: user_id, arena_slug, case_index,
+  // is_correct, course_id, created_at (server default). Writes fail-soft and
+  // report to the console instead of throwing.
+  function recordArenaCase(slug, caseIndex, isCorrect) {
+    return resolveContext().then(function (c) {
+      if (!c) {
+        try { console.warn('im-progress: arena case NOT saved (' + slug + ') -- no logged-in student.'); } catch (e) {}
+        return null;
+      }
+      var row = {
+        user_id: c.user.id,
+        arena_slug: String(slug),
+        case_index: (typeof caseIndex === 'number') ? caseIndex : null,
+        is_correct: !!isCorrect,
+        course_id: c.courseId   // may be null; column is nullable
+      };
+      return sb.from('im_attempt').insert(row).then(function (r) {
+        if (r && r.error) { try { console.warn('im-progress: arena case save FAILED (' + slug + '): ' + r.error.message); } catch (e) {} }
+        else { try { console.log('im-progress: arena case saved (' + slug + ', correct=' + (!!isCorrect) + ')'); } catch (e) {} }
+        return r;
+      });
+    }).catch(function (e) {
+      try { console.warn('im-progress: arena case threw (' + slug + '): ' + (e && e.message ? e.message : e)); } catch (er) {}
+      return null;
+    });
+  }
+
+  // Back-compat convenience: record a whole session as a single "case". Some
+  // arenas may call recordArena(slug, score, outcome) once at the end; treat a
+  // score >= 0.5 (or outcome 'win') as a correct case so it still lands in
+  // im_attempt. Per-case recording via recordArenaCase is preferred.
   function recordArena(slug, score, outcome, detail) {
-    return Promise.resolve(null);
+    var ok = (typeof score === 'number') ? (score >= 0.5)
+           : (outcome === 'win' || outcome === 'correct' || outcome === true);
+    return recordArenaCase(slug, null, ok);
   }
 
   // Lightweight telemetry (optional). No telemetry table in this project, so this
@@ -174,7 +217,7 @@
   function makeNoop(reason) {
     function noop() { return Promise.resolve(null); }
     return {
-      markReadingDone: noop, recordQuiz: noop, recordArena: noop,
+      markReadingDone: noop, recordQuiz: noop, recordArena: noop, recordArenaCase: noop,
       logEvent: noop, isSignedIn: function () { return Promise.resolve(false); },
       initArena: function () {}, reportArenaNow: function () {},
       trackReading: function () {}, _disabled: reason
@@ -307,6 +350,7 @@
     markReadingDone: markReadingDone,
     recordQuiz: recordQuiz,
     recordArena: recordArena,
+    recordArenaCase: recordArenaCase,
     logEvent: logEvent,
     isSignedIn: isSignedIn,
     initArena: initArena,

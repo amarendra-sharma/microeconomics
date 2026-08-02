@@ -7,6 +7,8 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sa-progress.js"></script>
 
 <style>
 :root {
@@ -684,6 +686,11 @@ function diagnose(choice) {
   }
   saveDetective();
   renderStats();
+  // Record this case to the database so it counts toward the arena grade.
+  try {
+    var _mod = (typeof SAProgress !== 'undefined') ? SAProgress : ((typeof IMProgress !== 'undefined') ? IMProgress : null);
+    if (_mod && _mod.recordArenaCase) { _mod.recordArenaCase('market-sandbox', DETECTIVE.attempted, correct); }
+  } catch (e) {}
 
   var e0 = eqm(BASE_A, BASE_B);
   var e1 = eqm(BASE_A + currentCase.da, BASE_B + currentCase.db);
