@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-admin-review';
+var SA_BUILD = 'intro-micro-portal-2026-08-admin-review-b';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -775,7 +775,7 @@ var VIEW_META = {
   analytics:['Analytics','Concept mastery and cohort engagement.',true],
   exams:['Exams','Assemble and publish midterms and finals.',true],
   assignments:['Assignments','Create assignments, then grade submissions with feedback.',true],
-  grading:['Grade Written','Review and finalize written answers, with optional AI assistance.',true],
+  grading:['Grading & Student Work','Review any student\u2019s exams, quizzes, arenas, and assignments; grade written answers with optional AI help.',true],
   subscriptions:['Subscriptions','Manage paid access for this course.',true],
   platform:['Platform & Pricing','Global price, Stripe link, and author bio.',false],
   people:['Instructors','Grant or revoke instructor access.',false]
@@ -2247,8 +2247,8 @@ function openItemStats(courseId){
    stamped with who made it. */
 function renderWorkBrowser(){
   var card=$('workBrowser'); if(!card){ return; }
-  card.innerHTML='<h3 style="font-size:15px;margin-bottom:8px;">Student work</h3>'+
-    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">See everything a student answered on an exam, chapter quiz, or arena, and adjust any score. Changes keep the original grade on record.</div>'+
+  card.innerHTML='<h3 style="font-size:15px;margin-bottom:8px;">Review student work</h3>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Pick any student and see everything they did on an exam, chapter quiz, arena, or assignment \u2014 and adjust any score. Changes keep the original grade on record.</div>'+
     '<div id="wbMsg" class="msg"></div>'+
     '<div class="row2"><div class="field"><label>Student</label><select id="wbStudent"><option value="">Loading\u2026</option></select></div>'+
     '<div class="field"><label>Type</label><select id="wbType">'+
