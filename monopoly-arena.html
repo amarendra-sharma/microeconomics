@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="im-backend.js"></script>
+<script src="sa-progress.js"></script>
+<script src="arena-attempts.js"></script>
 
 <style>
 :root {
@@ -136,6 +138,16 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   h1.sb-title { font-size: 2rem; }
   .sb-diag-grid { grid-template-columns: 1fr; }
 }
+.aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
+.aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
+.aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
+.aa-card .aa-scores, .aa-card .aa-final { font-size: 0.9rem; margin: 0.35rem 0; }
+.aa-card.aa-done { border-color: var(--gold, #b87408); background: var(--gold-lt, #fdf6ec); }
+.aa-card.aa-between { border-color: var(--accent, #0f3d9e); }
+.aa-actions { margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.aa-btn { font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--rule); cursor: pointer; background: var(--bg-card); }
+.aa-btn-primary { background: var(--accent, #0f3d9e); color: #fff; border-color: var(--accent, #0f3d9e); }
+.aa-btn-ghost { background: transparent; }
 </style>
 </head>
 
@@ -265,7 +277,13 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <div class="sb-panel">
   <div class="sb-panel-label">&#9881; Classify the market</div>
   <h4>Four structures, one verdict</h4>
-  <div class="sb-case" id="mk-story">Press <strong>New case</strong> to open the first file.</div>
+  <div id="mk-mode-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;padding-bottom:0.75rem;border-bottom:1px solid var(--rule);">
+    <span style="font-size:0.8rem;color:var(--ink-muted);">Mode:</span>
+    <button class="btn-sb btn-sb-ghost" id="mk-mode-practice" onclick="mkSetMode('practice')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Practice (unlimited, ungraded)</button>
+    <button class="btn-sb btn-sb-primary" id="mk-mode-graded" onclick="mkSetMode('graded')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Graded run</button>
+  </div>
+  <div id="aa-panel" style="margin-bottom:0.75rem;"></div>
+  <div class="sb-case" id="mk-story">Choose a mode above. <strong>Practice</strong> is unlimited and ungraded; the <strong>Graded run</strong> is 12 cases, two attempts, and counts toward your grade.</div>
   <div class="sb-diag-grid">
     <button class="sb-diag-btn" id="mk-PC" onclick="marketVerdict('PC')">Perfectly competitive (P = MC, many sellers)</button>
     <button class="sb-diag-btn" id="mk-SP" onclick="marketVerdict('SP')">Single-price monopoly (P &gt; MC, buyers priced out)</button>
@@ -274,7 +292,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   </div>
   <div class="sb-readout" id="mk-readout">The case file awaits your classification.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
-    <button class="btn-sb btn-sb-primary" onclick="newMarketCase()">New case</button>
+    <button class="btn-sb btn-sb-primary" id="mk-newcase" onclick="newMarketCase()">New case</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetMarketScore()">Reset my record</button>
   </div>
 </div>
@@ -659,8 +677,75 @@ function setMkButtons(disabled) {
 }
 
 var currentMkIndex = -1;
+var mkMode = "practice";       // 'practice' (unlimited, ungraded) or 'graded'
+var mkGradedOrder = [];        // shuffled case indices for the current graded attempt
+var mkGradedPos = 0;           // position within mkGradedOrder
+
+function mkShuffle(n) {
+  var a = [], i, j, t;
+  for (i = 0; i < n; i++) { a.push(i); }
+  for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+
+function mkSetMode(mode) {
+  mkMode = mode;
+  var bp = document.getElementById("mk-mode-practice");
+  var bg = document.getElementById("mk-mode-graded");
+  if (bp) { bp.className = "btn-sb " + (mode === "practice" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  if (bg) { bg.className = "btn-sb " + (mode === "graded" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  var story = document.getElementById("mk-story");
+  var nb = document.getElementById("mk-newcase");
+
+  if (mode === "graded") {
+    // Hand the run to the attempt controller. It shows the "2 attempts, 2nd
+    // optional, averaged, locks" flow in #aa-panel and calls back to start each
+    // attempt's case sequence.
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.init({
+        slug: "monopoly-arena",
+        caseCount: Math.min(12, MK_CASES.length),
+        mount: "aa-panel",
+        onAttemptEnd: function (info) {
+          // between/after each attempt: stop serving cases until the student
+          // chooses (the controller's screen drives "take 2nd" / "finish").
+          setMkButtons(true);
+          if (story) { story.innerHTML = "Attempt recorded. See the panel above for your score and options."; }
+        }
+      });
+    }
+    if (nb) { nb.textContent = "Start / next graded case"; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start / next graded case</strong> to begin. You'll classify 12 cases; you have two attempts and the second is optional."; }
+    setMkButtons(true);
+    mkGradedOrder = [];
+    mkGradedPos = 0;
+  } else {
+    if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }   // clears/renders panel
+    var panel = document.getElementById("aa-panel");
+    if (panel) { panel.innerHTML = ""; }
+    if (nb) { nb.textContent = "New case"; }
+    if (story) { story.innerHTML = "<strong>Practice mode.</strong> Unlimited cases, ungraded. Press <strong>New case</strong> to begin."; }
+    setMkButtons(true);
+  }
+}
+
 function newMarketCase() {
-  currentMkIndex = Math.floor(Math.random() * MK_CASES.length);
+  if (mkMode === "graded") {
+    if (typeof ArenaAttempts !== "undefined" && ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+      var lo = document.getElementById("mk-readout");
+      if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
+      return;
+    }
+    // start a fresh 12-case order at the beginning of each attempt
+    if (mkGradedOrder.length === 0 || mkGradedPos >= mkGradedOrder.length) {
+      mkGradedOrder = mkShuffle(MK_CASES.length).slice(0, Math.min(12, MK_CASES.length));
+      mkGradedPos = 0;
+    }
+    currentMkIndex = mkGradedOrder[mkGradedPos];
+    mkGradedPos += 1;
+  } else {
+    currentMkIndex = Math.floor(Math.random() * MK_CASES.length);
+  }
   currentMk = MK_CASES[currentMkIndex];
   mkAnswered = false;
   setMkButtons(false);
@@ -674,7 +759,7 @@ function newMarketCase() {
    currentMk.key is used ONLY as the offline fallback (professor previewing the
    raw file with no login). Online, the correct code comes from the Edge
    Function, and MK counters are replaced by the server's authoritative score. */
-function mkApplyVerdict(choice, correctCode, serverScore) {
+function mkApplyVerdict(choice, correctCode, serverScore, isPractice) {
   var correct = choice === correctCode;
   var btnChosen = document.getElementById("mk-" + choice);
   var btnRight = document.getElementById("mk-" + correctCode);
@@ -690,19 +775,21 @@ function mkApplyVerdict(choice, correctCode, serverScore) {
     MK.attempted += 1;
     if (correct) { MK.correct += 1; MK.streak += 1; if (MK.streak > MK.best) { MK.best = MK.streak; } }
     else { MK.streak = 0; }
-    saveMk();
+    if (isPractice) { saveMk(); }
   }
   renderMkStats();
 
   var out = document.getElementById("mk-readout");
   if (out) {
     var whyText = currentMk && currentMk.why ? currentMk.why : "";
+    var nextHint = (mkMode === "graded")
+      ? " Press <strong>Start / next graded case</strong> to continue the run."
+      : " Press <strong>New case</strong> for another.";
     if (correct) {
-      out.innerHTML = "<strong>Correct</strong> — this market is " + MK_NAMES[correctCode] + ". " + whyText +
-        " Streak: <strong>" + MK.streak + "</strong>. Press <strong>New case</strong> for another.";
+      out.innerHTML = "<strong>Correct</strong> — this market is " + MK_NAMES[correctCode] + ". " + whyText + nextHint;
     } else {
       out.innerHTML = "<strong>Not this one.</strong> The market is " + MK_NAMES[correctCode] + ". " + whyText +
-        " Check the fingerprints in order: how many sellers, price versus marginal cost, one price or a menu, and whether ATC ever stops falling. Next case when ready.";
+        " Check the fingerprints in order: how many sellers, price versus marginal cost, one price or a menu, and whether ATC ever stops falling." + nextHint;
     }
   }
 }
@@ -712,9 +799,14 @@ function marketVerdict(choice) {
   mkAnswered = true;
   setMkButtons(true);
 
-  /* Online: grade against the vault via the Edge Function; the correct code and
-     the authoritative score come back from the server. Offline (no backend, e.g.
-     a raw-file preview): fall back to the case's local key so the arena still runs. */
+  // PRACTICE mode: ungraded self-study. Grade locally, record NOTHING.
+  if (mkMode !== "graded") {
+    mkApplyVerdict(choice, currentMk.key, null, true);
+    return;
+  }
+
+  // GRADED mode: grade against the vault via the Edge Function (records to the
+  // gradebook), then tell the attempt controller a case was answered.
   if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
     IMBackend.gradeCase("monopoly-arena", currentMkIndex, choice, function (res) {
       if (res && res.needEnroll) {
@@ -726,16 +818,19 @@ function marketVerdict(choice) {
       }
       if (res && !res.offline && typeof res.correct === "boolean") {
         try { console.log("%carena: case RECORDED to server (correct=" + res.correct + ")", "color:#166534;font-weight:bold"); } catch (e) {}
-        mkApplyVerdict(choice, res.correctCode, res.score);
+        mkApplyVerdict(choice, res.correctCode, res.score, false);
+        if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.caseAnswered(res.correct); }
       } else {
         try { console.warn("arena: case fell back to OFFLINE (not recorded). Reason: " + (res && res.offline ? "no session/access_token -- sign in on this page" : "unexpected response") + "."); } catch (e) {}
-        /* transient failure: fall back to local key so the student isn't blocked */
-        mkApplyVerdict(choice, currentMk.key, null);
+        var o2 = document.getElementById("mk-readout");
+        if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page, so this graded case didn't save. Sign in at the top, then start the run again."; }
+        mkAnswered = false; setMkButtons(false);
       }
     });
   } else {
-    try { console.warn("arena: IMBackend offline (supabase-js not loaded) -- case not recorded."); } catch (e) {}
-    mkApplyVerdict(choice, currentMk.key, null);
+    var o3 = document.getElementById("mk-readout");
+    if (o3) { o3.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in. Switch to Practice mode to explore ungraded."; }
+    mkAnswered = false; setMkButtons(false);
   }
 }
 
@@ -781,6 +876,11 @@ function imRenderAuth() {
           if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
           else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
         }
+        // Enrolled students already have the course -- hide the "unlock the course"
+        // sales block for them. It stays for signed-out / non-enrolled visitors.
+        var ctas = document.getElementsByClassName("sb-cta");
+        var ci;
+        for (ci = 0; ci < ctas.length; ci++) { ctas[ci].style.display = ok ? "none" : ""; }
       });
     } else {
       try { console.warn("arena: SIGNED OUT -- not logged in ON THIS PAGE, so plays will NOT record to the gradebook. Use the sign-in bar at the top."); } catch (e) {}
