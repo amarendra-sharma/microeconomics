@@ -706,16 +706,24 @@ function mkSetMode(mode) {
         slug: "monopoly-arena",
         caseCount: Math.min(12, MK_CASES.length),
         mount: "aa-panel",
+        onStartAttempt: function (info) {
+          // controller says "begin this attempt" -> deal a fresh 12-case order
+          mkGradedOrder = mkShuffle(MK_CASES.length).slice(0, Math.min(12, MK_CASES.length));
+          mkGradedPos = 0;
+          mkDealGradedCase();
+        },
         onAttemptEnd: function (info) {
-          // between/after each attempt: stop serving cases until the student
-          // chooses (the controller's screen drives "take 2nd" / "finish").
+          // attempt's 12 done: stop dealing; the panel now drives next step
           setMkButtons(true);
-          if (story) { story.innerHTML = "Attempt recorded. See the panel above for your score and options."; }
+          var st = document.getElementById("mk-story");
+          if (st) { st.innerHTML = "Attempt complete. See the panel above for your score and options."; }
+          var nb2 = document.getElementById("mk-newcase");
+          if (nb2) { nb2.style.display = "none"; }
         }
       });
     }
-    if (nb) { nb.textContent = "Start / next graded case"; }
-    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start / next graded case</strong> to begin. You'll classify 12 cases; you have two attempts and the second is optional."; }
+    if (nb) { nb.textContent = "Start graded run"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll classify 12 cases; you have two attempts and the second is optional \u2014 if you take it, your grade is the average of both."; }
     setMkButtons(true);
     mkGradedOrder = [];
     mkGradedPos = 0;
@@ -729,23 +737,38 @@ function mkSetMode(mode) {
   }
 }
 
+function mkDealGradedCase() {
+  // deal the next case within the current active attempt
+  if (mkGradedPos >= mkGradedOrder.length) { return; }
+  currentMkIndex = mkGradedOrder[mkGradedPos];
+  mkGradedPos += 1;
+  currentMk = MK_CASES[currentMkIndex];
+  mkAnswered = false;
+  setMkButtons(false);
+  var nb = document.getElementById("mk-newcase");
+  if (nb) { nb.style.display = "none"; }   // controller/answer flow advances; no manual "new case" mid-attempt
+  var story = document.getElementById("mk-story");
+  if (story) { story.innerHTML = "<strong>The case:</strong> " + currentMk.story; }
+  var out = document.getElementById("mk-readout");
+  if (out) { out.innerHTML = "The case file awaits your classification."; }
+}
+
 function newMarketCase() {
   if (mkMode === "graded") {
-    if (typeof ArenaAttempts !== "undefined" && ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+    if (typeof ArenaAttempts === "undefined") { return; }
+    if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
       var lo = document.getElementById("mk-readout");
       if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
       return;
     }
-    // start a fresh 12-case order at the beginning of each attempt
-    if (mkGradedOrder.length === 0 || mkGradedPos >= mkGradedOrder.length) {
-      mkGradedOrder = mkShuffle(MK_CASES.length).slice(0, Math.min(12, MK_CASES.length));
-      mkGradedPos = 0;
+    // "Start graded run" -> begin attempt 1 (controller fires onStartAttempt to deal)
+    if (!ArenaAttempts.isAttemptActive()) {
+      ArenaAttempts.startAttempt(true);
     }
-    currentMkIndex = mkGradedOrder[mkGradedPos];
-    mkGradedPos += 1;
-  } else {
-    currentMkIndex = Math.floor(Math.random() * MK_CASES.length);
+    return;
   }
+  // practice: unlimited random, ungraded
+  currentMkIndex = Math.floor(Math.random() * MK_CASES.length);
   currentMk = MK_CASES[currentMkIndex];
   mkAnswered = false;
   setMkButtons(false);
@@ -819,7 +842,14 @@ function marketVerdict(choice) {
       if (res && !res.offline && typeof res.correct === "boolean") {
         try { console.log("%carena: case RECORDED to server (correct=" + res.correct + ")", "color:#166534;font-weight:bold"); } catch (e) {}
         mkApplyVerdict(choice, res.correctCode, res.score, false);
-        if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.caseAnswered(res.correct); }
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          // if the attempt is still running, auto-deal the next case after a beat
+          if (ArenaAttempts.isAttemptActive()) {
+            setMkButtons(true);
+            setTimeout(function () { mkDealGradedCase(); }, 1400);
+          }
+        }
       } else {
         try { console.warn("arena: case fell back to OFFLINE (not recorded). Reason: " + (res && res.offline ? "no session/access_token -- sign in on this page" : "unexpected response") + "."); } catch (e) {}
         var o2 = document.getElementById("mk-readout");

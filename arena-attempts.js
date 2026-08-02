@@ -50,6 +50,7 @@
     attemptScores: [],    // completed attempt fractions (0..1)
     locked: false,
     onAttemptEnd: null,
+    onStartAttempt: null,
     mountId: null,
     recordCase: null,
     maxAttempts: 2
@@ -139,18 +140,23 @@
     el.innerHTML = html;
 
     var b2 = global.document.getElementById("aa-second");
-    if (b2) { b2.onclick = function () { startAttempt(); }; }
+    if (b2) { b2.onclick = function () { startAttempt(true); }; }
     var bk = global.document.getElementById("aa-keep");
     if (bk) { bk.onclick = function () { S.locked = true; render(); }; }
   }
 
-  function startAttempt() {
+  function startAttempt(fromUser) {
     if (S.locked) { return; }
     if (S.attemptScores.length >= S.maxAttempts) { S.locked = true; render(); return; }
     S.attemptIndex = S.attemptScores.length + 1;
     S.answeredThisAttempt = 0;
     S.correctThisAttempt = 0;
     render();
+    // When the user explicitly starts an attempt (e.g. "Take second attempt"),
+    // tell the arena to deal the first case of the fresh attempt.
+    if (fromUser && typeof S.onStartAttempt === "function") {
+      S.onStartAttempt({ attempt: S.attemptIndex });
+    }
   }
 
   function endAttempt() {
@@ -181,6 +187,7 @@
     S.slug = opts.slug;
     S.caseCount = opts.caseCount || 0;
     S.onAttemptEnd = opts.onAttemptEnd || null;
+    S.onStartAttempt = opts.onStartAttempt || null;
     S.mountId = opts.mount || null;
     S.recordCase = opts.recordCase || null;
     if (typeof opts.maxAttempts === "number") { S.maxAttempts = opts.maxAttempts; }
@@ -197,7 +204,7 @@
   // is locked or no attempt is running (the caller can also check isPlayable()).
   function caseAnswered(isCorrect) {
     if (S.locked) { return false; }
-    if (S.attemptIndex < 1) { startAttempt(); }   // auto-start attempt 1 on first answer
+    if (S.attemptIndex < 1) { startAttempt(false); }   // count-only; arena already dealt case 1
     S.answeredThisAttempt += 1;
     if (isCorrect) { S.correctThisAttempt += 1; }
 
@@ -217,6 +224,8 @@
 
   function isPlayable() { return !S.locked; }
   function isLocked() { return S.locked; }
+  function isAttemptActive() { return S.attemptIndex >= 1 && S.answeredThisAttempt < S.caseCount && !S.locked; }
+  function casesLeft() { return Math.max(0, S.caseCount - S.answeredThisAttempt); }
   function attemptsTaken() { return S.attemptScores.length; }
   function currentGrade() { return averageScore(); }
 
@@ -226,6 +235,8 @@
     startAttempt: startAttempt,
     isPlayable: isPlayable,
     isLocked: isLocked,
+    isAttemptActive: isAttemptActive,
+    casesLeft: casesLeft,
     attemptsTaken: attemptsTaken,
     currentGrade: currentGrade,
     render: render
