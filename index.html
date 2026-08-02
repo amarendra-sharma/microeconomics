@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-admin-review-b';
+var SA_BUILD = 'intro-micro-portal-2026-08-waiver-access';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3571,31 +3571,36 @@ function resolveAccess() {
   // (course-wide or per-student) in any enrolled course.
   if (State.role === 'admin' || State.role === 'professor') { State.hasAccess = true; return Promise.resolve(true); }
   var uid = State.user.id;
-  var enrolledCourseIds = (State.courses || []).map(function(c){ return c.id; });
-  var waiverP = enrolledCourseIds.length
-    ? sb.from('im_fee_waiver').select('course_id,student_id').in('course_id', enrolledCourseIds)
-    : Promise.resolve({ data: [] });
-  return Promise.all([
-    sb.from('im_enrollment').select('status,expires_at').eq('student_id', uid).eq('status','active'),
-    waiverP
-  ]).then(function(res){
-    // 1) waiver check
-    var waivers = res[1] && res[1].data ? res[1].data : [];
-    for (var w = 0; w < waivers.length; w++) {
-      if (waivers[w].student_id === null || waivers[w].student_id === undefined || String(waivers[w].student_id) === String(uid)) {
-        State.hasAccess = true; return true;
+  // Load the student's OWN active enrollments directly. We must NOT rely on
+  // State.courses here: that list is only populated for instructors/admins
+  // (loadCourses runs solely for them), so for a student it stays empty --
+  // which previously made the waiver query below get skipped, leaving a waived
+  // student permanently locked. Fetch enrollments, then check waivers on those
+  // exact courses.
+  return sb.from('im_enrollment').select('course_id,status,expires_at').eq('student_id', uid).eq('status','active').then(function(enrRes){
+    var enrRows = enrRes && enrRes.data ? enrRes.data : [];
+    var enrolledCourseIds = enrRows.map(function(r){ return r.course_id; }).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
+    var waiverP = enrolledCourseIds.length
+      ? sb.from('im_fee_waiver').select('course_id,student_id').in('course_id', enrolledCourseIds)
+      : Promise.resolve({ data: [] });
+    return waiverP.then(function(wRes){
+      // 1) waiver check -- course-wide (student_id null) or this student's own
+      var waivers = wRes && wRes.data ? wRes.data : [];
+      for (var w = 0; w < waivers.length; w++) {
+        if (waivers[w].student_id === null || waivers[w].student_id === undefined || String(waivers[w].student_id) === String(uid)) {
+          State.hasAccess = true; return true;
+        }
       }
-    }
-    // 2) subscription check
-    var rows = res[0] && res[0].data ? res[0].data : [];
-    var now = Date.now();
-    var ok = false, i;
-    for (i = 0; i < rows.length; i++) {
-      var exp = rows[i].expires_at ? new Date(rows[i].expires_at).getTime() : null;
-      if (exp === null || exp > now) { ok = true; break; }
-    }
-    State.hasAccess = ok;
-    return ok;
+      // 2) subscription check -- any active, non-expired enrollment
+      var now = Date.now();
+      var ok = false, i;
+      for (i = 0; i < enrRows.length; i++) {
+        var exp = enrRows[i].expires_at ? new Date(enrRows[i].expires_at).getTime() : null;
+        if (exp === null || exp > now) { ok = true; break; }
+      }
+      State.hasAccess = ok;
+      return ok;
+    });
   }).catch(function(){ State.hasAccess = false; return false; });
 }
 function chapterLocked(n) { if (State.hasAccess) { return false; } return !FREE_CHAPTERS[n]; }
