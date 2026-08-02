@@ -34,6 +34,7 @@
    =========================================================================== */
 (function (global) {
   "use strict";
+  try { console.log("%carena-attempts build: 2026-08-flow-v2 (onStartAttempt present)", "color:#7c3aed;font-weight:bold"); } catch (e) {}
 
   function mod() {
     if (typeof global.SAProgress !== "undefined") { return global.SAProgress; }
