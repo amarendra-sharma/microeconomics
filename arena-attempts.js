@@ -229,6 +229,18 @@
   function attemptsTaken() { return S.attemptScores.length; }
   function currentGrade() { return averageScore(); }
 
+  // Clear stored attempts for THIS arena (local only). For dev/testing or when
+  // an instructor re-opens the arena. Does not touch server-recorded rows.
+  function resetLocal() {
+    try { global.localStorage.removeItem(lsKey()); } catch (e) {}
+    S.attemptScores = [];
+    S.locked = false;
+    S.attemptIndex = 0;
+    S.answeredThisAttempt = 0;
+    S.correctThisAttempt = 0;
+    render();
+  }
+
   global.ArenaAttempts = {
     init: init,
     caseAnswered: caseAnswered,
@@ -239,6 +251,7 @@
     casesLeft: casesLeft,
     attemptsTaken: attemptsTaken,
     currentGrade: currentGrade,
-    render: render
+    render: render,
+    resetLocal: resetLocal
   };
 })(window);

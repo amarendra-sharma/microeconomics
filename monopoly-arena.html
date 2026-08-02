@@ -727,6 +727,16 @@ function mkSetMode(mode) {
     setMkButtons(true);
     mkGradedOrder = [];
     mkGradedPos = 0;
+    // Show current attempt state (ready / between / locked) immediately, and if
+    // a prior run already used both attempts, tell the student instead of
+    // silently doing nothing when they press Start.
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.render();
+      if (ArenaAttempts.isLocked()) {
+        if (nb) { nb.style.display = "none"; }
+        if (story) { story.innerHTML = "You\u2019ve already used both graded attempts for this arena (from a previous session). See your score in the panel above. Use <strong>Reset graded attempts</strong> below if your instructor wants you to retake."; }
+      }
+    }
   } else {
     if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }   // clears/renders panel
     var panel = document.getElementById("aa-panel");
@@ -871,6 +881,17 @@ function resetMarketScore() {
   MK.best = 0;
   saveMk();
   renderMkStats();
+  // In graded mode, also clear the local attempt record so the student (or an
+  // instructor re-opening the arena) can start the graded run fresh.
+  if (mkMode === "graded" && typeof ArenaAttempts !== "undefined" && ArenaAttempts.resetLocal) {
+    ArenaAttempts.resetLocal();
+    var nb = document.getElementById("mk-newcase");
+    if (nb) { nb.style.display = ""; nb.textContent = "Start graded run"; }
+    var st = document.getElementById("mk-story");
+    if (st) { st.innerHTML = "Graded attempts reset. Press <strong>Start graded run</strong> to begin."; }
+    setMkButtons(true);
+    return;
+  }
   var out = document.getElementById("mk-readout");
   if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
 }
