@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-waiver-access-b';
+var SA_BUILD = 'intro-micro-portal-2026-08-arena-breakdown';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -472,6 +472,26 @@ var ARENA_MAX_ATTEMPTS = 2;   // only the first N attempts per arena count towar
 // scores; arenas never played contribute 0. Return the mean across all 13, so
 // partial completion earns partial credit and quality (not just participation)
 // drives the score. Result is 0..1.
+// Per-arena breakdown: returns [{slug, title, correct, total, pct}] for arenas
+// the student has actually played, so My Progress can show real per-arena scores
+// (e.g. "Monopoly: 92%") instead of only the diluted 12-arena aggregate.
+function arenaBreakdown(rows){
+  rows = rows ? rows : [];
+  var byArena = {};
+  rows.forEach(function(r){
+    if(!r || !r.arena_slug){ return; }
+    if(!byArena[r.arena_slug]){ byArena[r.arena_slug] = { c:0, n:0 }; }
+    byArena[r.arena_slug].n++; if(r.is_correct){ byArena[r.arena_slug].c++; }
+  });
+  var out = [];
+  for(var i=0;i<ARENA_SLUGS.length;i++){
+    var slug = ARENA_SLUGS[i]; var g = byArena[slug];
+    if(!g || g.n===0){ continue; }   // only arenas actually played
+    out.push({ slug:slug, title:(ARENA_TITLE[slug]||slug), correct:g.c, total:g.n, pct:(g.n>0?g.c/g.n:0) });
+  }
+  return out;
+}
+
 function computeArenaScore(rows){
   // Accepts rows from im_attempt (one PER CASE: arena_slug, is_correct) OR
   // pre-aggregated rows carrying a 0..1 `score` per arena. Each arena's score is
@@ -5506,6 +5526,23 @@ function loadCompletion() {
       var wsum=comps.reduce(function(s,x){return s+x[2];},0);
       var total=wsum>0?comps.reduce(function(s,x){return s+x[1]*x[2];},0)/wsum:0;
       renderCompletion(host, course, comps, total);
+      // Per-arena breakdown so the student sees their actual score on each arena
+      // they've played (the Arenas component above averages across all 12, so a
+      // single strong arena looks small there).
+      var bd = arenaBreakdown(arenas);
+      if(bd.length){
+        var rowsHtml = bd.map(function(a){
+          return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);">'+
+            '<span>'+esc(a.title)+'</span>'+
+            '<span class="mono"><b>'+Math.round(a.pct*100)+'%</b> <span style="color:var(--text-subtle);">('+a.correct+'/'+a.total+')</span></span></div>';
+        }).join('');
+        var card = document.createElement('div');
+        card.className='card'; card.style.margin='0 0 20px';
+        card.innerHTML='<h3 style="font-size:16px;margin-bottom:2px;">Your arenas</h3>'+
+          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Your score on each arena you\u2019ve played. The Arenas grade above averages these across all '+ARENA_SLUGS.length+' arenas, so playing more raises it.</div>'+
+          rowsHtml;
+        host.appendChild(card);
+      }
     }
 
     if (examIds.length === 0) { finish(null, null); return; }
