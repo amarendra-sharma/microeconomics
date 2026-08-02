@@ -132,21 +132,30 @@
   }
 
   function postGrade(payload, cb) {
-    if (!session || !session.access_token) { cb({ offline: true }); return; }
-    global.fetch(GRADE_FN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": "Bearer " + session.access_token
-      },
-      body: JSON.stringify(payload)
-    }).then(function (r) {
-      if (r.status === 403) { cb({ needEnroll: true }); return null; }
-      if (!r.ok) { cb({ offline: true }); return null; }
-      return r.json();
-    }).then(function (data) {
-      if (data) { cb(data); }
+    if (!init()) { cb({ offline: true }); return; }
+    // Fetch the CURRENT session from the client (reads localStorage / refreshes
+    // as needed) rather than trusting a cached variable that may be stale or was
+    // null at boot. checkAccess works because the client has the session; grade
+    // posts must use the same live source or they wrongly report "offline".
+    sb.auth.getSession().then(function (sres) {
+      var sess = sres && sres.data ? sres.data.session : null;
+      if (sess) { session = sess; }   // refresh cache
+      if (!sess || !sess.access_token) { cb({ offline: true }); return; }
+      global.fetch(GRADE_FN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + sess.access_token
+        },
+        body: JSON.stringify(payload)
+      }).then(function (r) {
+        if (r.status === 403) { cb({ needEnroll: true }); return null; }
+        if (!r.ok) { cb({ offline: true }); return null; }
+        return r.json();
+      }).then(function (data) {
+        if (data) { cb(data); }
+      }).catch(function () { cb({ offline: true }); });
     }).catch(function () { cb({ offline: true }); });
   }
 
@@ -156,21 +165,26 @@
      an im_exam_attempt row per item. cb receives
      { ok, score, total, pending } or { offline:true } / { needEnroll:true }. */
   function gradeQuiz(chapter, items, cb) {
-    if (!session || !session.access_token) { cb({ offline: true }); return; }
-    global.fetch(GRADE_QUIZ_FN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": "Bearer " + session.access_token
-      },
-      body: JSON.stringify({ chapter: chapter, items: items })
-    }).then(function (r) {
-      if (r.status === 403) { cb({ ok: false, needEnroll: true }); return null; }
-      if (!r.ok) { cb({ ok: false, offline: true }); return null; }
-      return r.json();
-    }).then(function (data) {
-      if (data) { cb(data); }
+    if (!init()) { cb({ ok: false, offline: true }); return; }
+    sb.auth.getSession().then(function (sres) {
+      var sess = sres && sres.data ? sres.data.session : null;
+      if (sess) { session = sess; }
+      if (!sess || !sess.access_token) { cb({ ok: false, offline: true }); return; }
+      global.fetch(GRADE_QUIZ_FN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + sess.access_token
+        },
+        body: JSON.stringify({ chapter: chapter, items: items })
+      }).then(function (r) {
+        if (r.status === 403) { cb({ ok: false, needEnroll: true }); return null; }
+        if (!r.ok) { cb({ ok: false, offline: true }); return null; }
+        return r.json();
+      }).then(function (data) {
+        if (data) { cb(data); }
+      }).catch(function () { cb({ ok: false, offline: true }); });
     }).catch(function () { cb({ ok: false, offline: true }); });
   }
 
