@@ -12,6 +12,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sa-progress.js"></script>
 <script src="im-backend.js"></script>
 
 <style>
@@ -2946,6 +2947,21 @@ function markComplete(chId) {
   if (btn) { btn.classList.add("done"); btn.textContent = "Completed \u2713"; }
   renderSidebar();
   updateProgressBar();
+  // Also record reading completion to the database so My Progress, My Grades,
+  // and the instructor gradebook reflect it (localStorage alone is device-only).
+  try {
+    var meta = chapterById(chId);
+    var chNum = meta ? meta.num : parseInt(String(chId).replace(/[^0-9]/g, ''), 10);
+    if (chNum && global_SAProgress() && global_SAProgress().markReadingDone) {
+      global_SAProgress().markReadingDone(chNum);
+    }
+  } catch (e) {}
+}
+// Resolve the progress module whether it exposes SAProgress or IMProgress.
+function global_SAProgress() {
+  if (typeof SAProgress !== 'undefined') { return SAProgress; }
+  if (typeof IMProgress !== 'undefined') { return IMProgress; }
+  return null;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -3065,6 +3081,17 @@ function showChapter(id) {
   window.scrollTo(0, 0);
   var sb = document.getElementById("tb-sidebar");
   if (sb) { sb.classList.remove("open"); }
+  // Start enforced reading tracking (scroll-coverage + dwell) for this chapter,
+  // so completion records to the database automatically once genuinely read.
+  try {
+    if (isChapter && BUILT[id] && isUnlocked(id) && page) {
+      var meta2 = chapterById(id);
+      var mod = global_SAProgress();
+      if (meta2 && mod && mod.trackReading) {
+        mod.trackReading(page, meta2.num, meta2.mins || 6);
+      }
+    }
+  } catch (e) {}
 }
 
 function refreshMarkButton(chId) {
