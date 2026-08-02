@@ -137,7 +137,16 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   main { padding: 2rem 1.1rem 3rem; }
   h1.sb-title { font-size: 2rem; }
   .sb-diag-grid { grid-template-columns: 1fr; }
+  /* Auth bar: stack vertically and make inputs full-width & tappable so the
+     password field is reachable and usable on phones. */
+  #im-authbar { padding: 0.6rem 1rem; }
+  #im-auth-signedout { flex-direction: column; align-items: stretch !important; gap: 0.4rem !important; }
+  #im-auth-signedout input, #im-auth-signedout button { width: 100%; box-sizing: border-box; }
 }
+/* 16px font on auth inputs everywhere prevents iOS Safari from auto-zooming on
+   focus (which was shifting the layout and hiding the password field). */
+#im-email, #im-pass { font-size: 16px !important; min-height: 40px; }
+#im-authbar button { min-height: 40px; }
 .aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
 .aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
 .aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
@@ -284,12 +293,13 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   </div>
   <div id="aa-panel" style="margin-bottom:0.75rem;"></div>
   <div class="sb-case" id="mk-story">Choose a mode above. <strong>Practice</strong> is unlimited and ungraded; the <strong>Graded run</strong> is 12 cases, two attempts, and counts toward your grade.</div>
-  <div class="sb-diag-grid">
+  <div class="sb-diag-grid" id="mk-diag-grid">
     <button class="sb-diag-btn" id="mk-PC" onclick="marketVerdict('PC')">Perfectly competitive (P = MC, many sellers)</button>
     <button class="sb-diag-btn" id="mk-SP" onclick="marketVerdict('SP')">Single-price monopoly (P &gt; MC, buyers priced out)</button>
     <button class="sb-diag-btn" id="mk-PD" onclick="marketVerdict('PD')">Price-discriminating monopoly (different prices, same cost)</button>
     <button class="sb-diag-btn" id="mk-NM" onclick="marketVerdict('NM')">Natural monopoly (falling ATC; one firm is cheapest)</button>
   </div>
+  <div class="sb-diag-grid" id="mk-concept" style="display:none;"></div>
   <div class="sb-readout" id="mk-readout">The case file awaits your classification.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="mk-newcase" onclick="newMarketCase()">New case</button>
@@ -620,6 +630,48 @@ var MK_CASES = [
     why: "The market is too small to cover a second fixed cost and ATC declines throughout — natural monopoly by geography." }
 ];
 
+// Concept questions (cases 12-15) fold the Regulator's Chair and Price
+// Discrimination games into the graded run. They test understanding, not table
+// values. case_index MUST match im_answer_key (12=B,13=C,14=A,15=D).
+var MK_CONCEPT = [
+  { case_index: 12, game: "rg",
+    q: "P = MC pricing erases deadweight loss, yet a regulator who imposes it on the ferry creates a problem the other regimes avoid. What is it?",
+    opts: [
+      { code: "A", text: "The ferry's owners earn excess profits that invite political backlash" },
+      { code: "B", text: "The fare no longer covers the boat's fixed cost, so the ferry runs a permanent loss and needs a subsidy" },
+      { code: "C", text: "Too few riders are served, leaving efficient crossings unmade" },
+      { code: "D", text: "The price rises so high that low-value riders are priced out" }
+    ] },
+  { case_index: 13, game: "rg",
+    q: "Average-cost pricing keeps the ferry solvent with only a small efficiency loss. Beyond that residual loss, what longer-run weakness does this regime carry?",
+    opts: [
+      { code: "A", text: "It still requires a large taxpayer subsidy every year" },
+      { code: "B", text: "It serves fewer riders than leaving the monopoly unregulated" },
+      { code: "C", text: "Because costs are passed straight into the fare, the firm has little reason to keep them down" },
+      { code: "D", text: "It hands the firm a larger profit than it would earn unregulated" }
+    ] },
+  { case_index: 14, game: "pd",
+    q: "Perfect price discrimination drives deadweight loss to zero, yet riders are collectively worse off than under a single price. How can efficiency improve while consumers lose?",
+    opts: [
+      { code: "A", text: "Efficiency counts total surplus regardless of who holds it; here the firm captures surplus that was consumers' - a transfer, not destroyed value" },
+      { code: "B", text: "The firm produces fewer crossings, so less total value is created" },
+      { code: "C", text: "Consumers pay a lower average price but receive worse service" },
+      { code: "D", text: "Deadweight loss and consumer surplus always move in the same direction" }
+    ] },
+  { case_index: 15, game: "pd",
+    q: "Public anger at monopoly usually aims at the firm's profit. The chapter argues the real economic damage lies elsewhere. Where?",
+    opts: [
+      { code: "A", text: "In the high profit, which is value taken from society" },
+      { code: "B", text: "In the firm's refusal to serve low-income riders" },
+      { code: "C", text: "In the subsidy taxpayers must provide to keep fares low" },
+      { code: "D", text: "In the gap between price and marginal cost - every trade inside it is worth making but never happens" }
+    ] }
+];
+function mkConceptByIndex(ci) {
+  for (var i = 0; i < MK_CONCEPT.length; i++) { if (MK_CONCEPT[i].case_index === ci) { return MK_CONCEPT[i]; } }
+  return null;
+}
+
 var MK = { attempted: 0, correct: 0, streak: 0, best: 0 };
 var currentMk = null;
 var mkAnswered = true;
@@ -705,17 +757,23 @@ function mkSetMode(mode) {
     if (typeof ArenaAttempts !== "undefined") {
       ArenaAttempts.init({
         slug: "monopoly-arena",
-        caseCount: Math.min(12, MK_CASES.length),
+        caseCount: Math.min(12, MK_CASES.length) + MK_CONCEPT.length,
         mount: "aa-panel",
         onStartAttempt: function (info) {
           // controller says "begin this attempt" -> deal a fresh 12-case order
           try { console.log("onStartAttempt fired, attempt=" + (info && info.attempt)); } catch(e){}
-          mkGradedOrder = mkShuffle(MK_CASES.length).slice(0, Math.min(12, MK_CASES.length));
+          // 12 classify cases (shuffled) followed by the 4 concept questions
+          // (fixed order at the end of the run).
+          var classify = mkShuffle(MK_CASES.length).slice(0, Math.min(12, MK_CASES.length));
+          var concept = [];
+          for (var ci = 0; ci < MK_CONCEPT.length; ci++) { concept.push(MK_CONCEPT[ci].case_index); }
+          mkGradedOrder = classify.concat(concept);
           mkGradedPos = 0;
           mkDealGradedCase();
         },
         onAttemptEnd: function (info) {
-          // attempt's 12 done: stop dealing; the panel now drives next step
+          // attempt's 16 cases done: stop dealing; the panel now drives next step
+          mkShowConcept(false);   // restore classify UI / un-hide readouts
           setMkButtons(true);
           var st = document.getElementById("mk-story");
           if (st) { st.innerHTML = "Attempt complete. See the panel above for your score and options."; }
@@ -725,7 +783,7 @@ function mkSetMode(mode) {
       });
     }
     if (nb) { nb.textContent = "Start graded run"; nb.style.display = ""; }
-    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll classify 12 cases; you have two attempts and the second is optional \u2014 if you take it, your grade is the average of both."; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll work through 16 items \u2014 12 market classifications plus 4 concept questions on regulation and price discrimination. You have two attempts and the second is optional \u2014 if you take it, your grade is the average of both."; }
     setMkButtons(true);
     mkGradedOrder = [];
     mkGradedPos = 0;
@@ -743,6 +801,7 @@ function mkSetMode(mode) {
     if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }   // clears/renders panel
     var panel = document.getElementById("aa-panel");
     if (panel) { panel.innerHTML = ""; }
+    mkShowConcept(false);   // restore classify buttons, un-hide sim readouts
     if (nb) { nb.textContent = "New case"; }
     if (story) { story.innerHTML = "<strong>Practice mode.</strong> Unlimited cases, ungraded. Press <strong>New case</strong> to begin."; }
     setMkButtons(true);
@@ -750,42 +809,78 @@ function mkSetMode(mode) {
 }
 
 function mkDealGradedCase() {
-  try { console.log("mkDealGradedCase: pos=" + mkGradedPos + " orderLen=" + mkGradedOrder.length); } catch(e){}
   // deal the next case within the current active attempt
-  if (mkGradedPos >= mkGradedOrder.length) { try { console.warn("mkDealGradedCase: no cases left to deal"); } catch(e){} return; }
+  if (mkGradedPos >= mkGradedOrder.length) { return; }
   currentMkIndex = mkGradedOrder[mkGradedPos];
   mkGradedPos += 1;
-  currentMk = MK_CASES[currentMkIndex];
   mkAnswered = false;
-  setMkButtons(false);
   var nb = document.getElementById("mk-newcase");
-  if (nb) { nb.style.display = "none"; }   // controller/answer flow advances; no manual "new case" mid-attempt
+  if (nb) { nb.style.display = "none"; }
+
+  if (currentMkIndex >= 12) {
+    // ---- concept question (Regulator / Price Discrimination) ----
+    mkRenderConcept(mkConceptByIndex(currentMkIndex));
+  } else {
+    // ---- classify case ----
+    mkShowConcept(false);           // ensure concept UI hidden, classify UI shown
+    currentMk = MK_CASES[currentMkIndex];
+    setMkButtons(false);
+    var story = document.getElementById("mk-story");
+    if (story) { story.innerHTML = "<strong>The case:</strong> " + currentMk.story; }
+    var out = document.getElementById("mk-readout");
+    if (out) { out.innerHTML = "The case file awaits your classification."; }
+  }
+}
+
+// Show/hide the classify UI vs the concept UI, and (for graded concept
+// questions) hide the simulation readouts/tables so the answer isn't on screen.
+function mkShowConcept(on) {
+  var grid = document.getElementById("mk-diag-grid");
+  var conceptBox = document.getElementById("mk-concept");
+  if (grid) { grid.style.display = on ? "none" : ""; }
+  if (conceptBox) { conceptBox.style.display = on ? "" : "none"; }
+  // During a graded concept question, hide the Regulator/PD explanatory readouts
+  // and result tables so the correct answer isn't visible. Restored afterwards.
+  var hideIds = ["rg-readout", "pd-readout"];
+  var i, el;
+  for (i = 0; i < hideIds.length; i++) {
+    el = document.getElementById(hideIds[i]);
+    if (el) { el.style.visibility = on ? "hidden" : ""; }
+  }
+}
+
+function mkRenderConcept(cq) {
+  if (!cq) { return; }
+  mkShowConcept(true);
   var story = document.getElementById("mk-story");
-  if (story) { story.innerHTML = "<strong>The case:</strong> " + currentMk.story; }
+  if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
+  var box = document.getElementById("mk-concept");
+  if (box) {
+    var html = "", i;
+    for (i = 0; i < cq.opts.length; i++) {
+      html += '<button class="sb-diag-btn" onclick="conceptVerdict(\'' + cq.opts[i].code + '\')">' +
+        cq.opts[i].code + ". " + cq.opts[i].text + "</button>";
+    }
+    box.innerHTML = html;
+  }
   var out = document.getElementById("mk-readout");
-  if (out) { out.innerHTML = "The case file awaits your classification."; }
+  if (out) { out.innerHTML = "Choose the best answer."; }
 }
 
 function newMarketCase() {
-  try { console.log("newMarketCase called, mode=" + mkMode + ", ArenaAttempts=" + (typeof ArenaAttempts)); } catch(e){}
   if (mkMode === "graded") {
     try {
       if (typeof ArenaAttempts === "undefined") { console.warn("GRADED: ArenaAttempts is undefined -- arena-attempts.js didn't load"); return; }
-      console.log("GRADED: about to check isLocked, isLocked type=" + (typeof ArenaAttempts.isLocked));
       var lockedNow = ArenaAttempts.isLocked ? ArenaAttempts.isLocked() : false;
-      console.log("GRADED: isLocked()=" + lockedNow);
       if (lockedNow) {
         var lo = document.getElementById("mk-readout");
         if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
         return;
       }
       var activeNow = ArenaAttempts.isAttemptActive ? ArenaAttempts.isAttemptActive() : false;
-      console.log("GRADED: isAttemptActive()=" + activeNow);
       if (!activeNow) {
-        console.log("GRADED: calling startAttempt(true)");
         ArenaAttempts.startAttempt(true);
       } else {
-        console.log("GRADED: attempt already active, dealing next case");
         mkDealGradedCase();
       }
     } catch (err) {
@@ -843,9 +938,53 @@ function mkApplyVerdict(choice, correctCode, serverScore, isPractice) {
   }
 }
 
-function marketVerdict(choice) {
-  if (!currentMk || mkAnswered) { return; }
+// Graded concept question (Regulator / Price Discrimination). Records the A-D
+// answer through the same server path as classify cases, then advances the run.
+function conceptVerdict(code) {
+  if (mkAnswered) { return; }
+  if (mkMode !== "graded") { return; }   // concept questions appear only in the graded run
   mkAnswered = true;
+  var box = document.getElementById("mk-concept");
+  if (box) { var bs = box.getElementsByTagName("button"); for (var i = 0; i < bs.length; i++) { bs[i].disabled = true; } }
+
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("monopoly-arena", currentMkIndex, code, function (res) {
+      if (res && res.needEnroll) {
+        mkAnswered = false;
+        if (box) { var b2 = box.getElementsByTagName("button"); for (var j = 0; j < b2.length; j++) { b2[j].disabled = false; } }
+        var o = document.getElementById("mk-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        var out = document.getElementById("mk-readout");
+        if (out) {
+          // Feedback WITHOUT stating the correct option text, so retaking the run
+          // (second attempt) isn't trivially aided.
+          out.innerHTML = res.correct
+            ? "<strong>Correct.</strong> Recorded."
+            : "<strong>Not quite.</strong> Recorded \u2014 revisit this station in Practice mode to see why.";
+        }
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setTimeout(function () { mkDealGradedCase(); }, 1600); }
+        }
+      } else {
+        mkAnswered = false;
+        if (box) { var b3 = box.getElementsByTagName("button"); for (var k = 0; k < b3.length; k++) { b3[k].disabled = false; } }
+        var o3 = document.getElementById("mk-readout");
+        if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    });
+  } else {
+    mkAnswered = false;
+    var o4 = document.getElementById("mk-readout");
+    if (o4) { o4.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in."; }
+  }
+}
+
+function marketVerdict(choice) {
+  if (!currentMk || mkAnswered) { return; }  mkAnswered = true;
   setMkButtons(true);
 
   // PRACTICE mode: ungraded self-study. Grade locally, record NOTHING.
@@ -923,9 +1062,18 @@ function imRenderAuth() {
   var bar = document.getElementById("im-authbar");
   if (bar) {
     bar.style.display = "block";
-    /* push page content down so the fixed bar doesn't cover the title */
+    /* push page content down by the bar's ACTUAL height so it never covers
+       content -- on mobile the bar stacks and is taller than a fixed 112px. */
     var mains = document.getElementsByTagName("main");
-    if (mains && mains[0]) { mains[0].style.marginTop = "112px"; }
+    function setMainOffset() {
+      if (mains && mains[0]) {
+        var h = bar.offsetHeight || 52;
+        mains[0].style.marginTop = (60 + h + 8) + "px";   // 60px top header + bar + gap
+      }
+    }
+    setMainOffset();
+    setTimeout(setMainOffset, 300);   // re-measure after layout settles / fonts load
+    if (window.addEventListener) { window.addEventListener("resize", setMainOffset); }
   }
   IMBackend.getSession(function (session) {
     var out = document.getElementById("im-auth-signedout");
