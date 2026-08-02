@@ -730,6 +730,7 @@ function setMkButtons(disabled) {
 
 var currentMkIndex = -1;
 var mkMode = "practice";       // 'practice' (unlimited, ungraded) or 'graded'
+var mkHasAccess = false;        // set by checkAccess; graded run needs enrollment
 var mkGradedOrder = [];        // shuffled case indices for the current graded attempt
 var mkGradedPos = 0;           // position within mkGradedOrder
 
@@ -871,6 +872,19 @@ function newMarketCase() {
   if (mkMode === "graded") {
     try {
       if (typeof ArenaAttempts === "undefined") { console.warn("GRADED: ArenaAttempts is undefined -- arena-attempts.js didn't load"); return; }
+      // Graded run records only for enrolled students. If not enrolled (e.g. an
+      // instructor previewing), say so clearly instead of letting each answer
+      // fail with 'enrollment required' and the run never stopping.
+      if (!mkHasAccess) {
+        var story0 = document.getElementById("mk-story");
+        if (story0) {
+          story0.innerHTML = "<strong>Graded run is for enrolled students.</strong> This account isn't enrolled in the course, so answers won't record and the run can't be scored. " +
+            "To preview the questions, switch to <strong>Practice</strong> mode above. (Students who've unlocked the course can take the graded run here.)";
+        }
+        var out0 = document.getElementById("mk-readout");
+        if (out0) { out0.innerHTML = ""; }
+        return;
+      }
       var lockedNow = ArenaAttempts.isLocked ? ArenaAttempts.isLocked() : false;
       if (lockedNow) {
         var lo = document.getElementById("mk-readout");
@@ -1086,6 +1100,7 @@ function imRenderAuth() {
       if (who) { who.textContent = session.user.email || "signed in"; }
       IMBackend.checkAccess(function (ok) {
         try { console.log("%carena: access check = " + ok + (ok ? " -- graded plays record to your course" : " -- NOT enrolled, plays will NOT count"), ok ? "color:#166534" : "color:#991b1b;font-weight:bold"); } catch (e) {}
+        mkHasAccess = !!ok;   // used to guide the graded run for non-enrolled users
         var b = document.getElementById("im-access-badge");
         if (b) {
           if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
@@ -1129,7 +1144,16 @@ function imDoSignOut() {
   IMBackend.signOut(function () { imRenderAuth(); });
 }
 
+var MONOPOLY_ARENA_BUILD = "monopoly-2026-08-concept+mobile-v3";
 function boot() {
+  try { console.log("%cmonopoly-arena build: " + MONOPOLY_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
+  // Visible build stamp so it's obvious on the page which version is deployed.
+  try {
+    var stamp = document.createElement("div");
+    stamp.textContent = "build " + MONOPOLY_ARENA_BUILD;
+    stamp.style.cssText = "position:fixed;bottom:4px;right:6px;z-index:9999;font:11px monospace;color:#94a3b8;background:rgba(255,255,255,0.8);padding:1px 5px;border-radius:4px;pointer-events:none;";
+    document.body.appendChild(stamp);
+  } catch (e) {}
   if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadMk();
   renderMkStats();
