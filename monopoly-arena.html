@@ -769,18 +769,27 @@ function mkDealGradedCase() {
 function newMarketCase() {
   try { console.log("newMarketCase called, mode=" + mkMode + ", ArenaAttempts=" + (typeof ArenaAttempts)); } catch(e){}
   if (mkMode === "graded") {
-    if (typeof ArenaAttempts === "undefined") { try { console.warn("GRADED: ArenaAttempts is undefined -- arena-attempts.js didn't load"); } catch(e){} return; }
-    if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
-      try { console.log("GRADED: locked -- both attempts used"); } catch(e){}
-      var lo = document.getElementById("mk-readout");
-      if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
-      return;
-    }
-    // "Start graded run" -> begin attempt 1 (controller fires onStartAttempt to deal)
-    try { console.log("GRADED: isAttemptActive=" + ArenaAttempts.isAttemptActive()); } catch(e){}
-    if (!ArenaAttempts.isAttemptActive()) {
-      try { console.log("GRADED: calling startAttempt(true)"); } catch(e){}
-      ArenaAttempts.startAttempt(true);
+    try {
+      if (typeof ArenaAttempts === "undefined") { console.warn("GRADED: ArenaAttempts is undefined -- arena-attempts.js didn't load"); return; }
+      console.log("GRADED: about to check isLocked, isLocked type=" + (typeof ArenaAttempts.isLocked));
+      var lockedNow = ArenaAttempts.isLocked ? ArenaAttempts.isLocked() : false;
+      console.log("GRADED: isLocked()=" + lockedNow);
+      if (lockedNow) {
+        var lo = document.getElementById("mk-readout");
+        if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
+        return;
+      }
+      var activeNow = ArenaAttempts.isAttemptActive ? ArenaAttempts.isAttemptActive() : false;
+      console.log("GRADED: isAttemptActive()=" + activeNow);
+      if (!activeNow) {
+        console.log("GRADED: calling startAttempt(true)");
+        ArenaAttempts.startAttempt(true);
+      } else {
+        console.log("GRADED: attempt already active, dealing next case");
+        mkDealGradedCase();
+      }
+    } catch (err) {
+      console.error("GRADED: exception in newMarketCase:", err);
     }
     return;
   }
