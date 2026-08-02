@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="im-backend.js"></script>
+<script src="sa-progress.js"></script>
+<script src="arena-attempts.js"></script>
 
 <style>
 :root {
@@ -131,7 +133,22 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   main { padding: 2rem 1.1rem 3rem; }
   h1.sb-title { font-size: 2rem; }
   .sb-diag-grid { grid-template-columns: 1fr; }
+  #im-authbar { padding: 0.6rem 1rem; }
+  #im-auth-signedout { flex-direction: column; align-items: stretch !important; gap: 0.4rem !important; }
+  #im-auth-signedout input, #im-auth-signedout button { width: 100%; box-sizing: border-box; }
 }
+#im-email, #im-pass { font-size: 16px !important; min-height: 40px; }
+#im-authbar button { min-height: 40px; }
+.aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
+.aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
+.aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
+.aa-card .aa-scores, .aa-card .aa-final { font-size: 0.9rem; margin: 0.35rem 0; }
+.aa-card.aa-done { border-color: var(--gold, #b87408); background: var(--gold-lt, #fdf6ec); }
+.aa-card.aa-between { border-color: var(--accent, #0f3d9e); }
+.aa-actions { margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.aa-btn { font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--rule); cursor: pointer; background: var(--bg-card); }
+.aa-btn-primary { background: var(--accent, #0f3d9e); color: #fff; border-color: var(--accent, #0f3d9e); }
+.aa-btn-ghost { background: transparent; }
 </style>
 </head>
 
@@ -144,6 +161,22 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <a class="sb-header-btn" href="index.html" style="margin-right:0.4rem;">&larr; Portal</a>
   <a class="sb-header-btn" href="intro-micro-textbook.html">Textbook</a>
 </header>
+
+<div id="im-authbar" style="display:none;position:fixed;top:60px;left:0;right:0;z-index:150;background:#f5f0e8;border-bottom:1px solid #e2e8f0;padding:0.5rem 1.5rem;font-family:'Inter',system-ui,sans-serif;font-size:0.8125rem;color:#334155;">
+  <div id="im-auth-signedout" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-weight:600;">Intro Micro account:</span>
+    <input id="im-email" type="email" placeholder="email" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <input id="im-pass" type="password" placeholder="password" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <button id="im-signin-btn" onclick="imDoSignIn()" style="padding:0.35rem 0.8rem;border:none;border-radius:6px;background:#0f3d9e;color:#fff;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign in</button>
+    <button id="im-signup-btn" onclick="imDoSignUp()" style="padding:0.35rem 0.8rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Create account</button>
+    <span id="im-auth-msg" style="color:#991b1b;"></span>
+  </div>
+  <div id="im-auth-signedin" style="display:none;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span id="im-who" style="font-weight:600;"></span>
+    <span id="im-access-badge"></span>
+    <button id="im-signout-btn" onclick="imDoSignOut()" style="padding:0.3rem 0.7rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign out</button>
+  </div>
+</div>
 
 <main>
 
@@ -213,7 +246,13 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <div class="sb-panel">
   <div class="sb-panel-label">&#9881; Case data</div>
   <h4>Run the midpoint formula, then make the call</h4>
-  <div class="sb-case" id="est-story">Press <strong>New data</strong> to pull your first case.</div>
+  <div id="est-mode-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;padding-bottom:0.75rem;border-bottom:1px solid var(--rule);">
+    <span style="font-size:0.8rem;color:var(--ink-muted);">Mode:</span>
+    <button class="btn-sb btn-sb-ghost" id="est-mode-practice" onclick="estSetMode('practice')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Practice (unlimited, ungraded)</button>
+    <button class="btn-sb btn-sb-primary" id="est-mode-graded" onclick="estSetMode('graded')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Graded run</button>
+  </div>
+  <div id="aa-panel" style="margin-bottom:0.75rem;"></div>
+  <div class="sb-case" id="est-story">Choose a mode above. <strong>Practice</strong> is unlimited and ungraded; the <strong>Graded run</strong> is 14 items and counts toward your grade.</div>
   <div class="sb-evidence">
     <div class="sb-ev-card">
       <div class="sb-ev-label">Price</div>
@@ -224,14 +263,15 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
       <div class="sb-ev-num" id="est-q">&mdash;</div>
     </div>
   </div>
-  <div class="sb-diag-grid">
+  <div class="sb-diag-grid" id="est-diag-grid">
     <button class="sb-diag-btn" id="est-E" onclick="classify('E')">Elastic (|E| &gt; 1)</button>
     <button class="sb-diag-btn" id="est-U" onclick="classify('U')">Unit elastic (|E| = 1)</button>
     <button class="sb-diag-btn" id="est-I" onclick="classify('I')">Inelastic (|E| &lt; 1)</button>
   </div>
+  <div class="sb-diag-grid" id="est-concept" style="display:none;grid-template-columns:1fr;"></div>
   <div class="sb-readout" id="est-readout">Your estimate, analyst?</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
-    <button class="btn-sb btn-sb-primary" onclick="newEst()">New data</button>
+    <button class="btn-sb btn-sb-primary" id="est-newcase" onclick="newEst()">New data</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetEstScore()">Reset my record</button>
   </div>
 </div>
@@ -466,6 +506,32 @@ var EST_CASES = [
   { good: "table salt (packs)",      p1: 4, p2: 6, q1: 105, q2: 95,  key: "I" }
 ];
 
+// Concept questions (cases 12-13) fold understanding checks into the graded run.
+// They test WHY (formula design + revenue implication), not table values.
+// case_index MUST match im_answer_key (12=C, 13=B). Codes A-D.
+var EST_CONCEPT = [
+  { case_index: 12,
+    q: "The midpoint (arc) formula divides each change by the AVERAGE of the start and end values rather than by the starting value. Why is that the standard choice?",
+    opts: [
+      { code: "A", text: "It always produces a larger elasticity, making demand look more responsive" },
+      { code: "B", text: "It converts the result into a percentage automatically" },
+      { code: "C", text: "It gives the same elasticity whether the price rises or falls between the two points, removing the direction bias of the simple formula" },
+      { code: "D", text: "It avoids having to compute percentage changes at all" }
+    ] },
+  { case_index: 13,
+    q: "A vendor raises the price of a good with INELASTIC demand. What happens to total revenue, and why?",
+    opts: [
+      { code: "A", text: "Revenue falls, because quantity always drops more than price rises" },
+      { code: "B", text: "Revenue rises, because quantity falls proportionally less than the price increase" },
+      { code: "C", text: "Revenue is unchanged, because elasticity has no effect on revenue" },
+      { code: "D", text: "Revenue rises only if the good is also a luxury" }
+    ] }
+];
+function estConceptByIndex(ci) {
+  for (var i = 0; i < EST_CONCEPT.length; i++) { if (EST_CONCEPT[i].case_index === ci) { return EST_CONCEPT[i]; } }
+  return null;
+}
+
 function midpointE(c) {
   var pctQ = (c.q2 - c.q1) / ((c.q1 + c.q2) / 2);
   var pctP = (c.p2 - c.p1) / ((c.p1 + c.p2) / 2);
@@ -474,7 +540,13 @@ function midpointE(c) {
 
 var EST = { attempted: 0, correct: 0, streak: 0, best: 0 };
 var currentEst = null;
+var currentEstIndex = -1;
 var estAnswered = true;
+var estMode = "practice";
+var estHasAccess = false;
+var estGradedOrder = [];
+var estGradedPos = 0;
+function estShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 
 function loadEst() {
   try {
@@ -523,8 +595,180 @@ function setEstButtons(disabled) {
   }
 }
 
+function estShowConcept(on) {
+  var grid = document.getElementById("est-diag-grid");
+  var box = document.getElementById("est-concept");
+  var ev = document.getElementsByClassName("sb-evidence");
+  if (grid) { grid.style.display = on ? "none" : ""; }
+  if (box) { box.style.display = on ? "" : "none"; }
+  // hide the price/quantity evidence cards during a concept question (they are
+  // irrelevant to it and keep the layout clean)
+  if (ev && ev[0]) { ev[0].style.visibility = on ? "hidden" : ""; }
+}
+
+function estSetMode(mode) {
+  estMode = mode;
+  var bp = document.getElementById("est-mode-practice");
+  var bg = document.getElementById("est-mode-graded");
+  if (bp) { bp.className = "btn-sb " + (mode === "practice" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  if (bg) { bg.className = "btn-sb " + (mode === "graded" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  var story = document.getElementById("est-story");
+  var nb = document.getElementById("est-newcase");
+  if (mode === "graded") {
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.init({
+        slug: "elasticity-explorer",
+        caseCount: Math.min(12, EST_CASES.length) + EST_CONCEPT.length,
+        mount: "aa-panel",
+        onStartAttempt: function (info) {
+          var classify = estShuffle(EST_CASES.length).slice(0, Math.min(12, EST_CASES.length));
+          var concept = [];
+          for (var ci = 0; ci < EST_CONCEPT.length; ci++) { concept.push(EST_CONCEPT[ci].case_index); }
+          estGradedOrder = classify.concat(concept);
+          estGradedPos = 0;
+          estDealGradedCase();
+        },
+        onAttemptEnd: function (info) {
+          estShowConcept(false);
+          setEstButtons(true);
+          var st = document.getElementById("est-story");
+          if (st) { st.innerHTML = "Attempt complete. See the panel above for your score and options."; }
+          var nb2 = document.getElementById("est-newcase");
+          if (nb2) { nb2.style.display = "none"; }
+        }
+      });
+    }
+    if (nb) { nb.textContent = "Start graded run"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll work through 14 items \u2014 12 elasticity classifications plus 2 concept questions. You have two attempts and the second is optional \u2014 if you take it, your grade is the average of both."; }
+    setEstButtons(true);
+    estGradedOrder = [];
+    estGradedPos = 0;
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.render();
+      if (ArenaAttempts.isLocked()) {
+        if (nb) { nb.style.display = "none"; }
+        if (story) { story.innerHTML = "You\u2019ve already used both graded attempts for this arena (from a previous session). See your score in the panel above. Use <strong>Reset my record</strong> to retake if your instructor allows."; }
+      }
+    }
+  } else {
+    if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }
+    var panel = document.getElementById("aa-panel");
+    if (panel) { panel.innerHTML = ""; }
+    estShowConcept(false);
+    if (nb) { nb.textContent = "New data"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Practice mode.</strong> Unlimited cases, ungraded. Press <strong>New data</strong> to begin."; }
+    setEstButtons(true);
+  }
+}
+
+function estDealGradedCase() {
+  if (estGradedPos >= estGradedOrder.length) { return; }
+  currentEstIndex = estGradedOrder[estGradedPos];
+  estGradedPos += 1;
+  estAnswered = false;
+  var nb = document.getElementById("est-newcase");
+  if (nb) { nb.style.display = "none"; }
+  if (currentEstIndex >= 12) {
+    estRenderConcept(estConceptByIndex(currentEstIndex));
+  } else {
+    estShowConcept(false);
+    currentEst = EST_CASES[currentEstIndex];
+    setEstButtons(false);
+    var story = document.getElementById("est-story");
+    if (story) {
+      story.innerHTML = "<strong>Field report:</strong> the price of " + currentEst.good +
+        " changed, and the sales office sent back the before-and-after numbers. Compute the midpoint elasticity and classify this demand.";
+    }
+    var pEl = document.getElementById("est-p");
+    var qEl = document.getElementById("est-q");
+    if (pEl) { pEl.textContent = "$" + currentEst.p1 + " \u2192 $" + currentEst.p2; }
+    if (qEl) { qEl.textContent = currentEst.q1 + " \u2192 " + currentEst.q2; }
+    var out = document.getElementById("est-readout");
+    if (out) { out.innerHTML = "Your estimate, analyst?"; }
+  }
+}
+
+function estRenderConcept(cq) {
+  if (!cq) { return; }
+  estShowConcept(true);
+  var story = document.getElementById("est-story");
+  if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
+  var box = document.getElementById("est-concept");
+  if (box) {
+    var html = "", i;
+    for (i = 0; i < cq.opts.length; i++) {
+      html += '<button class="sb-diag-btn" onclick="estConceptVerdict(\'' + cq.opts[i].code + '\')">' +
+        cq.opts[i].code + ". " + cq.opts[i].text + "</button>";
+    }
+    box.innerHTML = html;
+  }
+  var out = document.getElementById("est-readout");
+  if (out) { out.innerHTML = "Choose the best answer."; }
+}
+
+function estConceptVerdict(code) {
+  if (estAnswered) { return; }
+  if (estMode !== "graded") { return; }
+  estAnswered = true;
+  var box = document.getElementById("est-concept");
+  if (box) { var bs = box.getElementsByTagName("button"); for (var i = 0; i < bs.length; i++) { bs[i].disabled = true; } }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("elasticity-explorer", currentEstIndex, code, function (res) {
+      if (res && res.needEnroll) {
+        estAnswered = false;
+        if (box) { var b2 = box.getElementsByTagName("button"); for (var j = 0; j < b2.length; j++) { b2[j].disabled = false; } }
+        var o = document.getElementById("est-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        var out = document.getElementById("est-readout");
+        if (out) { out.innerHTML = res.correct ? "<strong>Correct.</strong> Recorded." : "<strong>Not quite.</strong> Recorded \u2014 revisit this idea in Practice mode."; }
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setTimeout(function () { estDealGradedCase(); }, 1600); }
+        }
+      } else {
+        estAnswered = false;
+        if (box) { var b3 = box.getElementsByTagName("button"); for (var k = 0; k < b3.length; k++) { b3[k].disabled = false; } }
+        var o3 = document.getElementById("est-readout");
+        if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    });
+  } else {
+    estAnswered = false;
+    var o4 = document.getElementById("est-readout");
+    if (o4) { o4.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in."; }
+  }
+}
+
 function newEst() {
-  currentEst = EST_CASES[Math.floor(Math.random() * EST_CASES.length)];
+  if (estMode === "graded") {
+    try {
+      if (typeof ArenaAttempts === "undefined") { return; }
+      if (!estHasAccess) {
+        var story0 = document.getElementById("est-story");
+        if (story0) { story0.innerHTML = "<strong>Graded run is for enrolled students.</strong> This account isn't enrolled, so answers won't record and the run can't be scored. To preview the questions, switch to <strong>Practice</strong> mode above."; }
+        var out0 = document.getElementById("est-readout");
+        if (out0) { out0.innerHTML = ""; }
+        return;
+      }
+      if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+        var lo = document.getElementById("est-readout");
+        if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
+        return;
+      }
+      if (!(ArenaAttempts.isAttemptActive && ArenaAttempts.isAttemptActive())) {
+        ArenaAttempts.startAttempt(true);
+      } else {
+        estDealGradedCase();
+      }
+    } catch (err) { try { console.error("GRADED est:", err); } catch (e) {} }
+    return;
+  }
+  // practice: unlimited random, ungraded
+  currentEstIndex = Math.floor(Math.random() * EST_CASES.length);
+  currentEst = EST_CASES[currentEstIndex];
   estAnswered = false;
   setEstButtons(false);
   var story = document.getElementById("est-story");
@@ -553,36 +797,65 @@ function estExplain(c) {
     "so <strong>|E| = " + pctQ + "% / " + pctP + "% = " + e + "</strong>.";
 }
 
-function classify(choice) {
-  if (!currentEst || estAnswered) { return; }
-  estAnswered = true;
-  setEstButtons(true);
+function estLocalVerdict(choice) {
   var correct = choice === currentEst.key;
   var btnChosen = document.getElementById("est-" + choice);
   var btnRight = document.getElementById("est-" + currentEst.key);
   if (btnRight) { btnRight.classList.add("correct"); }
   if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
-
-  EST.attempted += 1;
-  if (correct) {
-    EST.correct += 1;
-    EST.streak += 1;
-    if (EST.streak > EST.best) { EST.best = EST.streak; }
-  } else {
-    EST.streak = 0;
-  }
-  saveEst();
-  renderEstStats();
-
   var out = document.getElementById("est-readout");
   if (out) {
+    var tail = (estMode === "graded") ? "" : " Press <strong>New data</strong> for the next case.";
     if (correct) {
-      out.innerHTML = "<strong>Correct</strong> — " + EST_NAMES[currentEst.key] + ". " + estExplain(currentEst) +
-        " Streak: <strong>" + EST.streak + "</strong>. Press <strong>New data</strong> for the next case.";
+      out.innerHTML = "<strong>Correct</strong> — " + EST_NAMES[currentEst.key] + ". " + estExplain(currentEst) + tail;
     } else {
-      out.innerHTML = "<strong>Not this time.</strong> This demand is " + EST_NAMES[currentEst.key] + ". " + estExplain(currentEst) +
-        " Averages in the denominators — that is where most slips happen. Take the next case.";
+      out.innerHTML = "<strong>Not this time.</strong> This demand is " + EST_NAMES[currentEst.key] + ". " + estExplain(currentEst) + tail;
     }
+  }
+  return correct;
+}
+
+function classify(choice) {
+  if (!currentEst || estAnswered) { return; }
+  estAnswered = true;
+  setEstButtons(true);
+
+  // PRACTICE: ungraded self-study. Grade locally, record nothing.
+  if (estMode !== "graded") {
+    var c = estLocalVerdict(choice);
+    EST.attempted += 1;
+    if (c) { EST.correct += 1; EST.streak += 1; if (EST.streak > EST.best) { EST.best = EST.streak; } }
+    else { EST.streak = 0; }
+    saveEst();
+    renderEstStats();
+    return;
+  }
+
+  // GRADED: grade against the vault (records), show verdict, advance the run.
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("elasticity-explorer", currentEstIndex, choice, function (res) {
+      if (res && res.needEnroll) {
+        estAnswered = false; setEstButtons(false);
+        var o = document.getElementById("est-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        estLocalVerdict(choice);
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setEstButtons(true); setTimeout(function () { estDealGradedCase(); }, 1500); }
+        }
+      } else {
+        estAnswered = false; setEstButtons(false);
+        var o2 = document.getElementById("est-readout");
+        if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    });
+  } else {
+    estAnswered = false; setEstButtons(false);
+    var o3 = document.getElementById("est-readout");
+    if (o3) { o3.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in. Switch to Practice to explore."; }
   }
 }
 
@@ -593,19 +866,98 @@ function resetEstScore() {
   EST.best = 0;
   saveEst();
   renderEstStats();
+  if (estMode === "graded" && typeof ArenaAttempts !== "undefined" && ArenaAttempts.resetLocal) {
+    ArenaAttempts.resetLocal();
+    var nb = document.getElementById("est-newcase");
+    if (nb) { nb.style.display = ""; nb.textContent = "Start graded run"; }
+    var st = document.getElementById("est-story");
+    if (st) { st.innerHTML = "Graded attempts reset. Press <strong>Start graded run</strong> to begin."; }
+    setEstButtons(true);
+    return;
+  }
   var out = document.getElementById("est-readout");
   if (out) { out.innerHTML = "Record cleared. Press <strong>New data</strong> to start fresh."; }
 }
 
-/* ══════════ Boot ══════════ */
+function imShowMsg(msg) { var el = document.getElementById("im-auth-msg"); if (el) { el.textContent = msg || ""; } }
+function imRenderAuth() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) { return; }
+  var bar = document.getElementById("im-authbar");
+  if (bar) {
+    bar.style.display = "block";
+    var mains = document.getElementsByTagName("main");
+    function setMainOffset() {
+      if (mains && mains[0]) { var h = bar.offsetHeight || 52; mains[0].style.marginTop = (60 + h + 8) + "px"; }
+    }
+    setMainOffset();
+    setTimeout(setMainOffset, 300);
+    if (window.addEventListener) { window.addEventListener("resize", setMainOffset); }
+  }
+  IMBackend.getSession(function (session) {
+    var out = document.getElementById("im-auth-signedout");
+    var inn = document.getElementById("im-auth-signedin");
+    if (session && session.user) {
+      try { console.log("%carena: SIGNED IN as " + (session.user.email || session.user.id) + " -- grades WILL record", "color:#166534;font-weight:bold"); } catch (e) {}
+      if (out) { out.style.display = "none"; }
+      if (inn) { inn.style.display = "flex"; }
+      var who = document.getElementById("im-who");
+      if (who) { who.textContent = session.user.email || "signed in"; }
+      IMBackend.checkAccess(function (ok) {
+        try { console.log("%carena: access check = " + ok, ok ? "color:#166534" : "color:#991b1b;font-weight:bold"); } catch (e) {}
+        estHasAccess = !!ok;
+        var b = document.getElementById("im-access-badge");
+        if (b) {
+          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
+          else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
+        }
+        var ctas = document.getElementsByClassName("sb-cta");
+        var ci;
+        for (ci = 0; ci < ctas.length; ci++) { ctas[ci].style.display = ok ? "none" : ""; }
+      });
+    } else {
+      try { console.warn("arena: SIGNED OUT -- not logged in ON THIS PAGE, so plays will NOT record. Use the sign-in bar at the top."); } catch (e) {}
+      if (out) { out.style.display = "flex"; }
+      if (inn) { inn.style.display = "none"; }
+    }
+  });
+}
+function imDoSignIn() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signIn(e.value, p.value, function (res) {
+    if (res && res.ok) { imRenderAuth(); } else { imShowMsg(res && res.error ? res.error : "Sign-in failed."); }
+  });
+}
+function imDoSignUp() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signUp(e.value, p.value, null, function (res) {
+    if (res && res.ok) { imShowMsg(res.needsConfirm ? "Account created — check your email to confirm, then sign in." : "Account created — you can sign in now."); }
+    else { imShowMsg(res && res.error ? res.error : "Sign-up failed."); }
+  });
+}
+function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
+
+/* Boot */
+var ELASTICITY_ARENA_BUILD = "elasticity-2026-08-concept+mobile-v1";
 function boot() {
-  /* freemium gate: this is a paid chapter arena; free preview only for the
-     Market Sandbox. Overlays a sign-in/unlock prompt if not entitled. */
+  try { console.log("%celasticity-explorer build: " + ELASTICITY_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
+  try {
+    var stamp = document.createElement("div");
+    stamp.textContent = "build " + ELASTICITY_ARENA_BUILD;
+    stamp.style.cssText = "position:fixed;bottom:4px;right:6px;z-index:9999;font:11px monospace;color:#94a3b8;background:rgba(255,255,255,0.8);padding:1px 5px;border-radius:4px;pointer-events:none;";
+    document.body.appendChild(stamp);
+  } catch (e) {}
   if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadEst();
   renderEstStats();
   initEE();
   initTR();
+  imRenderAuth();
 }
 
 if (document.readyState === "loading") {
