@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-arena-breakdown';
+var SA_BUILD = 'intro-micro-portal-2026-08-arena-dropdown';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -5531,17 +5531,36 @@ function loadCompletion() {
       // single strong arena looks small there).
       var bd = arenaBreakdown(arenas);
       if(bd.length){
+        // Build a dropdown so the student can review a single arena's result or
+        // see all of them. Rows are id'd by slug so the picker can show/hide.
+        var optsHtml = '<option value="__all">All arenas</option>' + bd.map(function(a){
+          return '<option value="'+esc(a.slug)+'">'+esc(a.title)+' \u2014 '+Math.round(a.pct*100)+'%</option>';
+        }).join('');
         var rowsHtml = bd.map(function(a){
-          return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);">'+
+          return '<div class="arena-row" data-arena="'+esc(a.slug)+'" style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);">'+
             '<span>'+esc(a.title)+'</span>'+
             '<span class="mono"><b>'+Math.round(a.pct*100)+'%</b> <span style="color:var(--text-subtle);">('+a.correct+'/'+a.total+')</span></span></div>';
         }).join('');
         var card = document.createElement('div');
         card.className='card'; card.style.margin='0 0 20px';
-        card.innerHTML='<h3 style="font-size:16px;margin-bottom:2px;">Your arenas</h3>'+
+        card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:2px;">'+
+            '<h3 style="font-size:16px;margin:0;">Your arenas</h3>'+
+            '<select id="arena-review-pick" style="font-size:13px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);">'+optsHtml+'</select>'+
+          '</div>'+
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Your score on each arena you\u2019ve played. The Arenas grade above averages these across all '+ARENA_SLUGS.length+' arenas, so playing more raises it.</div>'+
-          rowsHtml;
+          '<div id="arena-review-rows">'+rowsHtml+'</div>';
         host.appendChild(card);
+        var pick = card.querySelector('#arena-review-pick');
+        if(pick){
+          pick.addEventListener('change', function(){
+            var sel = pick.value;
+            var rows = card.querySelectorAll('.arena-row');
+            for(var ri=0; ri<rows.length; ri++){
+              var slug = rows[ri].getAttribute('data-arena');
+              rows[ri].style.display = (sel==='__all' || sel===slug) ? '' : 'none';
+            }
+          });
+        }
       }
     }
 

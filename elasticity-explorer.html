@@ -185,7 +185,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <p class="sb-subtitle">Bend a demand curve with your own hands, climb the revenue hill until you find its peak, then prove you can compute an elasticity from raw market data &mdash; the same three moves Chapter 5 asks of you, made physical.</p>
 <hr class="sb-divider">
 
-<p>Elasticity is one number &mdash; the percentage change in quantity divided by the percentage change in price &mdash; but it decides real money: whether a price hike earns more or less, who bears a tax, why a bumper harvest can ruin farmers. This arena drills the three skills the chapter builds. Station 1 lets you <strong>reshape</strong> a demand curve and watch the number respond. Station 2 turns the <strong>total-revenue test</strong> into a hill you climb. Station 3 is the <strong>Estimator</strong>: raw before-and-after data, your midpoint arithmetic, your call. Your Estimator record saves for reporting back.</p>
+<p>Elasticity is one number &mdash; the percentage change in quantity divided by the percentage change in price &mdash; but it decides real money: whether a price hike earns more or less, who bears a tax, why a bumper harvest can ruin farmers. This arena drills the three skills the chapter builds. Station 1 lets you <strong>reshape</strong> a demand curve and watch the number respond. Station 2 turns the <strong>total-revenue test</strong> into a hill you climb. Station 3 is the <strong>Estimator</strong>: raw before-and-after data, your midpoint arithmetic, your call. Practice as much as you like; the Graded run records to your gradebook.</p>
 
 <!-- ═══ STATION 1: SHAPE THE CURVE ═══ -->
 <h2 class="sb-section"><span class="sb-step">1</span>Shape the curve</h2>
@@ -277,8 +277,8 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 </div>
 
 <!-- ═══ RESULTS ═══ -->
-<h2 class="sb-section"><span class="sb-step">4</span>Your record</h2>
-<p>Your Estimator record is saved in this browser. If this arena was assigned, report the numbers below; if your accuracy is under 80%, run more cases with the midpoint formula written out beside you until the arithmetic is automatic.</p>
+<h2 class="sb-section"><span class="sb-step">4</span>Your practice record</h2>
+<p>These numbers track your <strong>Practice</strong> attempts on this device only &mdash; they're for your own feedback and don't affect your grade. Your <strong>Graded run</strong> is recorded automatically to the gradebook when you're signed in. If your practice accuracy is under 80%, run more cases with the midpoint formula written out beside you until the arithmetic is automatic.</p>
 
 <div class="sb-stat-row">
   <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases attempted</div></div>
@@ -943,7 +943,7 @@ function imDoSignUp() {
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
 /* Boot */
-var ELASTICITY_ARENA_BUILD = "elasticity-2026-08-concept+mobile-v1";
+var ELASTICITY_ARENA_BUILD = "elasticity-2026-08-concept+mobile-v2";
 function boot() {
   try { console.log("%celasticity-explorer build: " + ELASTICITY_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {
