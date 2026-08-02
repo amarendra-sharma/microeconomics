@@ -689,6 +689,7 @@ function mkShuffle(n) {
 }
 
 function mkSetMode(mode) {
+  try { console.log("mkSetMode(" + mode + ")"); } catch(e){}
   mkMode = mode;
   var bp = document.getElementById("mk-mode-practice");
   var bg = document.getElementById("mk-mode-graded");
@@ -708,6 +709,7 @@ function mkSetMode(mode) {
         mount: "aa-panel",
         onStartAttempt: function (info) {
           // controller says "begin this attempt" -> deal a fresh 12-case order
+          try { console.log("onStartAttempt fired, attempt=" + (info && info.attempt)); } catch(e){}
           mkGradedOrder = mkShuffle(MK_CASES.length).slice(0, Math.min(12, MK_CASES.length));
           mkGradedPos = 0;
           mkDealGradedCase();
@@ -748,8 +750,9 @@ function mkSetMode(mode) {
 }
 
 function mkDealGradedCase() {
+  try { console.log("mkDealGradedCase: pos=" + mkGradedPos + " orderLen=" + mkGradedOrder.length); } catch(e){}
   // deal the next case within the current active attempt
-  if (mkGradedPos >= mkGradedOrder.length) { return; }
+  if (mkGradedPos >= mkGradedOrder.length) { try { console.warn("mkDealGradedCase: no cases left to deal"); } catch(e){} return; }
   currentMkIndex = mkGradedOrder[mkGradedPos];
   mkGradedPos += 1;
   currentMk = MK_CASES[currentMkIndex];
@@ -764,15 +767,19 @@ function mkDealGradedCase() {
 }
 
 function newMarketCase() {
+  try { console.log("newMarketCase called, mode=" + mkMode + ", ArenaAttempts=" + (typeof ArenaAttempts)); } catch(e){}
   if (mkMode === "graded") {
-    if (typeof ArenaAttempts === "undefined") { return; }
+    if (typeof ArenaAttempts === "undefined") { try { console.warn("GRADED: ArenaAttempts is undefined -- arena-attempts.js didn't load"); } catch(e){} return; }
     if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+      try { console.log("GRADED: locked -- both attempts used"); } catch(e){}
       var lo = document.getElementById("mk-readout");
       if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
       return;
     }
     // "Start graded run" -> begin attempt 1 (controller fires onStartAttempt to deal)
+    try { console.log("GRADED: isAttemptActive=" + ArenaAttempts.isAttemptActive()); } catch(e){}
     if (!ArenaAttempts.isAttemptActive()) {
+      try { console.log("GRADED: calling startAttempt(true)"); } catch(e){}
       ArenaAttempts.startAttempt(true);
     }
     return;

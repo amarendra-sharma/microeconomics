@@ -146,6 +146,7 @@
   }
 
   function startAttempt(fromUser) {
+    try { console.log("controller.startAttempt(fromUser=" + fromUser + ") locked=" + S.locked + " scores=" + S.attemptScores.length + " max=" + S.maxAttempts); } catch(e){}
     if (S.locked) { return; }
     if (S.attemptScores.length >= S.maxAttempts) { S.locked = true; render(); return; }
     S.attemptIndex = S.attemptScores.length + 1;
@@ -155,7 +156,10 @@
     // When the user explicitly starts an attempt (e.g. "Take second attempt"),
     // tell the arena to deal the first case of the fresh attempt.
     if (fromUser && typeof S.onStartAttempt === "function") {
+      try { console.log("controller: firing onStartAttempt"); } catch(e){}
       S.onStartAttempt({ attempt: S.attemptIndex });
+    } else if (fromUser) {
+      try { console.warn("controller: fromUser but onStartAttempt is not a function: " + (typeof S.onStartAttempt)); } catch(e){}
     }
   }
 
