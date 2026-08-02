@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-07-gradebook-fix-d';
+var SA_BUILD = 'intro-micro-portal-2026-08-admin-review';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1352,10 +1352,11 @@ function openAccommodation(studentId, email, existing){
     '<div class="field"><label>Extra attempts (this item)</label><input id="acItemExtra" type="number" min="0" value="0"></div></div>'+
     '<div id="acExisting" style="font-size:12px;color:var(--text-muted);margin:2px 0 8px;"></div>'+
     '<div style="border-top:1px solid var(--border);margin:12px 0 8px;padding-top:10px;">'+
-      '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">Reopen an auto-submitted exam</div>'+
-      '<div style="font-size:11.5px;color:var(--text-muted);margin-bottom:6px;">If a technical glitch force-submitted this student\u2019s exam, reopen it so they can finish where it cut off. Questions they already answered are kept; only the unfinished ones reopen.</div>'+
-      '<div class="row2"><div class="field"><label>Which exam</label><select id="acReopenExam"><option value="">Select an exam\u2026</option></select></div>'+
-      '<div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" id="acReopenBtn" style="width:100%;">Reopen for this student</button></div></div>'+
+      '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">Reopen an auto-submitted exam or quiz</div>'+
+      '<div style="font-size:11.5px;color:var(--text-muted);margin-bottom:6px;">If a technical glitch force-submitted this student\u2019s exam or graded quiz, reopen it so they can finish where it cut off. Questions they already answered are kept; only the unfinished ones reopen.</div>'+
+      '<div class="row2"><div class="field"><label>Type</label><select id="acReopenKind"><option value="exam">Exam</option><option value="quiz">Chapter quiz</option></select></div>'+
+      '<div class="field"><label id="acReopenWhichLbl">Which exam</label><select id="acReopenWhich"><option value="">Select an exam\u2026</option></select></div></div>'+
+      '<div class="inline-actions" style="justify-content:flex-end;margin-top:4px;"><button class="btn btn-ghost btn-sm" id="acReopenBtn">Reopen for this student</button></div>'+
       '<div id="acReopenMsg" class="msg" style="margin-top:4px;"></div>'+
     '</div>'+
     '<div class="inline-actions" style="justify-content:flex-end;">'+
@@ -1370,8 +1371,8 @@ function openAccommodation(studentId, email, existing){
   var courseAssignments=[];
   sb.from('im_exam').select('id,title,kind').eq('course_id',State.teachCourseId).order('title').then(function(r){
     courseExams=r.data?r.data:[]; if($('acKind').value){ fillRefs(); }
-    // populate the reopen-exam picker too
-    var rp=$('acReopenExam');
+    // populate the reopen picker (exam list by default)
+    var rp=$('acReopenWhich');
     if(rp){
       var o='<option value="">Select an exam\u2026</option>', k;
       for(k=0;k<courseExams.length;k++){ o+='<option value="'+courseExams[k].id+'">'+esc(courseExams[k].title)+'</option>'; }
@@ -1379,6 +1380,24 @@ function openAccommodation(studentId, email, existing){
       rp.innerHTML=o;
     }
   });
+  function fillReopenWhich(){
+    var kind=$('acReopenKind')?$('acReopenKind').value:'exam';
+    var rp=$('acReopenWhich'), lbl=$('acReopenWhichLbl'), k, o;
+    if(!rp){ return; }
+    if(kind==='quiz'){
+      if(lbl){ lbl.textContent='Which chapter'; }
+      o='<option value="">Select a chapter\u2026</option>';
+      for(k=0;k<STUDENT_CHAPTERS.length;k++){ o+='<option value="'+STUDENT_CHAPTERS[k].n+'">Ch '+STUDENT_CHAPTERS[k].n+' \u2014 '+esc(STUDENT_CHAPTERS[k].title)+'</option>'; }
+      rp.innerHTML=o;
+    } else {
+      if(lbl){ lbl.textContent='Which exam'; }
+      o='<option value="">Select an exam\u2026</option>';
+      for(k=0;k<courseExams.length;k++){ o+='<option value="'+courseExams[k].id+'">'+esc(courseExams[k].title)+'</option>'; }
+      if(courseExams.length===0){ o='<option value="">No exams in this course yet</option>'; }
+      rp.innerHTML=o;
+    }
+  }
+  if($('acReopenKind')){ $('acReopenKind').addEventListener('change', fillReopenWhich); }
   sb.from('im_assignment').select('id,title').eq('course_id',State.teachCourseId).order('title').then(function(r){
     courseAssignments=r.data?r.data:[]; if($('acKind').value==='assignment'){ fillRefs(); }
   });
@@ -1426,17 +1445,21 @@ function openAccommodation(studentId, email, existing){
   function close(){ $('modalHost').innerHTML=''; }
   $('acCancel').addEventListener('click', close);
   if($('acReopenBtn')){ $('acReopenBtn').addEventListener('click', function(){
-    var exId=$('acReopenExam')?$('acReopenExam').value:'';
+    var kind=$('acReopenKind')?$('acReopenKind').value:'exam';
+    var which=$('acReopenWhich')?$('acReopenWhich').value:'';
     var msg=$('acReopenMsg');
-    if(!exId){ if(msg){ msg.className='msg err'; msg.textContent='Choose an exam first.'; } return; }
-    if(!window.confirm('Reopen this exam for the student so they can finish the unfinished questions?\n\nAnswers they already submitted are kept. They will need to re-enter the exam from their Exams page.')){ return; }
+    if(!which){ if(msg){ msg.className='msg err'; msg.textContent=(kind==='quiz'?'Choose a chapter first.':'Choose an exam first.'); } return; }
+    if(!window.confirm('Reopen this '+(kind==='quiz'?'quiz':'exam')+' for the student so they can finish the unfinished questions?\n\nAnswers they already submitted are kept. They will need to re-enter from their '+(kind==='quiz'?'practice area':'Exams page')+'.')){ return; }
     var btn=$('acReopenBtn'); btn.disabled=true; btn.textContent='Reopening\u2026';
-    sb.rpc('im_reopen_attempt',{ p_course:State.teachCourseId, p_exam:exId, p_student:studentId, p_note:'instructor reopened after auto-submit' }).then(function(r){
+    var rpc = (kind==='quiz')
+      ? sb.rpc('im_reopen_quiz',{ p_course:State.teachCourseId, p_chapter:parseInt(which,10), p_student:studentId, p_note:'instructor reopened after auto-submit' })
+      : sb.rpc('im_reopen_attempt',{ p_course:State.teachCourseId, p_exam:which, p_student:studentId, p_note:'instructor reopened after auto-submit' });
+    rpc.then(function(r){
       btn.disabled=false; btn.textContent='Reopen for this student';
-      if(r && r.error){ msg.className='msg err'; msg.textContent=(String(r.error.message||'').indexOf('function')>=0?'Not installed yet \u2014 run im_28_reschedule_and_reopen.sql.':r.error.message); return; }
+      if(r && r.error){ msg.className='msg err'; msg.textContent=(String(r.error.message||'').indexOf('function')>=0?'Not installed yet \u2014 run im_28 (exam) / im_30 (quiz) migrations.':r.error.message); return; }
       var n=(r && typeof r.data==='number')?r.data:(r && r.data);
       msg.className='msg ok';
-      msg.textContent=(Number(n)>0)?('Reopened '+n+' question'+(Number(n)===1?'':'s')+'. The student can now finish from their Exams page.'):'Nothing needed reopening \u2014 this student has no unfinished questions on that exam.';
+      msg.textContent=(Number(n)>0)?('Reopened '+n+' question'+(Number(n)===1?'':'s')+'. The student can now finish from their '+(kind==='quiz'?'practice area':'Exams page')+'.'):'Nothing needed reopening \u2014 no unfinished questions on that '+(kind==='quiz'?'quiz':'exam')+'.';
     }, function(e){ btn.disabled=false; btn.textContent='Reopen for this student'; msg.className='msg err'; msg.textContent='Failed: '+String(e&&e.message?e.message:e); });
   }); }
   m.addEventListener('click', function(e){ if(e.target===m){ close(); } });
@@ -2229,7 +2252,7 @@ function renderWorkBrowser(){
     '<div id="wbMsg" class="msg"></div>'+
     '<div class="row2"><div class="field"><label>Student</label><select id="wbStudent"><option value="">Loading\u2026</option></select></div>'+
     '<div class="field"><label>Type</label><select id="wbType">'+
-      '<option value="exam">Exam</option><option value="quiz">Chapter quiz</option><option value="arena">Arena</option></select></div></div>'+
+      '<option value="exam">Exam</option><option value="quiz">Chapter quiz</option><option value="arena">Arena</option><option value="assignment">Assignment</option></select></div></div>'+
     '<div class="field"><label id="wbWhichLabel">Which exam</label><select id="wbWhich"><option value="">Loading\u2026</option></select></div>'+
     '<div class="inline-actions" style="justify-content:flex-end;"><button class="btn btn-primary btn-sm" id="wbLoad">Open work</button></div>'+
     '<div id="wbBody" style="margin-top:14px;"></div>';
@@ -2263,19 +2286,40 @@ function fillWhich(){
     out='<option value="">All chapters</option>';
     for(i=0;i<CHAPTERS.length;i++){ out+='<option value="'+CHAPTERS[i].n+'">Ch '+CHAPTERS[i].n+' \u2014 '+esc(CHAPTERS[i].title)+'</option>'; }
     sel.innerHTML=out;
-  } else {
+  } else if(t==='arena'){
     lbl.textContent='Which arena';
     out='<option value="">Choose an arena\u2026</option>';
     for(i=0;i<ARENA_SLUGS.length;i++){ out+='<option value="'+esc(ARENA_SLUGS[i])+'">'+esc(ARENA_SLUGS[i])+'</option>'; }
     sel.innerHTML=out;
+  } else {
+    lbl.textContent='Which assignment';
+    sel.innerHTML='<option value="">Loading\u2026</option>';
+    sb.from('im_assignment').select('id,title').eq('course_id',State.teachCourseId).order('title').then(function(r){
+      var rows=r.data?r.data:[]; out='<option value="">Choose an assignment\u2026</option>';
+      for(i=0;i<rows.length;i++){ out+='<option value="'+esc(rows[i].id)+'">'+esc(rows[i].title)+'</option>'; }
+      if(rows.length===0){ out='<option value="">No assignments yet</option>'; }
+      sel.innerHTML=out;
+    });
   }
 }
 function loadStudentWork(){
   var e=$('wbMsg'), sid=$('wbStudent').value, t=$('wbType').value, which=$('wbWhich').value;
   if(!sid){ e.textContent='Choose a student.'; e.className='msg err'; return; }
-  if(t!=='quiz' && !which){ e.textContent='Choose which '+(t==='exam'?'exam':'arena')+'.'; e.className='msg err'; return; }
+  if(t!=='quiz' && !which){ e.textContent='Choose which '+(t==='exam'?'exam':(t==='assignment'?'assignment':'arena'))+'.'; e.className='msg err'; return; }
   e.textContent=''; e.className='msg';
   $('wbBody').innerHTML=loadingCard();
+  // Assignments are file submissions, not question work -- read im_submission
+  // directly (with the file list) instead of the grading edge function.
+  if(t==='assignment'){
+    sb.from('im_submission').select('id,student_id,score,feedback,submitted_at,file_path,file_name').eq('assignment_id',which).eq('student_id',sid).then(function(res){
+      var box=$('wbBody'); if(!box){ return; }
+      if(res.error){ box.innerHTML='<div class="card empty">Could not load that submission: '+esc(res.error.message)+'</div>'; return; }
+      var subsA=res.data?res.data:[];
+      box.innerHTML=assignmentWorkHtml(subsA, sid, which);
+      wireAssignmentWork(box, sid, which);
+    }, function(){ $('wbBody').innerHTML='<div class="card empty">Could not load that submission.</div>'; });
+    return;
+  }
   var body;
   if(t==='exam'){ body={ action:'student_work', exam_id:which, student_id:sid }; }
   else if(t==='quiz'){ body={ action:'quiz_work', course_id:State.teachCourseId, student_id:sid }; if(which){ body.chapter=parseInt(which,10); } }
@@ -2345,6 +2389,53 @@ function arenaWorkHtml(items, sid, slug){
       '</div></div>';
   }
   return html;
+}
+/* Instructor review of an assignment submission: shows the uploaded file(s) and
+   lets staff set/adjust the score and feedback. */
+function assignmentWorkHtml(subs, sid, assignmentId){
+  if(!subs || subs.length===0){
+    return '<div class="card empty">This student hasn\u2019t submitted this assignment yet.</div>';
+  }
+  var html='<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">The student\u2019s submission for this assignment. Download the file to review it, then set a score and feedback.</div>';
+  subs.forEach(function(s){
+    var when=s.submitted_at?new Date(s.submitted_at).toLocaleString():'';
+    var fileLink = s.file_path
+      ? '<button class="btn btn-ghost btn-sm" data-dlsub="'+esc(s.file_path)+'">\u2b07 '+esc(s.file_name||'Download file')+'</button>'
+      : '<span style="color:var(--text-subtle);font-size:12px;">No file attached</span>';
+    html+='<div class="card" style="margin-bottom:10px;padding:12px 14px;">'+
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">'+
+        '<div style="font-size:12px;color:var(--text-subtle);">Submitted '+esc(when)+'</div>'+fileLink+'</div>'+
+      '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">'+
+        '<div class="field" style="margin:0;width:120px;"><label>Score</label><input id="as_'+esc(String(s.id))+'" type="number" step="0.01" value="'+((s.score===null||s.score===undefined)?'':esc(String(s.score)))+'"></div>'+
+        '<div class="field" style="margin:0;flex:1;min-width:200px;"><label>Feedback</label><input id="af_'+esc(String(s.id))+'" value="'+esc(s.feedback||'')+'" placeholder="Optional comments for the student"></div>'+
+        '<button class="btn btn-primary btn-sm" data-savesub="'+esc(String(s.id))+'">Save score</button>'+
+      '</div></div>';
+  });
+  return html;
+}
+function wireAssignmentWork(box, sid, assignmentId){
+  Array.prototype.forEach.call(box.querySelectorAll('[data-savesub]'), function(b){
+    b.addEventListener('click', function(){
+      var subId=b.getAttribute('data-savesub');
+      var sc=$('as_'+subId).value;
+      var score=(sc===''?null:parseFloat(sc));
+      b.disabled=true; b.textContent='Saving\u2026';
+      sb.from('im_submission').update({ score:score, feedback:$('af_'+subId).value, graded_at:new Date().toISOString(), graded_by:State.user.id }).eq('id',subId).then(function(r){
+        b.disabled=false; b.textContent='Save score';
+        var m=$('wbMsg'); if(r.error){ if(m){ m.className='msg err'; m.textContent=r.error.message; } return; }
+        if(m){ m.className='msg ok'; m.textContent='Saved.'; }
+      }, function(){ b.disabled=false; b.textContent='Save score'; });
+    });
+  });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-dlsub]'), function(b){
+    b.addEventListener('click', function(){
+      var path=b.getAttribute('data-dlsub');
+      sb.storage.from('assignment-files').createSignedUrl(path, 120).then(function(r){
+        if(r.data && r.data.signedUrl){ window.open(r.data.signedUrl,'_blank'); }
+        else { var m=$('wbMsg'); if(m){ m.className='msg err'; m.textContent='Could not open file.'; } }
+      });
+    });
+  });
 }
 function wireWorkButtons(box, t, sid, which){
   Array.prototype.forEach.call(box.querySelectorAll('[data-regrade]'), function(b){
@@ -3319,6 +3410,10 @@ function renderPlatform(host){
     '<div class="field"><label>Stripe payment link</label><input id="pfStripe" value="'+esc(s.stripe_link||'')+'" placeholder="https://buy.stripe.com/..."></div>'+
     '<div class="field"><label>Notify email (where new professor requests are sent)</label><input id="pfNotify" value="'+esc(s.notify_email||'')+'" placeholder="you@macronations.com"></div>'+
     '<button class="btn btn-primary" id="pfSavePricing">Save pricing</button></div>'+
+    '<div class="card" style="max-width:680px;margin-bottom:18px;"><h3>Self-study course</h3>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">When on, students who aren\u2019t enrolled in a professor\u2019s course are placed into the platform self-study course so they can read, practice, and take quizzes on their own. Turn it off to close self-study for everyone at once.</div>'+
+    '<label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;"><input type="checkbox" id="pfSelfStudy"'+((s.self_study_enabled===false)?'':' checked')+' style="width:auto;"> Self-study is available platform-wide</label>'+
+    '<button class="btn btn-primary" id="pfSaveSelfStudy" style="margin-top:12px;">Save</button></div>'+
     '<div class="card" style="max-width:680px;"><h3>Author bio &amp; photo</h3><div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Shown on the textbook’s “About the Author” page.</div>'+
     '<div class="field"><label>Author name</label><input id="pfName" value="'+esc(s.author_name||'')+'"></div>'+
     '<div class="field"><label>Subtitle (optional — leave blank to keep the founder line)</label><input id="pfSub" value="'+esc(s.author_subtitle||'')+'"></div>'+
@@ -3332,6 +3427,9 @@ function renderPlatform(host){
   $('pfSaveBio').addEventListener('click', function(){
     savePlatform({ author_name:$('pfName').value.trim(), author_subtitle:$('pfSub').value.trim(), author_photo_url:$('pfPhoto').value.trim(), author_bio_html:$('pfBio').value.trim() }, 'Bio saved.');
   });
+  if($('pfSaveSelfStudy')){ $('pfSaveSelfStudy').addEventListener('click', function(){
+    savePlatform({ self_study_enabled: $('pfSelfStudy').checked }, $('pfSelfStudy').checked?'Self-study turned on for everyone.':'Self-study turned off for everyone.');
+  }); }
 }
 function savePlatform(patch, okMsg){
   patch.id=1; patch.updated_by=State.user.id;
@@ -3638,9 +3736,12 @@ function ensureProfileAndCourse() {
       if (selfRow) { State.selfCourseId = selfRow.course_id; if(!State.payCourseId){ State.payCourseId = selfRow.course_id; } return null; }
       if (anyRow) { State.selfCourseId = anyRow.course_id; if(!State.payCourseId){ State.payCourseId = anyRow.course_id; } return null; }
       // No ACTIVE enrollment (e.g., dropped from the only course): put the student
-      // into THE single platform self-study course. There is exactly one, created
-      // and owned by the super-admin (im_course.is_self_study = true, enforced by a
-      // unique index); students are never given a course of their own.
+      // into THE single platform self-study course -- but only if the super-admin
+      // has self-study enabled platform-wide.
+      if (State.settings && State.settings.self_study_enabled === false) {
+        State.selfCourseId = null;
+        return null;
+      }
       return sb.from('im_course').select('id').eq('is_self_study', true).limit(1).maybeSingle().then(function(ss) {
         if (!ss || !ss.data) {
           // The admin has not created the self-study course yet. Leave the student
