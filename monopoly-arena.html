@@ -718,19 +718,23 @@ function marketVerdict(choice) {
   if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
     IMBackend.gradeCase("monopoly-arena", currentMkIndex, choice, function (res) {
       if (res && res.needEnroll) {
+        try { console.warn("arena: case NOT recorded -- server says enrollment required."); } catch (e) {}
         mkAnswered = false; setMkButtons(false);
         var o = document.getElementById("mk-readout");
         if (o) { o.innerHTML = "<strong>Enrollment required.</strong> This graded arena needs an active Intro Micro enrollment. <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
         return;
       }
       if (res && !res.offline && typeof res.correct === "boolean") {
+        try { console.log("%carena: case RECORDED to server (correct=" + res.correct + ")", "color:#166534;font-weight:bold"); } catch (e) {}
         mkApplyVerdict(choice, res.correctCode, res.score);
       } else {
+        try { console.warn("arena: case fell back to OFFLINE (not recorded). Reason: " + (res && res.offline ? "no session/access_token -- sign in on this page" : "unexpected response") + "."); } catch (e) {}
         /* transient failure: fall back to local key so the student isn't blocked */
         mkApplyVerdict(choice, currentMk.key, null);
       }
     });
   } else {
+    try { console.warn("arena: IMBackend offline (supabase-js not loaded) -- case not recorded."); } catch (e) {}
     mkApplyVerdict(choice, currentMk.key, null);
   }
 }
@@ -765,11 +769,13 @@ function imRenderAuth() {
     var out = document.getElementById("im-auth-signedout");
     var inn = document.getElementById("im-auth-signedin");
     if (session && session.user) {
+      try { console.log("%carena: SIGNED IN as " + (session.user.email || session.user.id) + " -- grades WILL record", "color:#166534;font-weight:bold"); } catch (e) {}
       if (out) { out.style.display = "none"; }
       if (inn) { inn.style.display = "flex"; }
       var who = document.getElementById("im-who");
       if (who) { who.textContent = session.user.email || "signed in"; }
       IMBackend.checkAccess(function (ok) {
+        try { console.log("%carena: access check = " + ok + (ok ? " -- graded plays record to your course" : " -- NOT enrolled, plays will NOT count"), ok ? "color:#166534" : "color:#991b1b;font-weight:bold"); } catch (e) {}
         var b = document.getElementById("im-access-badge");
         if (b) {
           if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
@@ -777,6 +783,7 @@ function imRenderAuth() {
         }
       });
     } else {
+      try { console.warn("arena: SIGNED OUT -- not logged in ON THIS PAGE, so plays will NOT record to the gradebook. Use the sign-in bar at the top."); } catch (e) {}
       if (out) { out.style.display = "flex"; }
       if (inn) { inn.style.display = "none"; }
     }
@@ -808,6 +815,7 @@ function imDoSignOut() {
 }
 
 function boot() {
+  if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadMk();
   renderMkStats();
   initMn();
