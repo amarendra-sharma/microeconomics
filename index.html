@@ -415,7 +415,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-waiver-access';
+var SA_BUILD = 'intro-micro-portal-2026-08-waiver-access-b';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3577,7 +3577,7 @@ function resolveAccess() {
   // which previously made the waiver query below get skipped, leaving a waived
   // student permanently locked. Fetch enrollments, then check waivers on those
   // exact courses.
-  return sb.from('im_enrollment').select('course_id,status,expires_at').eq('student_id', uid).eq('status','active').then(function(enrRes){
+  return sb.from('im_enrollment').select('course_id,status').eq('student_id', uid).eq('status','active').then(function(enrRes){
     var enrRows = enrRes && enrRes.data ? enrRes.data : [];
     var enrolledCourseIds = enrRows.map(function(r){ return r.course_id; }).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
     var waiverP = enrolledCourseIds.length
@@ -3591,15 +3591,11 @@ function resolveAccess() {
           State.hasAccess = true; return true;
         }
       }
-      // 2) subscription check -- any active, non-expired enrollment
-      var now = Date.now();
-      var ok = false, i;
-      for (i = 0; i < enrRows.length; i++) {
-        var exp = enrRows[i].expires_at ? new Date(enrRows[i].expires_at).getTime() : null;
-        if (exp === null || exp > now) { ok = true; break; }
-      }
-      State.hasAccess = ok;
-      return ok;
+      // 2) an active enrollment grants access. (Time-based expiry, if ever needed,
+      //    lives on the subscription record, not im_enrollment -- this table has
+      //    no expires_at column, so we do not read one here.)
+      State.hasAccess = enrRows.length > 0;
+      return State.hasAccess;
     });
   }).catch(function(){ State.hasAccess = false; return false; });
 }
