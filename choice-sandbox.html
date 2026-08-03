@@ -7,6 +7,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
+<script src="sa-progress.js"></script>
+<script src="arena-attempts.js"></script>
 
 <style>
 :root {
@@ -143,7 +147,23 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); 
 footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
 
 @media (max-width: 640px) {
-  main { padding: 2rem 1.1rem 3rem; }
+  main { padding: 2rem 1.1rem 3rem; 
+  #im-authbar { padding: 0.6rem 1rem; }
+  #im-auth-signedout { flex-direction: column; align-items: stretch !important; gap: 0.4rem !important; }
+  #im-auth-signedout input, #im-auth-signedout button { width: 100%; box-sizing: border-box; }
+}
+#im-email, #im-pass { font-size: 16px !important; min-height: 40px; }
+#im-authbar button { min-height: 40px; }
+.aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
+.aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
+.aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
+.aa-card .aa-scores, .aa-card .aa-final { font-size: 0.9rem; margin: 0.35rem 0; }
+.aa-card.aa-done { border-color: var(--gold, #b87408); background: var(--gold-lt, #fdf6ec); }
+.aa-card.aa-between { border-color: var(--accent, #0f3d9e); }
+.aa-actions { margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.aa-btn { font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--rule); cursor: pointer; background: var(--bg-card); }
+.aa-btn-primary { background: var(--accent, #0f3d9e); color: #fff; border-color: var(--accent, #0f3d9e); }
+.aa-btn-ghost { background: transparent; }
   h1.sb-title { font-size: 2rem; }
   .sb-diag-grid { grid-template-columns: 1fr; }
   .sb-mubar-label { flex-basis: 120px; }
@@ -157,8 +177,25 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Choice Sandbox</div>
   <span class="sb-course-tag">Course Arena</span>
   <div class="sb-spacer"></div>
-  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+  <a class="sb-header-btn" href="index.html" style="margin-right:0.4rem;">&larr; Portal</a>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">Textbook</a>
 </header>
+
+<div id="im-authbar" style="display:none;position:fixed;top:60px;left:0;right:0;z-index:150;background:#f5f0e8;border-bottom:1px solid #e2e8f0;padding:0.5rem 1.5rem;font-family:'Inter',system-ui,sans-serif;font-size:0.8125rem;color:#334155;">
+  <div id="im-auth-signedout" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-weight:600;">Intro Micro account:</span>
+    <input id="im-email" type="email" placeholder="email" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <input id="im-pass" type="password" placeholder="password" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <button id="im-signin-btn" onclick="imDoSignIn()" style="padding:0.35rem 0.8rem;border:none;border-radius:6px;background:#0f3d9e;color:#fff;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign in</button>
+    <button id="im-signup-btn" onclick="imDoSignUp()" style="padding:0.35rem 0.8rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Create account</button>
+    <span id="im-auth-msg" style="color:#991b1b;"></span>
+  </div>
+  <div id="im-auth-signedin" style="display:none;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span id="im-who" style="font-weight:600;"></span>
+    <span id="im-access-badge"></span>
+    <button id="im-signout-btn" onclick="imDoSignOut()" style="padding:0.3rem 0.7rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign out</button>
+  </div>
+</div>
 
 <main>
 
@@ -167,7 +204,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <p class="sb-subtitle">Fill a real basket under a real budget and hunt the utility maximum with your own hands; watch the budget line and indifference curves find each other; then do what the whole chapter was building toward &mdash; construct a demand curve out of nothing but choices.</p>
 <hr class="sb-divider">
 
-<p>Chapter 8 answers the question the earlier chapters postponed: <em>where does the demand curve come from?</em> The answer is built in three moves &mdash; a budget that limits, satisfaction that diminishes, and a rule that balances the last dollar &mdash; and this sandbox makes you perform each one. Station 1 is the chapter's opening problem with the training wheels off. Stations 2 and 3 run the smooth geometry of budget lines and indifference curves. Station 4 is the <strong>Basket Check</strong>, the graded game whose record saves for reporting back.</p>
+<p>Chapter 8 answers the question the earlier chapters postponed: <em>where does the demand curve come from?</em> The answer is built in three moves &mdash; a budget that limits, satisfaction that diminishes, and a rule that balances the last dollar &mdash; and this sandbox makes you perform each one. Station 1 is the chapter's opening problem with the training wheels off. Stations 2 and 3 run the smooth geometry of budget lines and indifference curves. Station 4 is the <strong>Basket Check</strong>, the graded game. Practice as much as you like; the Graded run records to your gradebook.</p>
 
 <!-- ═══ STATION 1: FILL THE BASKET ═══ -->
 <h2 class="sb-section"><span class="sb-step">1</span>Fill the basket</h2>
@@ -285,23 +322,30 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <div class="sb-panel">
   <div class="sb-panel-label">&#9881; Diagnose the basket</div>
   <h4>One look at the margins, one verdict</h4>
-  <div class="sb-case" id="bc-story">Press <strong>New basket</strong> to inspect the first one.</div>
-  <div class="sb-diag-grid">
+  <div id="bc-mode-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;padding-bottom:0.75rem;border-bottom:1px solid var(--rule);">
+    <span style="font-size:0.8rem;color:var(--ink-muted);">Mode:</span>
+    <button class="btn-sb btn-sb-ghost" id="bc-mode-practice" onclick="bcSetMode('practice')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Practice (unlimited, ungraded)</button>
+    <button class="btn-sb btn-sb-primary" id="bc-mode-graded" onclick="bcSetMode('graded')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Graded run</button>
+  </div>
+  <div id="aa-panel" style="margin-bottom:0.75rem;"></div>
+  <div class="sb-case" id="bc-story">Choose a mode above. <strong>Practice</strong> is unlimited and ungraded; the <strong>Graded run</strong> is 14 items and counts toward your grade.</div>
+  <div class="sb-diag-grid" id="bc-diag-grid">
     <button class="sb-diag-btn" id="bc-X" onclick="basketCheck('X')">Shift spending toward the <strong>first</strong> good</button>
     <button class="sb-diag-btn" id="bc-Y" onclick="basketCheck('Y')">Shift spending toward the <strong>second</strong> good</button>
     <button class="sb-diag-btn" id="bc-OPT" onclick="basketCheck('OPT')">Nothing &mdash; this basket is optimal</button>
     <button class="sb-diag-btn" id="bc-SPEND" onclick="basketCheck('SPEND')">Spend the unspent money first</button>
   </div>
+  <div class="sb-diag-grid" id="bc-concept" style="display:none;grid-template-columns:1fr;"></div>
   <div class="sb-readout" id="bc-readout">The basket awaits inspection.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
-    <button class="btn-sb btn-sb-primary" onclick="newBasketCase()">New basket</button>
+    <button class="btn-sb btn-sb-primary" id="bc-newcase" onclick="newBasketCase()">New basket</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetBasketScore()">Reset my record</button>
   </div>
 </div>
 
 <!-- ═══ RESULTS ═══ -->
-<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
-<p>Your Basket Check record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, run more baskets, always asking the two questions in order &mdash; is the budget spent? are the per-dollar margins equal?</p>
+<h2 class="sb-section"><span class="sb-step">5</span>Your practice record</h2>
+<p>These numbers track your <strong>Practice</strong> attempts on this device only &mdash; they’re for your own feedback and don’t affect your grade. Your <strong>Graded run</strong> records automatically to the gradebook when you’re signed in. Below 80%, run more baskets, always asking the two questions in order &mdash; is the budget spent? are the per-dollar margins equal?</p>
 
 <div class="sb-stat-row">
   <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">baskets inspected</div></div>
@@ -658,8 +702,39 @@ var BC_CASES = [
     why: "Equal margins are not enough: the unspent fifth buys nothing at all. Spending it on either good (or both) strictly beats leaving it idle." }
 ];
 
+// Concept questions (cases 12-13): the equimarginal rule (per-dollar, not per-
+// unit or total) and the spend-first ordering (idle money buys zero). Keys 12=C, 13=A.
+var BC_CONCEPT = [
+  { case_index: 12,
+    q: "The consumer optimum is described as the point where the 'last dollar spent on each good yields equal utility.' Why compare utility PER DOLLAR rather than the total utility each good provides?",
+    opts: [
+      { code: "A", text: "Total utility can't be measured, but per-dollar utility can" },
+      { code: "B", text: "Goods always cost the same, so the two comparisons are identical" },
+      { code: "C", text: "Because goods have different prices: a dollar is the common unit, so equalizing utility per dollar \u2014 not per unit \u2014 is what guarantees no reallocation can raise total utility" },
+      { code: "D", text: "Per-dollar utility is just a simpler name for marginal utility" }
+    ] },
+  { case_index: 13,
+    q: "Two goods already have equal per-dollar marginal utility, but part of the budget sits unspent. Why is this basket NOT yet optimal, even though the margins are equal?",
+    opts: [
+      { code: "A", text: "Idle money yields zero utility while another unit of either good yields positive utility, so spending the leftover strictly raises total utility \u2014 the budget must be fully spent before equal margins mean anything" },
+      { code: "B", text: "Equal margins are never optimal; the margins must be unequal" },
+      { code: "C", text: "The consumer should save the unspent money instead" },
+      { code: "D", text: "The basket IS optimal; unspent money doesn't matter once margins are equal" }
+    ] }
+];
+function bcConceptByIndex(ci) {
+  for (var i = 0; i < BC_CONCEPT.length; i++) { if (BC_CONCEPT[i].case_index === ci) { return BC_CONCEPT[i]; } }
+  return null;
+}
+
 var BC = { attempted: 0, correct: 0, streak: 0, best: 0 };
 var currentBc = null;
+var currentBcIndex = -1;
+var bcMode = "practice";
+var bcHasAccess = false;
+var bcGradedOrder = [];
+var bcGradedPos = 0;
+function bcShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var bcAnswered = true;
 
 function loadBc() {
@@ -714,8 +789,162 @@ function setBcButtons(disabled) {
   }
 }
 
+function bcShowConcept(on) {
+  var grid = document.getElementById("bc-diag-grid");
+  var box = document.getElementById("bc-concept");
+  if (grid) { grid.style.display = on ? "none" : ""; }
+  if (box) { box.style.display = on ? "" : "none"; }
+}
+function bcSetMode(mode) {
+  bcMode = mode;
+  var bp = document.getElementById("bc-mode-practice");
+  var bg = document.getElementById("bc-mode-graded");
+  if (bp) { bp.className = "btn-sb " + (mode === "practice" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  if (bg) { bg.className = "btn-sb " + (mode === "graded" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  var story = document.getElementById("bc-story");
+  var nb = document.getElementById("bc-newcase");
+  if (mode === "graded") {
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.init({
+        slug: "choice-sandbox",
+        caseCount: Math.min(12, BC_CASES.length) + BC_CONCEPT.length,
+        mount: "aa-panel",
+        onStartAttempt: function (info) {
+          var cl = bcShuffle(BC_CASES.length).slice(0, Math.min(12, BC_CASES.length));
+          var co = [];
+          for (var ci = 0; ci < BC_CONCEPT.length; ci++) { co.push(BC_CONCEPT[ci].case_index); }
+          bcGradedOrder = cl.concat(co);
+          bcGradedPos = 0;
+          bcDealGradedCase();
+        },
+        onAttemptEnd: function (info) {
+          bcShowConcept(false);
+          setBcButtons(true);
+          var st = document.getElementById("bc-story");
+          if (st) { st.innerHTML = "Attempt complete. See the panel above for your score and options."; }
+          var nb2 = document.getElementById("bc-newcase");
+          if (nb2) { nb2.style.display = "none"; }
+        }
+      });
+    }
+    if (nb) { nb.textContent = "Start graded run"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll work through 14 items \u2014 12 basket diagnoses plus 2 concept questions. You have two attempts and the second is optional \u2014 if you take it, your grade is the average of both."; }
+    setBcButtons(true);
+    bcGradedOrder = [];
+    bcGradedPos = 0;
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.render();
+      if (ArenaAttempts.isLocked()) {
+        if (nb) { nb.style.display = "none"; }
+        if (story) { story.innerHTML = "You\u2019ve already used both graded attempts for this arena (from a previous session). See your score in the panel above. Use <strong>Reset my record</strong> to retake if your instructor allows."; }
+      }
+    }
+  } else {
+    if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }
+    var panel = document.getElementById("aa-panel");
+    if (panel) { panel.innerHTML = ""; }
+    bcShowConcept(false);
+    if (nb) { nb.textContent = "New basket"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Practice mode.</strong> Unlimited baskets, ungraded. Press <strong>New basket</strong> to begin."; }
+    setBcButtons(true);
+  }
+}
+function bcDealGradedCase() {
+  if (bcGradedPos >= bcGradedOrder.length) { return; }
+  currentBcIndex = bcGradedOrder[bcGradedPos];
+  bcGradedPos += 1;
+  bcAnswered = false;
+  var nb = document.getElementById("bc-newcase");
+  if (nb) { nb.style.display = "none"; }
+  if (currentBcIndex >= 12) {
+    bcRenderConcept(bcConceptByIndex(currentBcIndex));
+  } else {
+    bcShowConcept(false);
+    currentBc = BC_CASES[currentBcIndex];
+    setBcButtons(false);
+    var story = document.getElementById("bc-story");
+    if (story) { story.innerHTML = "<strong>The basket:</strong> " + currentBc.story; }
+    var out = document.getElementById("bc-readout");
+    if (out) { out.innerHTML = "The basket awaits inspection."; }
+  }
+}
+function bcRenderConcept(cq) {
+  if (!cq) { return; }
+  bcShowConcept(true);
+  var story = document.getElementById("bc-story");
+  if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
+  var box = document.getElementById("bc-concept");
+  if (box) {
+    var html = "", i;
+    for (i = 0; i < cq.opts.length; i++) {
+      html += '<button class="sb-diag-btn" onclick="bcConceptVerdict(\'' + cq.opts[i].code + '\')">' + cq.opts[i].code + ". " + cq.opts[i].text + "</button>";
+    }
+    box.innerHTML = html;
+  }
+  var out = document.getElementById("bc-readout");
+  if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function bcConceptVerdict(code) {
+  if (bcAnswered) { return; }
+  if (bcMode !== "graded") { return; }
+  bcAnswered = true;
+  var box = document.getElementById("bc-concept");
+  if (box) { var bs = box.getElementsByTagName("button"); for (var i = 0; i < bs.length; i++) { bs[i].disabled = true; } }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("choice-sandbox", currentBcIndex, code, function (res) {
+      if (res && res.needEnroll) {
+        bcAnswered = false;
+        if (box) { var b2 = box.getElementsByTagName("button"); for (var j = 0; j < b2.length; j++) { b2[j].disabled = false; } }
+        var o = document.getElementById("bc-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        var out = document.getElementById("bc-readout");
+        if (out) { out.innerHTML = res.correct ? "<strong>Correct.</strong> Recorded." : "<strong>Not quite.</strong> Recorded \u2014 revisit this idea in Practice mode."; }
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setTimeout(function () { bcDealGradedCase(); }, 1600); }
+        }
+      } else {
+        bcAnswered = false;
+        if (box) { var b3 = box.getElementsByTagName("button"); for (var k = 0; k < b3.length; k++) { b3[k].disabled = false; } }
+        var o3 = document.getElementById("bc-readout");
+        if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    });
+  } else {
+    bcAnswered = false;
+    var o4 = document.getElementById("bc-readout");
+    if (o4) { o4.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in."; }
+  }
+}
 function newBasketCase() {
-  currentBc = BC_CASES[Math.floor(Math.random() * BC_CASES.length)];
+  if (bcMode === "graded") {
+    try {
+      if (typeof ArenaAttempts === "undefined") { return; }
+      if (!bcHasAccess) {
+        var story0 = document.getElementById("bc-story");
+        if (story0) { story0.innerHTML = "<strong>Graded run is for enrolled students.</strong> This account isn't enrolled, so answers won't record and the run can't be scored. To preview the questions, switch to <strong>Practice</strong> mode above."; }
+        var out0 = document.getElementById("bc-readout");
+        if (out0) { out0.innerHTML = ""; }
+        return;
+      }
+      if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+        var lo = document.getElementById("bc-readout");
+        if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
+        return;
+      }
+      if (!(ArenaAttempts.isAttemptActive && ArenaAttempts.isAttemptActive())) {
+        ArenaAttempts.startAttempt(true);
+      } else {
+        bcDealGradedCase();
+      }
+    } catch (err) { try { console.error("GRADED bc:", err); } catch (e) {} }
+    return;
+  }
+  currentBcIndex = Math.floor(Math.random() * BC_CASES.length);
+  currentBc = BC_CASES[currentBcIndex];
   bcAnswered = false;
   setBcButtons(false);
   var story = document.getElementById("bc-story");
@@ -724,36 +953,61 @@ function newBasketCase() {
   if (out) { out.innerHTML = "The basket awaits inspection."; }
 }
 
-function basketCheck(choice) {
-  if (!currentBc || bcAnswered) { return; }
-  bcAnswered = true;
-  setBcButtons(true);
+function bcLocalVerdict(choice) {
   var correct = choice === currentBc.key;
   var btnChosen = document.getElementById("bc-" + choice);
   var btnRight = document.getElementById("bc-" + currentBc.key);
   if (btnRight) { btnRight.classList.add("correct"); }
   if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
-
-  BC.attempted += 1;
-  if (correct) {
-    BC.correct += 1;
-    BC.streak += 1;
-    if (BC.streak > BC.best) { BC.best = BC.streak; }
-  } else {
-    BC.streak = 0;
-  }
-  saveBc();
-  renderBcStats();
-
   var out = document.getElementById("bc-readout");
   if (out) {
+    var tail = (bcMode === "graded") ? "" : " Press <strong>New basket</strong> for another.";
     if (correct) {
-      out.innerHTML = "<strong>Correct</strong> — " + BC_NAMES[currentBc.key] + ". " + currentBc.why +
-        " Streak: <strong>" + BC.streak + "</strong>. Press <strong>New basket</strong> for another.";
+      out.innerHTML = "<strong>Correct</strong> — " + BC_NAMES[currentBc.key] + ". " + currentBc.why + tail;
     } else {
       out.innerHTML = "<strong>Not this one.</strong> The right move: " + BC_NAMES[currentBc.key] + ". " + currentBc.why +
-        " Two questions, in order: budget spent? margins equal? Take the next basket.";
+        " Two questions, in order: budget spent? margins equal?" + tail;
     }
+  }
+  return correct;
+}
+function basketCheck(choice) {
+  if (!currentBc || bcAnswered) { return; }
+  bcAnswered = true;
+  setBcButtons(true);
+  if (bcMode !== "graded") {
+    var c = bcLocalVerdict(choice);
+    BC.attempted += 1;
+    if (c) { BC.correct += 1; BC.streak += 1; if (BC.streak > BC.best) { BC.best = BC.streak; } }
+    else { BC.streak = 0; }
+    saveBc();
+    renderBcStats();
+    return;
+  }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("choice-sandbox", currentBcIndex, choice, function (res) {
+      if (res && res.needEnroll) {
+        bcAnswered = false; setBcButtons(false);
+        var o = document.getElementById("bc-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        bcLocalVerdict(choice);
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setBcButtons(true); setTimeout(function () { bcDealGradedCase(); }, 1500); }
+        }
+      } else {
+        bcAnswered = false; setBcButtons(false);
+        var o2 = document.getElementById("bc-readout");
+        if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    });
+  } else {
+    bcAnswered = false; setBcButtons(false);
+    var o3 = document.getElementById("bc-readout");
+    if (o3) { o3.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in. Switch to Practice to explore."; }
   }
 }
 
@@ -764,17 +1018,95 @@ function resetBasketScore() {
   BC.best = 0;
   saveBc();
   renderBcStats();
+  if (bcMode === "graded" && typeof ArenaAttempts !== "undefined" && ArenaAttempts.resetLocal) {
+    ArenaAttempts.resetLocal();
+    var nbr = document.getElementById("bc-newcase");
+    if (nbr) { nbr.style.display = ""; nbr.textContent = "Start graded run"; }
+    var str = document.getElementById("bc-story");
+    if (str) { str.innerHTML = "Graded attempts reset. Press <strong>Start graded run</strong> to begin."; }
+    setBcButtons(true);
+    return;
+  }
   var out = document.getElementById("bc-readout");
   if (out) { out.innerHTML = "Record cleared. Press <strong>New basket</strong> to start fresh."; }
 }
 
 /* ══════════ Boot ══════════ */
+function imShowMsg(msg) { var el = document.getElementById("im-auth-msg"); if (el) { el.textContent = msg || ""; } }
+function imRenderAuth() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) { return; }
+  var bar = document.getElementById("im-authbar");
+  if (bar) {
+    bar.style.display = "block";
+    var mains = document.getElementsByTagName("main");
+    function setMainOffset() { if (mains && mains[0]) { var h = bar.offsetHeight || 52; mains[0].style.marginTop = (60 + h + 8) + "px"; } }
+    setMainOffset();
+    setTimeout(setMainOffset, 300);
+    if (window.addEventListener) { window.addEventListener("resize", setMainOffset); }
+  }
+  IMBackend.getSession(function (session) {
+    var out = document.getElementById("im-auth-signedout");
+    var inn = document.getElementById("im-auth-signedin");
+    if (session && session.user) {
+      try { console.log("%carena: SIGNED IN as " + (session.user.email || session.user.id) + " -- grades WILL record", "color:#166534;font-weight:bold"); } catch (e) {}
+      if (out) { out.style.display = "none"; }
+      if (inn) { inn.style.display = "flex"; }
+      var who = document.getElementById("im-who");
+      if (who) { who.textContent = session.user.email || "signed in"; }
+      IMBackend.checkAccess(function (ok) {
+        try { console.log("%carena: access check = " + ok, ok ? "color:#166534" : "color:#991b1b;font-weight:bold"); } catch (e) {}
+        bcHasAccess = !!ok;
+        var b = document.getElementById("im-access-badge");
+        if (b) {
+          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
+          else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
+        }
+        var ctas = document.getElementsByClassName("sb-cta");
+        var ci;
+        for (ci = 0; ci < ctas.length; ci++) { ctas[ci].style.display = ok ? "none" : ""; }
+      });
+    } else {
+      try { console.warn("arena: SIGNED OUT -- not logged in ON THIS PAGE, so plays will NOT record. Use the sign-in bar at the top."); } catch (e) {}
+      if (out) { out.style.display = "flex"; }
+      if (inn) { inn.style.display = "none"; }
+    }
+  });
+}
+function imDoSignIn() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signIn(e.value, p.value, function (res) { if (res && res.ok) { imRenderAuth(); } else { imShowMsg(res && res.error ? res.error : "Sign-in failed."); } });
+}
+function imDoSignUp() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signUp(e.value, p.value, null, function (res) {
+    if (res && res.ok) { imShowMsg(res.needsConfirm ? "Account created \u2014 check your email to confirm, then sign in." : "Account created \u2014 you can sign in now."); }
+    else { imShowMsg(res && res.error ? res.error : "Sign-up failed."); }
+  });
+}
+function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
+
+var CHOICE_ARENA_BUILD = "choice-2026-08-concept+mobile-v1";
 function boot() {
+  try { console.log("%cchoice-sandbox build: " + CHOICE_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
+  try {
+    var stamp = document.createElement("div");
+    stamp.textContent = "build " + CHOICE_ARENA_BUILD;
+    stamp.style.cssText = "position:fixed;bottom:4px;right:6px;z-index:9999;font:11px monospace;color:#94a3b8;background:rgba(255,255,255,0.8);padding:1px 5px;border-radius:4px;pointer-events:none;";
+    document.body.appendChild(stamp);
+  } catch (e) {}
+  if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadBc();
   renderBcStats();
   updateBasket();
   initBl();
   initDd();
+  imRenderAuth();
 }
 
 if (document.readyState === "loading") {
