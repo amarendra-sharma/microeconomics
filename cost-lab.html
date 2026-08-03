@@ -7,6 +7,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
+<script src="sa-progress.js"></script>
+<script src="arena-attempts.js"></script>
 
 <style>
 :root {
@@ -123,7 +127,23 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); 
 footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
 
 @media (max-width: 640px) {
-  main { padding: 2rem 1.1rem 3rem; }
+  main { padding: 2rem 1.1rem 3rem; 
+  #im-authbar { padding: 0.6rem 1rem; }
+  #im-auth-signedout { flex-direction: column; align-items: stretch !important; gap: 0.4rem !important; }
+  #im-auth-signedout input, #im-auth-signedout button { width: 100%; box-sizing: border-box; }
+}
+#im-email, #im-pass { font-size: 16px !important; min-height: 40px; }
+#im-authbar button { min-height: 40px; }
+.aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
+.aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
+.aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
+.aa-card .aa-scores, .aa-card .aa-final { font-size: 0.9rem; margin: 0.35rem 0; }
+.aa-card.aa-done { border-color: var(--gold, #b87408); background: var(--gold-lt, #fdf6ec); }
+.aa-card.aa-between { border-color: var(--accent, #0f3d9e); }
+.aa-actions { margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.aa-btn { font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--rule); cursor: pointer; background: var(--bg-card); }
+.aa-btn-primary { background: var(--accent, #0f3d9e); color: #fff; border-color: var(--accent, #0f3d9e); }
+.aa-btn-ghost { background: transparent; }
   h1.sb-title { font-size: 2rem; }
   .sb-diag-grid { grid-template-columns: 1fr; }
 }
@@ -136,8 +156,25 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Cost Curve Lab</div>
   <span class="sb-course-tag">Course Arena</span>
   <div class="sb-spacer"></div>
-  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+  <a class="sb-header-btn" href="index.html" style="margin-right:0.4rem;">&larr; Portal</a>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">Textbook</a>
 </header>
+
+<div id="im-authbar" style="display:none;position:fixed;top:60px;left:0;right:0;z-index:150;background:#f5f0e8;border-bottom:1px solid #e2e8f0;padding:0.5rem 1.5rem;font-family:'Inter',system-ui,sans-serif;font-size:0.8125rem;color:#334155;">
+  <div id="im-auth-signedout" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-weight:600;">Intro Micro account:</span>
+    <input id="im-email" type="email" placeholder="email" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <input id="im-pass" type="password" placeholder="password" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <button id="im-signin-btn" onclick="imDoSignIn()" style="padding:0.35rem 0.8rem;border:none;border-radius:6px;background:#0f3d9e;color:#fff;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign in</button>
+    <button id="im-signup-btn" onclick="imDoSignUp()" style="padding:0.35rem 0.8rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Create account</button>
+    <span id="im-auth-msg" style="color:#991b1b;"></span>
+  </div>
+  <div id="im-auth-signedin" style="display:none;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span id="im-who" style="font-weight:600;"></span>
+    <span id="im-access-badge"></span>
+    <button id="im-signout-btn" onclick="imDoSignOut()" style="padding:0.3rem 0.7rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign out</button>
+  </div>
+</div>
 
 <main>
 
@@ -146,7 +183,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <p class="sb-subtitle">Watch cost curves get <em>manufactured</em> &mdash; from workers' shrinking marginal product, through the full U-shaped anatomy, to an experiment the chapter can only describe: shock the rent and see which curves flinch. Then prove you can tell the four curves apart blindfolded.</p>
 <hr class="sb-divider">
 
-<p>Chapter 9 makes one claim above all: cost curves are not drawn, they are <em>produced</em> &mdash; every dollar figure downstream of a production fact. This lab runs Mara's cart on the chapter's exact numbers: the worker schedule where marginal product rises through the third hire and then diminishes, and the smooth cost family <code>TC = 48 + 3.6q &minus; 0.12q&sup2; + 0.006q&sup3;</code> whose AVC bottoms at <strong>$3 at 10 cups</strong> and ATC at <strong>$6 at 20 cups</strong>. Station 4's identification record saves for reporting back.</p>
+<p>Chapter 9 makes one claim above all: cost curves are not drawn, they are <em>produced</em> &mdash; every dollar figure downstream of a production fact. This lab runs Mara's cart on the chapter's exact numbers: the worker schedule where marginal product rises through the third hire and then diminishes, and the smooth cost family <code>TC = 48 + 3.6q &minus; 0.12q&sup2; + 0.006q&sup3;</code> whose AVC bottoms at <strong>$3 at 10 cups</strong> and ATC at <strong>$6 at 20 cups</strong>. Practice as much as you like; the Graded run records to your gradebook.</p>
 
 <!-- ═══ STATION 1: THE MIRROR ═══ -->
 <h2 class="sb-section"><span class="sb-step">1</span>The productivity&ndash;cost mirror</h2>
@@ -224,23 +261,30 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <div class="sb-panel">
   <div class="sb-panel-label">&#9881; The lineup</div>
   <h4>Four suspects: AFC, AVC, ATC, MC</h4>
-  <div class="sb-case" id="cd-story">Press <strong>New clue</strong> to hear the first one.</div>
-  <div class="sb-diag-grid">
+  <div id="cd-mode-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;padding-bottom:0.75rem;border-bottom:1px solid var(--rule);">
+    <span style="font-size:0.8rem;color:var(--ink-muted);">Mode:</span>
+    <button class="btn-sb btn-sb-ghost" id="cd-mode-practice" onclick="cdSetMode('practice')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Practice (unlimited, ungraded)</button>
+    <button class="btn-sb btn-sb-primary" id="cd-mode-graded" onclick="cdSetMode('graded')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Graded run</button>
+  </div>
+  <div id="aa-panel" style="margin-bottom:0.75rem;"></div>
+  <div class="sb-case" id="cd-story">Choose a mode above. <strong>Practice</strong> is unlimited and ungraded; the <strong>Graded run</strong> is 14 items and counts toward your grade.</div>
+  <div class="sb-diag-grid" id="cd-diag-grid">
     <button class="sb-diag-btn" id="cd-AFC" onclick="curveGuess('AFC')">AFC &mdash; average fixed cost</button>
     <button class="sb-diag-btn" id="cd-AVC" onclick="curveGuess('AVC')">AVC &mdash; average variable cost</button>
     <button class="sb-diag-btn" id="cd-ATC" onclick="curveGuess('ATC')">ATC &mdash; average total cost</button>
     <button class="sb-diag-btn" id="cd-MC" onclick="curveGuess('MC')">MC &mdash; marginal cost</button>
   </div>
+  <div class="sb-diag-grid" id="cd-concept" style="display:none;grid-template-columns:1fr;"></div>
   <div class="sb-readout" id="cd-readout">The lineup awaits your identification.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
-    <button class="btn-sb btn-sb-primary" onclick="newClue()">New clue</button>
+    <button class="btn-sb btn-sb-primary" id="cd-newcase" onclick="newClue()">New clue</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetCurveScore()">Reset my record</button>
   </div>
 </div>
 
 <!-- ═══ RESULTS ═══ -->
-<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
-<p>Your identification record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, revisit Station 2 with the cursor and watch each curve's signature behavior until the clues feel obvious.</p>
+<h2 class="sb-section"><span class="sb-step">5</span>Your practice record</h2>
+<p>These numbers track your <strong>Practice</strong> attempts on this device only &mdash; they’re for your own feedback and don’t affect your grade. Your <strong>Graded run</strong> records automatically to the gradebook when you’re signed in. Below 80%, revisit Station 2 with the cursor and watch each curve’s signature behavior until the clues feel obvious.</p>
 
 <div class="sb-stat-row">
   <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">clues heard</div></div>
@@ -534,8 +578,39 @@ var CD_CASES = [
     why: "Profit compares price with ATC; but the shutdown call compares price with AVC, so a firm can lose money yet keep operating." }
 ];
 
+// Concept questions (cases 12-13): the marginal-average (GPA) rule, and the
+// shutdown-vs-break-even distinction (AVC vs ATC). Keys 12=A, 13=D.
+var CD_CONCEPT = [
+  { case_index: 12,
+    q: "Marginal cost cuts through both the AVC and ATC curves at exactly their lowest points. What general principle forces this?",
+    opts: [
+      { code: "A", text: "Whenever the marginal value is below an average it pulls the average down, and above it pulls it up; so marginal must equal the average precisely where the average stops falling and starts rising" },
+      { code: "B", text: "Marginal cost is always the smallest of the cost curves" },
+      { code: "C", text: "It is a coincidence of the specific numbers in this cost family" },
+      { code: "D", text: "Averages always reach their minimum where fixed cost hits zero" }
+    ] },
+  { case_index: 13,
+    q: "A coffee cart is losing money at the current price, yet an economist advises it to keep operating in the short run. How can staying open be correct while losing money?",
+    opts: [
+      { code: "A", text: "It cannot; any loss means the firm should shut down immediately" },
+      { code: "B", text: "Losses are always temporary, so the firm should ignore them" },
+      { code: "C", text: "The firm should keep operating only if price exceeds average TOTAL cost" },
+      { code: "D", text: "Shutdown depends on price versus average VARIABLE cost, not total cost: if price covers AVC it beats losing all the fixed cost by closing, even while total cost isn't fully covered" }
+    ] }
+];
+function cdConceptByIndex(ci) {
+  for (var i = 0; i < CD_CONCEPT.length; i++) { if (CD_CONCEPT[i].case_index === ci) { return CD_CONCEPT[i]; } }
+  return null;
+}
+
 var CD = { attempted: 0, correct: 0, streak: 0, best: 0 };
 var currentCd = null;
+var currentCdIndex = -1;
+var cdMode = "practice";
+var cdHasAccess = false;
+var cdGradedOrder = [];
+var cdGradedPos = 0;
+function cdShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var cdAnswered = true;
 
 function loadCd() {
@@ -584,8 +659,162 @@ function setCdButtons(disabled) {
   }
 }
 
+function cdShowConcept(on) {
+  var grid = document.getElementById("cd-diag-grid");
+  var box = document.getElementById("cd-concept");
+  if (grid) { grid.style.display = on ? "none" : ""; }
+  if (box) { box.style.display = on ? "" : "none"; }
+}
+function cdSetMode(mode) {
+  cdMode = mode;
+  var bp = document.getElementById("cd-mode-practice");
+  var bg = document.getElementById("cd-mode-graded");
+  if (bp) { bp.className = "btn-sb " + (mode === "practice" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  if (bg) { bg.className = "btn-sb " + (mode === "graded" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  var story = document.getElementById("cd-story");
+  var nb = document.getElementById("cd-newcase");
+  if (mode === "graded") {
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.init({
+        slug: "cost-lab",
+        caseCount: Math.min(12, CD_CASES.length) + CD_CONCEPT.length,
+        mount: "aa-panel",
+        onStartAttempt: function (info) {
+          var cl = cdShuffle(CD_CASES.length).slice(0, Math.min(12, CD_CASES.length));
+          var co = [];
+          for (var ci = 0; ci < CD_CONCEPT.length; ci++) { co.push(CD_CONCEPT[ci].case_index); }
+          cdGradedOrder = cl.concat(co);
+          cdGradedPos = 0;
+          cdDealGradedCase();
+        },
+        onAttemptEnd: function (info) {
+          cdShowConcept(false);
+          setCdButtons(true);
+          var st = document.getElementById("cd-story");
+          if (st) { st.innerHTML = "Attempt complete. See the panel above for your score and options."; }
+          var nb2 = document.getElementById("cd-newcase");
+          if (nb2) { nb2.style.display = "none"; }
+        }
+      });
+    }
+    if (nb) { nb.textContent = "Start graded run"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll work through 14 items \u2014 12 curve identifications plus 2 concept questions. You have two attempts and the second is optional \u2014 if you take it, your grade is the average of both."; }
+    setCdButtons(true);
+    cdGradedOrder = [];
+    cdGradedPos = 0;
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.render();
+      if (ArenaAttempts.isLocked()) {
+        if (nb) { nb.style.display = "none"; }
+        if (story) { story.innerHTML = "You\u2019ve already used both graded attempts for this arena (from a previous session). See your score in the panel above. Use <strong>Reset my record</strong> to retake if your instructor allows."; }
+      }
+    }
+  } else {
+    if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }
+    var panel = document.getElementById("aa-panel");
+    if (panel) { panel.innerHTML = ""; }
+    cdShowConcept(false);
+    if (nb) { nb.textContent = "New clue"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Practice mode.</strong> Unlimited clues, ungraded. Press <strong>New clue</strong> to begin."; }
+    setCdButtons(true);
+  }
+}
+function cdDealGradedCase() {
+  if (cdGradedPos >= cdGradedOrder.length) { return; }
+  currentCdIndex = cdGradedOrder[cdGradedPos];
+  cdGradedPos += 1;
+  cdAnswered = false;
+  var nb = document.getElementById("cd-newcase");
+  if (nb) { nb.style.display = "none"; }
+  if (currentCdIndex >= 12) {
+    cdRenderConcept(cdConceptByIndex(currentCdIndex));
+  } else {
+    cdShowConcept(false);
+    currentCd = CD_CASES[currentCdIndex];
+    setCdButtons(false);
+    var story = document.getElementById("cd-story");
+    if (story) { story.innerHTML = "<strong>The curve speaks:</strong> \u201C" + currentCd.clue + "\u201D"; }
+    var out = document.getElementById("cd-readout");
+    if (out) { out.innerHTML = "The lineup awaits your identification."; }
+  }
+}
+function cdRenderConcept(cq) {
+  if (!cq) { return; }
+  cdShowConcept(true);
+  var story = document.getElementById("cd-story");
+  if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
+  var box = document.getElementById("cd-concept");
+  if (box) {
+    var html = "", i;
+    for (i = 0; i < cq.opts.length; i++) {
+      html += '<button class="sb-diag-btn" onclick="cdConceptVerdict(\'' + cq.opts[i].code + '\')">' + cq.opts[i].code + ". " + cq.opts[i].text + "</button>";
+    }
+    box.innerHTML = html;
+  }
+  var out = document.getElementById("cd-readout");
+  if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function cdConceptVerdict(code) {
+  if (cdAnswered) { return; }
+  if (cdMode !== "graded") { return; }
+  cdAnswered = true;
+  var box = document.getElementById("cd-concept");
+  if (box) { var bs = box.getElementsByTagName("button"); for (var i = 0; i < bs.length; i++) { bs[i].disabled = true; } }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("cost-lab", currentCdIndex, code, function (res) {
+      if (res && res.needEnroll) {
+        cdAnswered = false;
+        if (box) { var b2 = box.getElementsByTagName("button"); for (var j = 0; j < b2.length; j++) { b2[j].disabled = false; } }
+        var o = document.getElementById("cd-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        var out = document.getElementById("cd-readout");
+        if (out) { out.innerHTML = res.correct ? "<strong>Correct.</strong> Recorded." : "<strong>Not quite.</strong> Recorded \u2014 revisit this idea in Practice mode."; }
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setTimeout(function () { cdDealGradedCase(); }, 1600); }
+        }
+      } else {
+        cdAnswered = false;
+        if (box) { var b3 = box.getElementsByTagName("button"); for (var k = 0; k < b3.length; k++) { b3[k].disabled = false; } }
+        var o3 = document.getElementById("cd-readout");
+        if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    });
+  } else {
+    cdAnswered = false;
+    var o4 = document.getElementById("cd-readout");
+    if (o4) { o4.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in."; }
+  }
+}
 function newClue() {
-  currentCd = CD_CASES[Math.floor(Math.random() * CD_CASES.length)];
+  if (cdMode === "graded") {
+    try {
+      if (typeof ArenaAttempts === "undefined") { return; }
+      if (!cdHasAccess) {
+        var story0 = document.getElementById("cd-story");
+        if (story0) { story0.innerHTML = "<strong>Graded run is for enrolled students.</strong> This account isn't enrolled, so answers won't record and the run can't be scored. To preview the questions, switch to <strong>Practice</strong> mode above."; }
+        var out0 = document.getElementById("cd-readout");
+        if (out0) { out0.innerHTML = ""; }
+        return;
+      }
+      if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+        var lo = document.getElementById("cd-readout");
+        if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
+        return;
+      }
+      if (!(ArenaAttempts.isAttemptActive && ArenaAttempts.isAttemptActive())) {
+        ArenaAttempts.startAttempt(true);
+      } else {
+        cdDealGradedCase();
+      }
+    } catch (err) { try { console.error("GRADED cd:", err); } catch (e) {} }
+    return;
+  }
+  currentCdIndex = Math.floor(Math.random() * CD_CASES.length);
+  currentCd = CD_CASES[currentCdIndex];
   cdAnswered = false;
   setCdButtons(false);
   var story = document.getElementById("cd-story");
@@ -594,36 +823,60 @@ function newClue() {
   if (out) { out.innerHTML = "The lineup awaits your identification."; }
 }
 
-function curveGuess(choice) {
-  if (!currentCd || cdAnswered) { return; }
-  cdAnswered = true;
-  setCdButtons(true);
+function cdLocalVerdict(choice) {
   var correct = choice === currentCd.key;
   var btnChosen = document.getElementById("cd-" + choice);
   var btnRight = document.getElementById("cd-" + currentCd.key);
   if (btnRight) { btnRight.classList.add("correct"); }
   if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
-
-  CD.attempted += 1;
-  if (correct) {
-    CD.correct += 1;
-    CD.streak += 1;
-    if (CD.streak > CD.best) { CD.best = CD.streak; }
-  } else {
-    CD.streak = 0;
-  }
-  saveCd();
-  renderCdStats();
-
   var out = document.getElementById("cd-readout");
   if (out) {
+    var tail = (cdMode === "graded") ? "" : " Press <strong>New clue</strong> for another.";
     if (correct) {
-      out.innerHTML = "<strong>Identified</strong> — it was " + currentCd.key + ". " + currentCd.why +
-        " Streak: <strong>" + CD.streak + "</strong>. Press <strong>New clue</strong> for another.";
+      out.innerHTML = "<strong>Identified</strong> — it was " + currentCd.key + ". " + currentCd.why + tail;
     } else {
-      out.innerHTML = "<strong>Wrong suspect.</strong> That was " + currentCd.key + ". " + currentCd.why +
-        " Revisit the cursor in Station 2 if the signatures are blurring. Next clue when ready.";
+      out.innerHTML = "<strong>Wrong suspect.</strong> That was " + currentCd.key + ". " + currentCd.why + tail;
     }
+  }
+  return correct;
+}
+function curveGuess(choice) {
+  if (!currentCd || cdAnswered) { return; }
+  cdAnswered = true;
+  setCdButtons(true);
+  if (cdMode !== "graded") {
+    var c = cdLocalVerdict(choice);
+    CD.attempted += 1;
+    if (c) { CD.correct += 1; CD.streak += 1; if (CD.streak > CD.best) { CD.best = CD.streak; } }
+    else { CD.streak = 0; }
+    saveCd();
+    renderCdStats();
+    return;
+  }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("cost-lab", currentCdIndex, choice, function (res) {
+      if (res && res.needEnroll) {
+        cdAnswered = false; setCdButtons(false);
+        var o = document.getElementById("cd-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        cdLocalVerdict(choice);
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setCdButtons(true); setTimeout(function () { cdDealGradedCase(); }, 1500); }
+        }
+      } else {
+        cdAnswered = false; setCdButtons(false);
+        var o2 = document.getElementById("cd-readout");
+        if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    });
+  } else {
+    cdAnswered = false; setCdButtons(false);
+    var o3 = document.getElementById("cd-readout");
+    if (o3) { o3.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in. Switch to Practice to explore."; }
   }
 }
 
@@ -634,17 +887,95 @@ function resetCurveScore() {
   CD.best = 0;
   saveCd();
   renderCdStats();
+  if (cdMode === "graded" && typeof ArenaAttempts !== "undefined" && ArenaAttempts.resetLocal) {
+    ArenaAttempts.resetLocal();
+    var nbr = document.getElementById("cd-newcase");
+    if (nbr) { nbr.style.display = ""; nbr.textContent = "Start graded run"; }
+    var str = document.getElementById("cd-story");
+    if (str) { str.innerHTML = "Graded attempts reset. Press <strong>Start graded run</strong> to begin."; }
+    setCdButtons(true);
+    return;
+  }
   var out = document.getElementById("cd-readout");
   if (out) { out.innerHTML = "Record cleared. Press <strong>New clue</strong> to start fresh."; }
 }
 
 /* ══════════ Boot ══════════ */
+function imShowMsg(msg) { var el = document.getElementById("im-auth-msg"); if (el) { el.textContent = msg || ""; } }
+function imRenderAuth() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) { return; }
+  var bar = document.getElementById("im-authbar");
+  if (bar) {
+    bar.style.display = "block";
+    var mains = document.getElementsByTagName("main");
+    function setMainOffset() { if (mains && mains[0]) { var h = bar.offsetHeight || 52; mains[0].style.marginTop = (60 + h + 8) + "px"; } }
+    setMainOffset();
+    setTimeout(setMainOffset, 300);
+    if (window.addEventListener) { window.addEventListener("resize", setMainOffset); }
+  }
+  IMBackend.getSession(function (session) {
+    var out = document.getElementById("im-auth-signedout");
+    var inn = document.getElementById("im-auth-signedin");
+    if (session && session.user) {
+      try { console.log("%carena: SIGNED IN as " + (session.user.email || session.user.id) + " -- grades WILL record", "color:#166534;font-weight:bold"); } catch (e) {}
+      if (out) { out.style.display = "none"; }
+      if (inn) { inn.style.display = "flex"; }
+      var who = document.getElementById("im-who");
+      if (who) { who.textContent = session.user.email || "signed in"; }
+      IMBackend.checkAccess(function (ok) {
+        try { console.log("%carena: access check = " + ok, ok ? "color:#166534" : "color:#991b1b;font-weight:bold"); } catch (e) {}
+        cdHasAccess = !!ok;
+        var b = document.getElementById("im-access-badge");
+        if (b) {
+          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
+          else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
+        }
+        var ctas = document.getElementsByClassName("sb-cta");
+        var ci;
+        for (ci = 0; ci < ctas.length; ci++) { ctas[ci].style.display = ok ? "none" : ""; }
+      });
+    } else {
+      try { console.warn("arena: SIGNED OUT -- not logged in ON THIS PAGE, so plays will NOT record. Use the sign-in bar at the top."); } catch (e) {}
+      if (out) { out.style.display = "flex"; }
+      if (inn) { inn.style.display = "none"; }
+    }
+  });
+}
+function imDoSignIn() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signIn(e.value, p.value, function (res) { if (res && res.ok) { imRenderAuth(); } else { imShowMsg(res && res.error ? res.error : "Sign-in failed."); } });
+}
+function imDoSignUp() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signUp(e.value, p.value, null, function (res) {
+    if (res && res.ok) { imShowMsg(res.needsConfirm ? "Account created \u2014 check your email to confirm, then sign in." : "Account created \u2014 you can sign in now."); }
+    else { imShowMsg(res && res.error ? res.error : "Sign-up failed."); }
+  });
+}
+function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
+
+var COSTLAB_ARENA_BUILD = "cost-2026-08-concept+mobile-v1";
 function boot() {
+  try { console.log("%ccost-lab build: " + COSTLAB_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
+  try {
+    var stamp = document.createElement("div");
+    stamp.textContent = "build " + COSTLAB_ARENA_BUILD;
+    stamp.style.cssText = "position:fixed;bottom:4px;right:6px;z-index:9999;font:11px monospace;color:#94a3b8;background:rgba(255,255,255,0.8);padding:1px 5px;border-radius:4px;pointer-events:none;";
+    document.body.appendChild(stamp);
+  } catch (e) {}
+  if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadCd();
   renderCdStats();
   initPm();
   initCc();
   initFc();
+  imRenderAuth();
 }
 
 if (document.readyState === "loading") {
