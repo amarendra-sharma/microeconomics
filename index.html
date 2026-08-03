@@ -387,7 +387,11 @@
       <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="attemptsTbl"><thead><tr><th>Item</th><th>Chapter</th><th>Result</th><th>Points</th><th>When</th></tr></thead><tbody></tbody></table></div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:24px 0 12px;">
         <h3 style="font-size:22px;margin:0;">Arena results</h3>
-        <select id="arena-filter-pick" style="font-size:13px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);"><option value="__all">All arenas</option></select>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);">Filter by arena:
+          <select id="arena-filter-pick" style="font-size:13.5px;padding:8px 32px 8px 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-strong);color:var(--text-bright);font-family:inherit;min-width:200px;cursor:pointer;-webkit-appearance:none;-moz-appearance:none;appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%22M2 4l4 4 4-4%22 fill=%22none%22 stroke=%22%23D4D1E8%22 stroke-width=%221.5%22/></svg>');background-repeat:no-repeat;background-position:right 12px center;">
+            <option value="__all">All arenas</option>
+          </select>
+        </label>
       </div>
       <div id="arenaSummary"></div>
       <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="arenaTbl"><thead><tr><th>Arena</th><th>Result</th><th>When</th></tr></thead><tbody></tbody></table></div>
@@ -419,7 +423,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-arena-results-filter';
+var SA_BUILD = 'intro-micro-portal-2026-08-arena-filter-visible';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -5437,8 +5441,9 @@ function loadProgress() {
 
       // populate filter dropdown from arenas actually played
       if (pick) {
-        var opts = '<option value="__all">All arenas ('+rows.length+')</option>';
-        bd.forEach(function(a){ opts += '<option value="'+esc(a.slug)+'">'+esc(a.title)+' ('+a.total+')</option>'; });
+        var optStyle = ' style="background:#1a1730;color:#F0EEFA;"';
+        var opts = '<option value="__all"'+optStyle+'>All arenas ('+rows.length+')</option>';
+        bd.forEach(function(a){ opts += '<option value="'+esc(a.slug)+'"'+optStyle+'>'+esc(a.title)+' ('+a.total+')</option>'; });
         pick.innerHTML = opts;
       }
 
