@@ -122,8 +122,14 @@
   /* gradeCase: key-mode arenas. Posts {arena_slug, case_index, submitted} and
      returns via cb({ correct, correctCode, score }) or cb({ offline:true }) so
      the caller can fall back to its local key. */
-  function gradeCase(arenaSlug, caseIndex, submitted, cb) {
-    postGrade({ arena_slug: arenaSlug, case_index: caseIndex, submitted: submitted }, cb);
+  function gradeCase(arenaSlug, caseIndex, submitted, cb, attemptNo, review) {
+    var payload = { arena_slug: arenaSlug, case_index: caseIndex, submitted: submitted };
+    if (typeof attemptNo === "number" && attemptNo >= 1) { payload.attempt_no = attemptNo; }
+    if (review && typeof review === "object") {
+      if (review.prompt_text) { payload.prompt_text = review.prompt_text; }
+      if (review.labels) { payload.labels = review.labels; }
+    }
+    postGrade(payload, cb);
   }
 
   /* gradePerformance: profit-arena. Posts achieved vs round_max. */

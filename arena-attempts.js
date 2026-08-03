@@ -246,6 +246,8 @@
     render();
   }
 
+  function currentAttempt() { return S.attemptIndex >= 1 ? S.attemptIndex : 1; }
+
   global.ArenaAttempts = {
     init: init,
     caseAnswered: caseAnswered,
@@ -255,6 +257,7 @@
     isAttemptActive: isAttemptActive,
     casesLeft: casesLeft,
     attemptsTaken: attemptsTaken,
+    currentAttempt: currentAttempt,
     currentGrade: currentGrade,
     render: render,
     resetLocal: resetLocal

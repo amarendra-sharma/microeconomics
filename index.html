@@ -394,7 +394,7 @@
         </label>
       </div>
       <div id="arenaSummary"></div>
-      <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="arenaTbl"><thead><tr><th>Arena</th><th>Result</th><th>When</th></tr></thead><tbody></tbody></table></div>
+      <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="arenaTbl"><thead><tr><th>Arena</th><th>Result</th><th>When</th><th>Review</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     </div>
@@ -423,7 +423,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-arena-filter-visible';
+var SA_BUILD = 'intro-micro-portal-2026-08-arena-review';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3867,11 +3867,20 @@ function renderArenas() {
     });
   }
   if (uid) {
-    var q = sb.from('im_attempt').select('arena_slug').eq('user_id', uid);
+    // Count DISTINCT graded attempts per arena, not per-case rows. im_attempt is
+    // one row PER CASE, so a 14-case run must count as 1 attempt (not 14). We
+    // group by attempt_no (added in im_40); older rows default to attempt_no=1.
+    var q = sb.from('im_attempt').select('arena_slug, attempt_no').eq('user_id', uid);
     if (courseId) { q = q.eq('course_id', courseId); }
     q.then(function(res){
       var rows = res.data ? res.data : [];
-      rows.forEach(function(r){ countBy[r.arena_slug] = (countBy[r.arena_slug] || 0) + 1; });
+      var seen = {};   // arena_slug -> { attempt_no: true }
+      rows.forEach(function(r){
+        var an = (r.attempt_no === null || r.attempt_no === undefined) ? 1 : r.attempt_no;
+        if (!seen[r.arena_slug]) { seen[r.arena_slug] = {}; }
+        seen[r.arena_slug][an] = true;
+      });
+      Object.keys(seen).forEach(function(slug){ countBy[slug] = Object.keys(seen[slug]).length; });
       paint();
     });
   } else {
@@ -5416,16 +5425,31 @@ function loadProgress() {
       });
       if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="dim" style="color:var(--text-subtle);">No attempts yet — try the Practice tab.</td></tr>'; }
     });
-  // arena results: per-arena summary + a filterable table of all attempts
-  sb.from('im_attempt').select('arena_slug, is_correct, created_at')
-    .eq('user_id', uid).order('created_at', { ascending: false }).limit(2000)
-    .then(function(res) {
+  // arena results: per-arena summary + a filterable table with post-deadline
+  // review of wrong cases. We pull the review columns (added in im_41) and the
+  // per-arena review_available_at deadline from im_arena_config.
+  Promise.all([
+    sb.from('im_attempt')
+      .select('arena_slug, is_correct, created_at, attempt_no, case_index, prompt_text, chosen_label, correct_label')
+      .eq('user_id', uid).order('created_at', { ascending: false }).limit(2000),
+    sb.from('im_arena_config').select('arena_slug, review_available_at')
+  ]).then(function(results) {
+      var res = results[0];
+      var cfgRes = results[1];
       var rows = res.data ? res.data : [];
       var tb = $('arenaTbl').querySelector('tbody');
       var summaryHost = $('arenaSummary');
       var pick = $('arena-filter-pick');
 
-      // per-arena summary (correct / total / %)
+      var reviewAt = {};
+      (cfgRes && cfgRes.data ? cfgRes.data : []).forEach(function(c){ reviewAt[c.arena_slug] = c.review_available_at ? new Date(c.review_available_at) : null; });
+      function reviewOpen(slug){
+        var d = reviewAt[slug];
+        if (d === undefined) { return true; }
+        if (d === null) { return true; }
+        return (new Date()) >= d;
+      }
+
       var bd = arenaBreakdown(rows);
       if (summaryHost) {
         if (bd.length) {
@@ -5439,7 +5463,6 @@ function loadProgress() {
         } else { summaryHost.innerHTML = ''; }
       }
 
-      // populate filter dropdown from arenas actually played
       if (pick) {
         var optStyle = ' style="background:#1a1730;color:#F0EEFA;"';
         var opts = '<option value="__all"'+optStyle+'>All arenas ('+rows.length+')</option>';
@@ -5447,26 +5470,62 @@ function loadProgress() {
         pick.innerHTML = opts;
       }
 
+      var reviewIdx = 0;
+      var reviewStore = {};
+
       function renderArenaRows(filter) {
         tb.innerHTML = '';
+        reviewStore = {};
         var shown = 0;
         rows.forEach(function(r) {
           if (filter && filter !== '__all' && r.arena_slug !== filter) { return; }
           var t = ARENA_TITLE[r.arena_slug] ? ARENA_TITLE[r.arena_slug] : r.arena_slug;
           var when = r.created_at ? new Date(r.created_at).toLocaleString() : '';
           var result = r.is_correct ? '<span class="tag green">correct</span>' : '<span class="tag rose">incorrect</span>';
-          tb.innerHTML += '<tr><td>' + esc(t) + '</td><td>' + result + '</td><td>' + when + '</td></tr>';
+          var reviewCell = '';
+          if (!r.is_correct && r.prompt_text && reviewOpen(r.arena_slug)) {
+            var rk = 'rv' + (reviewIdx++);
+            reviewStore[rk] = r;
+            reviewCell = '<button class="btn btn-ghost btn-sm" data-arenareview="'+rk+'">Review</button>';
+          } else if (!r.is_correct && r.prompt_text && !reviewOpen(r.arena_slug)) {
+            var da = reviewAt[r.arena_slug];
+            reviewCell = '<span style="font-size:11px;color:var(--text-subtle);">Review opens '+(da?da.toLocaleDateString():'')+'</span>';
+          }
+          tb.innerHTML += '<tr><td>' + esc(t) + '</td><td>' + result + '</td><td>' + when + '</td><td>' + reviewCell + '</td></tr>';
           shown++;
         });
-        if (shown === 0) { tb.innerHTML = '<tr><td colspan="3" style="color:var(--text-subtle);">No arena sessions recorded yet.</td></tr>'; }
+        if (shown === 0) { tb.innerHTML = '<tr><td colspan="4" style="color:var(--text-subtle);">No arena sessions recorded yet.</td></tr>'; }
       }
       renderArenaRows('__all');
+
+      tb.addEventListener('click', function(ev){
+        var btn = ev.target && ev.target.getAttribute ? ev.target.getAttribute('data-arenareview') : null;
+        if (!btn) { return; }
+        var r = reviewStore[btn];
+        if (!r) { return; }
+        var tr = ev.target.closest ? ev.target.closest('tr') : null;
+        if (!tr) { return; }
+        if (tr.nextSibling && tr.nextSibling.getAttribute && tr.nextSibling.getAttribute('data-reviewpanel')) {
+          tr.parentNode.removeChild(tr.nextSibling);
+          return;
+        }
+        var panel = document.createElement('tr');
+        panel.setAttribute('data-reviewpanel','1');
+        var yours = r.chosen_label ? esc(r.chosen_label) : (r.submitted ? esc(r.submitted) : '\u2014');
+        var right = r.correct_label ? esc(r.correct_label) : '\u2014';
+        panel.innerHTML = '<td colspan="4" style="background:var(--surface-strong);padding:12px 14px;">'+
+          '<div style="font-size:13px;line-height:1.5;">'+
+            '<div style="margin-bottom:8px;"><b>Question:</b> '+esc(r.prompt_text)+'</div>'+
+            '<div style="color:var(--rose,#e05a6b);"><b>Your answer:</b> '+yours+'</div>'+
+            '<div style="color:var(--green,#4ec98a);"><b>Correct answer:</b> '+right+'</div>'+
+          '</div></td>';
+        if (tr.nextSibling) { tr.parentNode.insertBefore(panel, tr.nextSibling); } else { tr.parentNode.appendChild(panel); }
+      });
 
       if (pick) {
         pick.addEventListener('change', function(){
           var sel = pick.value;
           renderArenaRows(sel);
-          // also spotlight the matching summary row
           if (summaryHost) {
             var srows = summaryHost.querySelectorAll('.arena-sum-row');
             for (var si=0; si<srows.length; si++) {

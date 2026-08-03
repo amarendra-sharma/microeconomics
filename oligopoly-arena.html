@@ -695,6 +695,7 @@ var gdMode = "practice";
 var gdHasAccess = false;
 var gdGradedOrder = [];
 var gdGradedPos = 0;
+var gdCurrentConcept = null;   // the concept question now on screen (for review data)
 function gdShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var gdAnswered = true;
 
@@ -831,6 +832,7 @@ function gdDealGradedCase() {
 }
 function gdRenderConcept(cq) {
   if (!cq) { return; }
+  gdCurrentConcept = cq;
   gdShowConcept(true);
   var story = document.getElementById("gd-story");
   if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
@@ -844,6 +846,20 @@ function gdRenderConcept(cq) {
   }
   var out = document.getElementById("gd-readout");
   if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function gdReviewData() {
+  // Build the readable review payload for the case currently being graded, so a
+  // student can later see the question + their answer + the correct answer.
+  if (currentGdIndex >= 12 && gdCurrentConcept) {
+    var labels = {};
+    var i;
+    for (i = 0; i < gdCurrentConcept.opts.length; i++) { labels[gdCurrentConcept.opts[i].code] = gdCurrentConcept.opts[i].text; }
+    return { prompt_text: gdCurrentConcept.q, labels: labels };
+  }
+  if (currentGd) {
+    return { prompt_text: currentGd.story, labels: GD_NAMES };
+  }
+  return null;
 }
 function gdConceptVerdict(code) {
   if (gdAnswered) { return; }
@@ -873,7 +889,7 @@ function gdConceptVerdict(code) {
         var o3 = document.getElementById("gd-readout");
         if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), gdReviewData());
   } else {
     gdAnswered = false;
     var o4 = document.getElementById("gd-readout");
@@ -964,7 +980,7 @@ function gdVerdict(choice) {
         var o2 = document.getElementById("gd-readout");
         if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), gdReviewData());
   } else {
     gdAnswered = false; setGdButtons(false);
     var o3 = document.getElementById("gd-readout");
@@ -1074,7 +1090,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var OLIGOPOLY_ARENA_BUILD = "oligopoly-2026-08-concept+mobile-v1";
+var OLIGOPOLY_ARENA_BUILD = "oligopoly-2026-08-concept+review-v2";
 function boot() {
   try { console.log("%coligopoly-arena build: " + OLIGOPOLY_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {
