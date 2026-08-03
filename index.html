@@ -385,7 +385,11 @@
       <div class="stat-row" id="progStats" style="margin-top:24px;"></div>
       <h3 style="font-size:22px;margin:10px 0 12px;">Recent practice attempts</h3>
       <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="attemptsTbl"><thead><tr><th>Item</th><th>Chapter</th><th>Result</th><th>Points</th><th>When</th></tr></thead><tbody></tbody></table></div>
-      <h3 style="font-size:22px;margin:24px 0 12px;">Arena results</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:24px 0 12px;">
+        <h3 style="font-size:22px;margin:0;">Arena results</h3>
+        <select id="arena-filter-pick" style="font-size:13px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);"><option value="__all">All arenas</option></select>
+      </div>
+      <div id="arenaSummary"></div>
       <div class="card" style="padding:6px 6px 2px;"><table class="tbl" id="arenaTbl"><thead><tr><th>Arena</th><th>Result</th><th>When</th></tr></thead><tbody></tbody></table></div>
     </section>
 
@@ -415,7 +419,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-arena-dropdown';
+var SA_BUILD = 'intro-micro-portal-2026-08-arena-results-filter';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -5408,19 +5412,65 @@ function loadProgress() {
       });
       if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="dim" style="color:var(--text-subtle);">No attempts yet — try the Practice tab.</td></tr>'; }
     });
-  // arena results
+  // arena results: per-arena summary + a filterable table of all attempts
   sb.from('im_attempt').select('arena_slug, is_correct, created_at')
-    .eq('user_id', uid).order('created_at', { ascending: false }).limit(20)
+    .eq('user_id', uid).order('created_at', { ascending: false }).limit(2000)
     .then(function(res) {
       var rows = res.data ? res.data : [];
-      var tb = $('arenaTbl').querySelector('tbody'); tb.innerHTML = '';
-      rows.forEach(function(r) {
-        var t = ARENA_TITLE[r.arena_slug] ? ARENA_TITLE[r.arena_slug] : r.arena_slug;
-        var when = r.created_at ? new Date(r.created_at).toLocaleString() : '';
-        var result = r.is_correct ? '<span class="tag green">correct</span>' : '<span class="tag rose">incorrect</span>';
-        tb.innerHTML += '<tr><td>' + esc(t) + '</td><td>' + result + '</td><td>' + when + '</td></tr>';
-      });
-      if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="3" style="color:var(--text-subtle);">No arena sessions recorded yet.</td></tr>'; }
+      var tb = $('arenaTbl').querySelector('tbody');
+      var summaryHost = $('arenaSummary');
+      var pick = $('arena-filter-pick');
+
+      // per-arena summary (correct / total / %)
+      var bd = arenaBreakdown(rows);
+      if (summaryHost) {
+        if (bd.length) {
+          summaryHost.innerHTML = '<div class="card" style="margin:0 0 12px;">'+
+            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Your score on each arena you\u2019ve played. The Arenas grade averages these across all '+ARENA_SLUGS.length+' arenas, so playing more raises it.</div>'+
+            bd.map(function(a){
+              return '<div class="arena-sum-row" data-arena="'+esc(a.slug)+'" style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);">'+
+                '<span>'+esc(a.title)+'</span>'+
+                '<span class="mono"><b>'+Math.round(a.pct*100)+'%</b> <span style="color:var(--text-subtle);">('+a.correct+'/'+a.total+')</span></span></div>';
+            }).join('')+'</div>';
+        } else { summaryHost.innerHTML = ''; }
+      }
+
+      // populate filter dropdown from arenas actually played
+      if (pick) {
+        var opts = '<option value="__all">All arenas ('+rows.length+')</option>';
+        bd.forEach(function(a){ opts += '<option value="'+esc(a.slug)+'">'+esc(a.title)+' ('+a.total+')</option>'; });
+        pick.innerHTML = opts;
+      }
+
+      function renderArenaRows(filter) {
+        tb.innerHTML = '';
+        var shown = 0;
+        rows.forEach(function(r) {
+          if (filter && filter !== '__all' && r.arena_slug !== filter) { return; }
+          var t = ARENA_TITLE[r.arena_slug] ? ARENA_TITLE[r.arena_slug] : r.arena_slug;
+          var when = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+          var result = r.is_correct ? '<span class="tag green">correct</span>' : '<span class="tag rose">incorrect</span>';
+          tb.innerHTML += '<tr><td>' + esc(t) + '</td><td>' + result + '</td><td>' + when + '</td></tr>';
+          shown++;
+        });
+        if (shown === 0) { tb.innerHTML = '<tr><td colspan="3" style="color:var(--text-subtle);">No arena sessions recorded yet.</td></tr>'; }
+      }
+      renderArenaRows('__all');
+
+      if (pick) {
+        pick.addEventListener('change', function(){
+          var sel = pick.value;
+          renderArenaRows(sel);
+          // also spotlight the matching summary row
+          if (summaryHost) {
+            var srows = summaryHost.querySelectorAll('.arena-sum-row');
+            for (var si=0; si<srows.length; si++) {
+              var slug = srows[si].getAttribute('data-arena');
+              srows[si].style.display = (sel==='__all' || sel===slug) ? '' : 'none';
+            }
+          }
+        });
+      }
     });
   loadBadges();
   loadCompletion();
@@ -5526,42 +5576,6 @@ function loadCompletion() {
       var wsum=comps.reduce(function(s,x){return s+x[2];},0);
       var total=wsum>0?comps.reduce(function(s,x){return s+x[1]*x[2];},0)/wsum:0;
       renderCompletion(host, course, comps, total);
-      // Per-arena breakdown so the student sees their actual score on each arena
-      // they've played (the Arenas component above averages across all 12, so a
-      // single strong arena looks small there).
-      var bd = arenaBreakdown(arenas);
-      if(bd.length){
-        // Build a dropdown so the student can review a single arena's result or
-        // see all of them. Rows are id'd by slug so the picker can show/hide.
-        var optsHtml = '<option value="__all">All arenas</option>' + bd.map(function(a){
-          return '<option value="'+esc(a.slug)+'">'+esc(a.title)+' \u2014 '+Math.round(a.pct*100)+'%</option>';
-        }).join('');
-        var rowsHtml = bd.map(function(a){
-          return '<div class="arena-row" data-arena="'+esc(a.slug)+'" style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);">'+
-            '<span>'+esc(a.title)+'</span>'+
-            '<span class="mono"><b>'+Math.round(a.pct*100)+'%</b> <span style="color:var(--text-subtle);">('+a.correct+'/'+a.total+')</span></span></div>';
-        }).join('');
-        var card = document.createElement('div');
-        card.className='card'; card.style.margin='0 0 20px';
-        card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:2px;">'+
-            '<h3 style="font-size:16px;margin:0;">Your arenas</h3>'+
-            '<select id="arena-review-pick" style="font-size:13px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);">'+optsHtml+'</select>'+
-          '</div>'+
-          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Your score on each arena you\u2019ve played. The Arenas grade above averages these across all '+ARENA_SLUGS.length+' arenas, so playing more raises it.</div>'+
-          '<div id="arena-review-rows">'+rowsHtml+'</div>';
-        host.appendChild(card);
-        var pick = card.querySelector('#arena-review-pick');
-        if(pick){
-          pick.addEventListener('change', function(){
-            var sel = pick.value;
-            var rows = card.querySelectorAll('.arena-row');
-            for(var ri=0; ri<rows.length; ri++){
-              var slug = rows[ri].getAttribute('data-arena');
-              rows[ri].style.display = (sel==='__all' || sel===slug) ? '' : 'none';
-            }
-          });
-        }
-      }
     }
 
     if (examIds.length === 0) { finish(null, null); return; }
