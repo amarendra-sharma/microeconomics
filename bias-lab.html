@@ -7,6 +7,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
+<script src="sa-progress.js"></script>
+<script src="arena-attempts.js"></script>
 
 <style>
 :root {
@@ -90,7 +94,20 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); 
 .sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
 footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
 @media (max-width: 640px) {
-  main { padding: 2rem 1.1rem 3rem; }
+  main { padding: 2rem 1.1rem 3rem; 
+  #im-authbar { padding: 0.6rem 1rem; }
+  #im-auth-signedout { flex-direction: column; align-items: stretch !important; gap: 0.4rem !important; }
+  #im-auth-signedout input, #im-auth-signedout button { width: 100%; box-sizing: border-box; }
+}
+#im-email, #im-pass { font-size: 16px !important; min-height: 40px; }
+#im-authbar button { min-height: 40px; }
+.aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
+.aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
+.aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
+.aa-card.aa-done { border-color: var(--gold, #b87408); background: var(--gold-lt, #fdf6ec); }
+.aa-btn { font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--rule); cursor: pointer; background: var(--bg-card); }
+.aa-btn-primary { background: var(--accent, #0f3d9e); color: #fff; border-color: var(--accent, #0f3d9e); }
+.aa-btn-ghost { background: transparent; }
   h1.sb-title { font-size: 2rem; }
   .sb-diag-grid { grid-template-columns: 1fr; }
 }
@@ -103,8 +120,25 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Bias Lab</div>
   <span class="sb-course-tag">Course Arena</span>
   <div class="sb-spacer"></div>
-  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+  <a class="sb-header-btn" href="index.html" style="margin-right:0.4rem;">&larr; Portal</a>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">Textbook</a>
 </header>
+
+<div id="im-authbar" style="display:none;position:fixed;top:60px;left:0;right:0;z-index:150;background:#f5f0e8;border-bottom:1px solid #e2e8f0;padding:0.5rem 1.5rem;font-family:'Inter',system-ui,sans-serif;font-size:0.8125rem;color:#334155;">
+  <div id="im-auth-signedout" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-weight:600;">Intro Micro account:</span>
+    <input id="im-email" type="email" placeholder="email" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <input id="im-pass" type="password" placeholder="password" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <button id="im-signin-btn" onclick="imDoSignIn()" style="padding:0.35rem 0.8rem;border:none;border-radius:6px;background:#0f3d9e;color:#fff;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign in</button>
+    <button id="im-signup-btn" onclick="imDoSignUp()" style="padding:0.35rem 0.8rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Create account</button>
+    <span id="im-auth-msg" style="color:#991b1b;"></span>
+  </div>
+  <div id="im-auth-signedin" style="display:none;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span id="im-who" style="font-weight:600;"></span>
+    <span id="im-access-badge"></span>
+    <button id="im-signout-btn" onclick="imDoSignOut()" style="padding:0.3rem 0.7rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign out</button>
+  </div>
+</div>
 
 <main>
 
@@ -113,7 +147,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <p class="sb-subtitle">Every other arena tested a market. This one tests <em>you</em>. Four classic experiments from the behavioral-economics literature, run on a subject pool of one &mdash; then a detective round to spot the same biases loose in the world. Answer honestly; the lab only works on the truth.</p>
 <hr class="sb-divider">
 
-<p>Sixteen chapters assumed the chooser was a cool calculator. Chapter 17 put that assumption in the dock, and this lab is the cross-examination. Each station reproduces a famous experiment &mdash; anchoring, loss aversion, framing, present bias &mdash; on <strong>you</strong>. For each: commit to your answers <em>first</em>, then read the reveal. Your Bias Detective record saves for reporting back.</p>
+<p>Sixteen chapters assumed the chooser was a cool calculator. Chapter 17 put that assumption in the dock, and this lab is the cross-examination. Each station reproduces a famous experiment &mdash; anchoring, loss aversion, framing, present bias &mdash; on <strong>you</strong>. For each: commit to your answers <em>first</em>, then read the reveal. Practice as much as you like; the Graded run records to your gradebook.</p>
 
 <!-- ═══ STATION 1: ANCHORING ═══ -->
 <h2 class="sb-section"><span class="sb-step">1</span>The anchor experiment</h2>
@@ -212,23 +246,26 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <div class="sb-panel">
   <div class="sb-panel-label">&#9881; Name the bias</div>
   <h4>Four diagnoses, one verdict</h4>
-  <div class="sb-case" id="bd-story">Press <strong>New case</strong> to open the first file.</div>
-  <div class="sb-diag-grid">
+  <div id="bd-mode-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;padding-bottom:0.75rem;border-bottom:1px solid var(--rule);"><span style="font-size:0.8rem;color:var(--ink-muted);">Mode:</span><button class="btn-sb btn-sb-ghost" id="bd-mode-practice" onclick="bdSetMode('practice')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Practice (unlimited, ungraded)</button><button class="btn-sb btn-sb-primary" id="bd-mode-graded" onclick="bdSetMode('graded')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Graded run</button></div>
+  <div id="aa-panel" style="margin-bottom:0.75rem;"></div>
+  <div class="sb-case" id="bd-story">Choose a mode above. <strong>Practice</strong> is unlimited and ungraded; the <strong>Graded run</strong> is 14 items and counts toward your grade.</div>
+  <div class="sb-diag-grid" id="bd-diag-grid">
     <button class="sb-diag-btn" id="bd-ANCH" onclick="bdVerdict('ANCH')">Anchoring &mdash; an irrelevant number steers the estimate</button>
     <button class="sb-diag-btn" id="bd-LOSS" onclick="bdVerdict('LOSS')">Loss aversion &mdash; losses loom larger than equal gains</button>
     <button class="sb-diag-btn" id="bd-FRAME" onclick="bdVerdict('FRAME')">Framing &mdash; the same facts, re-worded, flip the choice</button>
     <button class="sb-diag-btn" id="bd-PRES" onclick="bdVerdict('PRES')">Present bias &mdash; today crushes tomorrow, plans reverse</button>
   </div>
+  <div class="sb-diag-grid" id="bd-concept" style="display:none;grid-template-columns:1fr;"></div>
   <div class="sb-readout" id="bd-readout">The case file awaits your diagnosis.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
-    <button class="btn-sb btn-sb-primary" onclick="newBdCase()">New case</button>
+    <button class="btn-sb btn-sb-primary" id="bd-newcase" onclick="newBdCase()">New case</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetBdScore()">Reset my record</button>
   </div>
 </div>
 
 <!-- ═══ RESULTS ═══ -->
-<h2 class="sb-section"><span class="sb-step">6</span>Your record</h2>
-<p>Your Bias Detective record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, re-run the cases asking: what irrelevant thing changed the decision &mdash; a number, a sign (gain vs. loss), a wording, or a date?</p>
+<h2 class="sb-section"><span class="sb-step">6</span>Your practice record</h2>
+<p>These numbers track your <strong>Practice</strong> attempts on this device only &mdash; they’re for your own feedback and don’t affect your grade. Your <strong>Graded run</strong> records automatically to the gradebook when you’re signed in. Below 80%, re-run the cases asking: what irrelevant thing changed the decision &mdash; a number, a sign (gain vs. loss), a wording, or a date?</p>
 
 <div class="sb-stat-row">
   <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases diagnosed</div></div>
@@ -522,8 +559,38 @@ var BD_CASES = [
     why: "Save More Tomorrow works because sacrifice scheduled for the future meets no present-bias resistance — and once the future arrives, inertia holds. A policy built from this station's diagnosis." }
 ];
 
+var BD_CONCEPT = [
+  { case_index: 12,
+    q: "In Ariely's experiment, people wrote down the last two digits of their Social Security number, then bid on items \u2014 and higher digits led to higher bids. What does this show about anchoring?",
+    opts: [
+      { code: "A", text: "That people with higher SSNs are wealthier" },
+      { code: "B", text: "That an anchor must be a fair market price to influence a valuation" },
+      { code: "C", text: "That an anchor biases judgment even when it is transparently random and logically irrelevant \u2014 relevance is not required for the anchor to pull estimates toward it" },
+      { code: "D", text: "That anchoring disappears once people are told the number is random" }
+    ] },
+  { case_index: 13,
+    q: "An investor holds a losing stock to avoid 'realizing' the loss, and a mug-owner demands more to sell a mug than a non-owner will pay for it. What single mechanism underlies both the disposition effect and the endowment effect?",
+    opts: [
+      { code: "A", text: "Present bias \u2014 overweighting immediate rewards" },
+      { code: "B", text: "Loss aversion \u2014 a loss looms larger than an equal gain, so giving something up (or booking a loss) is resisted more than the gain would justify" },
+      { code: "C", text: "Anchoring on the purchase price only" },
+      { code: "D", text: "Framing \u2014 the way the choice is described" }
+    ] }
+];
+function bdConceptByIndex(ci) {
+  for (var i = 0; i < BD_CONCEPT.length; i++) { if (BD_CONCEPT[i].case_index === ci) { return BD_CONCEPT[i]; } }
+  return null;
+}
+
 var BD = { attempted: 0, correct: 0, streak: 0, best: 0 };
 var currentBd = null;
+var currentBdIndex = -1;
+var bdMode = "practice";
+var bdHasAccess = false;
+var bdGradedOrder = [];
+var bdGradedPos = 0;
+var bdCurrentConcept = null;
+function bdShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var bdAnswered = true;
 
 function loadBd() {
@@ -578,8 +645,172 @@ function setBdButtons(disabled) {
   }
 }
 
+function bdShowConcept(on) {
+  var grid = document.getElementById("bd-diag-grid");
+  var box = document.getElementById("bd-concept");
+  if (grid) { grid.style.display = on ? "none" : ""; }
+  if (box) { box.style.display = on ? "" : "none"; }
+}
+function bdReviewData() {
+  if (currentBdIndex >= 12 && bdCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < bdCurrentConcept.opts.length; i++) { labels[bdCurrentConcept.opts[i].code] = bdCurrentConcept.opts[i].text; }
+    return { prompt_text: bdCurrentConcept.q, labels: labels };
+  }
+  if (currentBd) { return { prompt_text: currentBd.story, labels: BD_NAMES }; }
+  return null;
+}
+function bdSetMode(mode) {
+  bdMode = mode;
+  var bp = document.getElementById("bd-mode-practice");
+  var bg = document.getElementById("bd-mode-graded");
+  if (bp) { bp.className = "btn-sb " + (mode === "practice" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  if (bg) { bg.className = "btn-sb " + (mode === "graded" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  var story = document.getElementById("bd-story");
+  var nb = document.getElementById("bd-newcase");
+  if (mode === "graded") {
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.init({
+        slug: "bias-lab",
+        caseCount: Math.min(12, BD_CASES.length) + BD_CONCEPT.length,
+        mount: "aa-panel",
+        onStartAttempt: function (info) {
+          var cl = bdShuffle(BD_CASES.length).slice(0, Math.min(12, BD_CASES.length));
+          var co = [];
+          for (var ci = 0; ci < BD_CONCEPT.length; ci++) { co.push(BD_CONCEPT[ci].case_index); }
+          bdGradedOrder = cl.concat(co);
+          bdGradedPos = 0;
+          bdDealGradedCase();
+        },
+        onAttemptEnd: function (info) {
+          bdShowConcept(false);
+          setBdButtons(true);
+          var st = document.getElementById("bd-story");
+          if (st) { st.innerHTML = "Attempt complete. See the panel above for your score and options."; }
+          var nb2 = document.getElementById("bd-newcase");
+          if (nb2) { nb2.style.display = "none"; }
+        }
+      });
+    }
+    if (nb) { nb.textContent = "Start graded run"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll work through 14 items \u2014 12 cases plus 2 concept questions. You have two attempts and the second is optional \u2014 if you take it, your grade is the average of both."; }
+    setBdButtons(true);
+    bdGradedOrder = [];
+    bdGradedPos = 0;
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.render();
+      if (ArenaAttempts.isLocked()) {
+        if (nb) { nb.style.display = "none"; }
+        if (story) { story.innerHTML = "You\u2019ve already used both graded attempts for this arena (from a previous session). See your score in the panel above. Use <strong>Reset my record</strong> to retake if your instructor allows."; }
+      }
+    }
+  } else {
+    if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }
+    var panel = document.getElementById("aa-panel");
+    if (panel) { panel.innerHTML = ""; }
+    bdShowConcept(false);
+    if (nb) { nb.textContent = "New case"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Practice mode.</strong> Unlimited cases, ungraded. Press <strong>New case</strong> to begin."; }
+    setBdButtons(true);
+  }
+}
+function bdDealGradedCase() {
+  if (bdGradedPos >= bdGradedOrder.length) { return; }
+  currentBdIndex = bdGradedOrder[bdGradedPos];
+  bdGradedPos += 1;
+  bdAnswered = false;
+  var nb = document.getElementById("bd-newcase");
+  if (nb) { nb.style.display = "none"; }
+  if (currentBdIndex >= 12) {
+    bdRenderConcept(bdConceptByIndex(currentBdIndex));
+  } else {
+    bdShowConcept(false);
+    currentBd = BD_CASES[currentBdIndex];
+    setBdButtons(false);
+    var story = document.getElementById("bd-story");
+    if (story) { story.innerHTML = "<strong>The case:</strong> " + currentBd.story; }
+    var out = document.getElementById("bd-readout");
+    if (out) { out.innerHTML = "The case file awaits your diagnosis."; }
+  }
+}
+function bdRenderConcept(cq) {
+  if (!cq) { return; }
+  bdCurrentConcept = cq;
+  bdShowConcept(true);
+  var story = document.getElementById("bd-story");
+  if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
+  var box = document.getElementById("bd-concept");
+  if (box) {
+    var html = "", i;
+    for (i = 0; i < cq.opts.length; i++) {
+      html += '<button class="sb-diag-btn" onclick="bdConceptVerdict(\'' + cq.opts[i].code + '\')">' + cq.opts[i].code + ". " + cq.opts[i].text + "</button>";
+    }
+    box.innerHTML = html;
+  }
+  var out = document.getElementById("bd-readout");
+  if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function bdConceptVerdict(code) {
+  if (bdAnswered) { return; }
+  if (bdMode !== "graded") { return; }
+  bdAnswered = true;
+  var box = document.getElementById("bd-concept");
+  if (box) { var bs = box.getElementsByTagName("button"); for (var i = 0; i < bs.length; i++) { bs[i].disabled = true; } }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("bias-lab", currentBdIndex, code, function (res) {
+      if (res && res.needEnroll) {
+        bdAnswered = false;
+        if (box) { var b2 = box.getElementsByTagName("button"); for (var j = 0; j < b2.length; j++) { b2[j].disabled = false; } }
+        var o = document.getElementById("bd-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        var out = document.getElementById("bd-readout");
+        if (out) { out.innerHTML = res.correct ? "<strong>Correct.</strong> Recorded." : "<strong>Not quite.</strong> Recorded \u2014 revisit this idea in Practice mode."; }
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setTimeout(function () { bdDealGradedCase(); }, 1600); }
+        }
+      } else {
+        bdAnswered = false;
+        if (box) { var b3 = box.getElementsByTagName("button"); for (var k = 0; k < b3.length; k++) { b3[k].disabled = false; } }
+        var o3 = document.getElementById("bd-readout");
+        if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), bdReviewData());
+  } else {
+    bdAnswered = false;
+    var o4 = document.getElementById("bd-readout");
+    if (o4) { o4.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in."; }
+  }
+}
 function newBdCase() {
-  currentBd = BD_CASES[Math.floor(Math.random() * BD_CASES.length)];
+  if (bdMode === "graded") {
+    try {
+      if (typeof ArenaAttempts === "undefined") { return; }
+      if (!bdHasAccess) {
+        var story0 = document.getElementById("bd-story");
+        if (story0) { story0.innerHTML = "<strong>Graded run is for enrolled students.</strong> This account isn't enrolled, so answers won't record and the run can't be scored. To preview the questions, switch to <strong>Practice</strong> mode above."; }
+        var out0 = document.getElementById("bd-readout");
+        if (out0) { out0.innerHTML = ""; }
+        return;
+      }
+      if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+        var lo = document.getElementById("bd-readout");
+        if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
+        return;
+      }
+      if (!(ArenaAttempts.isAttemptActive && ArenaAttempts.isAttemptActive())) {
+        ArenaAttempts.startAttempt(true);
+      } else {
+        bdDealGradedCase();
+      }
+    } catch (err) { try { console.error("GRADED bd:", err); } catch (e) {} }
+    return;
+  }
+  currentBdIndex = Math.floor(Math.random() * BD_CASES.length);
+  currentBd = BD_CASES[currentBdIndex];
   bdAnswered = false;
   setBdButtons(false);
   var story = document.getElementById("bd-story");
@@ -588,36 +819,60 @@ function newBdCase() {
   if (out) { out.innerHTML = "The case file awaits your diagnosis."; }
 }
 
-function bdVerdict(choice) {
-  if (!currentBd || bdAnswered) { return; }
-  bdAnswered = true;
-  setBdButtons(true);
+function bdLocalVerdict(choice) {
   var correct = choice === currentBd.key;
   var btnChosen = document.getElementById("bd-" + choice);
   var btnRight = document.getElementById("bd-" + currentBd.key);
   if (btnRight) { btnRight.classList.add("correct"); }
   if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
-
-  BD.attempted += 1;
-  if (correct) {
-    BD.correct += 1;
-    BD.streak += 1;
-    if (BD.streak > BD.best) { BD.best = BD.streak; }
-  } else {
-    BD.streak = 0;
-  }
-  saveBd();
-  renderBdStats();
-
   var out = document.getElementById("bd-readout");
   if (out) {
+    var tail = (bdMode === "graded") ? "" : " Press <strong>New case</strong> for another.";
     if (correct) {
-      out.innerHTML = "<strong>Correct</strong> — this is " + BD_NAMES[currentBd.key] + ". " + currentBd.why +
-        " Streak: <strong>" + BD.streak + "</strong>. Press <strong>New case</strong> for another.";
+      out.innerHTML = "<strong>Correct</strong> \u2014 this is " + BD_NAMES[currentBd.key] + ". " + currentBd.why + tail;
     } else {
-      out.innerHTML = "<strong>Not this one.</strong> This is " + BD_NAMES[currentBd.key] + ". " + currentBd.why +
-        " Ask: what irrelevant thing changed the decision — a number, a sign, a wording, or a date? Next case when ready.";
+      out.innerHTML = "<strong>Not this one.</strong> This is " + BD_NAMES[currentBd.key] + ". " + currentBd.why + tail;
     }
+  }
+  return correct;
+}
+function bdVerdict(choice) {
+  if (!currentBd || bdAnswered) { return; }
+  bdAnswered = true;
+  setBdButtons(true);
+  if (bdMode !== "graded") {
+    var c = bdLocalVerdict(choice);
+    BD.attempted += 1;
+    if (c) { BD.correct += 1; BD.streak += 1; if (BD.streak > BD.best) { BD.best = BD.streak; } }
+    else { BD.streak = 0; }
+    saveBd();
+    renderBdStats();
+    return;
+  }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("bias-lab", currentBdIndex, choice, function (res) {
+      if (res && res.needEnroll) {
+        bdAnswered = false; setBdButtons(false);
+        var o = document.getElementById("bd-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        bdLocalVerdict(choice);
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setBdButtons(true); setTimeout(function () { bdDealGradedCase(); }, 1500); }
+        }
+      } else {
+        bdAnswered = false; setBdButtons(false);
+        var o2 = document.getElementById("bd-readout");
+        if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), bdReviewData());
+  } else {
+    bdAnswered = false; setBdButtons(false);
+    var o3 = document.getElementById("bd-readout");
+    if (o3) { o3.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in. Switch to Practice to explore."; }
   }
 }
 
@@ -628,14 +883,92 @@ function resetBdScore() {
   BD.best = 0;
   saveBd();
   renderBdStats();
+  if (bdMode === "graded" && typeof ArenaAttempts !== "undefined" && ArenaAttempts.resetLocal) {
+    ArenaAttempts.resetLocal();
+    var nbr = document.getElementById("bd-newcase");
+    if (nbr) { nbr.style.display = ""; nbr.textContent = "Start graded run"; }
+    var str = document.getElementById("bd-story");
+    if (str) { str.innerHTML = "Graded attempts reset. Press <strong>Start graded run</strong> to begin."; }
+    setBdButtons(true);
+    return;
+  }
   var out = document.getElementById("bd-readout");
   if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
 }
 
 /* ══════════ Boot ══════════ */
+function imShowMsg(msg) { var el = document.getElementById("im-auth-msg"); if (el) { el.textContent = msg || ""; } }
+function imRenderAuth() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) { return; }
+  var bar = document.getElementById("im-authbar");
+  if (bar) {
+    bar.style.display = "block";
+    var mains = document.getElementsByTagName("main");
+    function setMainOffset() { if (mains && mains[0]) { var h = bar.offsetHeight || 52; mains[0].style.marginTop = (60 + h + 8) + "px"; } }
+    setMainOffset();
+    setTimeout(setMainOffset, 300);
+    if (window.addEventListener) { window.addEventListener("resize", setMainOffset); }
+  }
+  IMBackend.getSession(function (session) {
+    var out = document.getElementById("im-auth-signedout");
+    var inn = document.getElementById("im-auth-signedin");
+    if (session && session.user) {
+      try { console.log("%carena: SIGNED IN as " + (session.user.email || session.user.id) + " -- grades WILL record", "color:#166534;font-weight:bold"); } catch (e) {}
+      if (out) { out.style.display = "none"; }
+      if (inn) { inn.style.display = "flex"; }
+      var who = document.getElementById("im-who");
+      if (who) { who.textContent = session.user.email || "signed in"; }
+      IMBackend.checkAccess(function (ok) {
+        try { console.log("%carena: access check = " + ok, ok ? "color:#166534" : "color:#991b1b;font-weight:bold"); } catch (e) {}
+        bdHasAccess = !!ok;
+        var b = document.getElementById("im-access-badge");
+        if (b) {
+          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
+          else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
+        }
+        var ctas = document.getElementsByClassName("sb-cta");
+        var ci;
+        for (ci = 0; ci < ctas.length; ci++) { ctas[ci].style.display = ok ? "none" : ""; }
+      });
+    } else {
+      try { console.warn("arena: SIGNED OUT -- not logged in ON THIS PAGE, so plays will NOT record. Use the sign-in bar at the top."); } catch (e) {}
+      if (out) { out.style.display = "flex"; }
+      if (inn) { inn.style.display = "none"; }
+    }
+  });
+}
+function imDoSignIn() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signIn(e.value, p.value, function (res) { if (res && res.ok) { imRenderAuth(); } else { imShowMsg(res && res.error ? res.error : "Sign-in failed."); } });
+}
+function imDoSignUp() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signUp(e.value, p.value, null, function (res) {
+    if (res && res.ok) { imShowMsg(res.needsConfirm ? "Account created \u2014 check your email to confirm, then sign in." : "Account created \u2014 you can sign in now."); }
+    else { imShowMsg(res && res.error ? res.error : "Sign-up failed."); }
+  });
+}
+function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
+
+var BIAS_ARENA_BUILD = "bias-2026-08-concept+review-v1";
 function boot() {
+  try { console.log("%cbias-lab build: " + BIAS_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
+  try {
+    var stamp = document.createElement("div");
+    stamp.textContent = "build " + BIAS_ARENA_BUILD;
+    stamp.style.cssText = "position:fixed;bottom:4px;right:6px;z-index:9999;font:11px monospace;color:#94a3b8;background:rgba(255,255,255,0.8);padding:1px 5px;border-radius:4px;pointer-events:none;";
+    document.body.appendChild(stamp);
+  } catch (e) {}
+  if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadBd();
   renderBdStats();
+  imRenderAuth();
 }
 
 if (document.readyState === "loading") {

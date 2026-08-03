@@ -7,6 +7,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
+<script src="sa-progress.js"></script>
+<script src="arena-attempts.js"></script>
 
 <style>
 :root {
@@ -93,7 +97,20 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); 
 .sb-cta p { font-size: 0.9rem; color: var(--ink-muted); }
 footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
 @media (max-width: 640px) {
-  main { padding: 2rem 1.1rem 3rem; }
+  main { padding: 2rem 1.1rem 3rem; 
+  #im-authbar { padding: 0.6rem 1rem; }
+  #im-auth-signedout { flex-direction: column; align-items: stretch !important; gap: 0.4rem !important; }
+  #im-auth-signedout input, #im-auth-signedout button { width: 100%; box-sizing: border-box; }
+}
+#im-email, #im-pass { font-size: 16px !important; min-height: 40px; }
+#im-authbar button { min-height: 40px; }
+.aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
+.aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
+.aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
+.aa-card.aa-done { border-color: var(--gold, #b87408); background: var(--gold-lt, #fdf6ec); }
+.aa-btn { font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--rule); cursor: pointer; background: var(--bg-card); }
+.aa-btn-primary { background: var(--accent, #0f3d9e); color: #fff; border-color: var(--accent, #0f3d9e); }
+.aa-btn-ghost { background: transparent; }
   h1.sb-title { font-size: 2rem; }
   .sb-diag-grid { grid-template-columns: 1fr; }
 }
@@ -106,8 +123,25 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Lemons Market Arena</div>
   <span class="sb-course-tag">Course Arena</span>
   <div class="sb-spacer"></div>
-  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+  <a class="sb-header-btn" href="index.html" style="margin-right:0.4rem;">&larr; Portal</a>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">Textbook</a>
 </header>
+
+<div id="im-authbar" style="display:none;position:fixed;top:60px;left:0;right:0;z-index:150;background:#f5f0e8;border-bottom:1px solid #e2e8f0;padding:0.5rem 1.5rem;font-family:'Inter',system-ui,sans-serif;font-size:0.8125rem;color:#334155;">
+  <div id="im-auth-signedout" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-weight:600;">Intro Micro account:</span>
+    <input id="im-email" type="email" placeholder="email" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <input id="im-pass" type="password" placeholder="password" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <button id="im-signin-btn" onclick="imDoSignIn()" style="padding:0.35rem 0.8rem;border:none;border-radius:6px;background:#0f3d9e;color:#fff;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign in</button>
+    <button id="im-signup-btn" onclick="imDoSignUp()" style="padding:0.35rem 0.8rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Create account</button>
+    <span id="im-auth-msg" style="color:#991b1b;"></span>
+  </div>
+  <div id="im-auth-signedin" style="display:none;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span id="im-who" style="font-weight:600;"></span>
+    <span id="im-access-badge"></span>
+    <button id="im-signout-btn" onclick="imDoSignOut()" style="padding:0.3rem 0.7rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign out</button>
+  </div>
+</div>
 
 <main>
 
@@ -116,7 +150,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <p class="sb-subtitle">Watch a market where nobody lies destroy itself anyway: slide the share of hidden lemons past the tipping point and see the good cars flee; run an insurance pool through its death spiral round by round; then install the fixes real markets invented &mdash; and learn to spot all four information diseases in the wild.</p>
 <hr class="sb-divider">
 
-<p>Chapter 16's markets fail for a new reason: <strong>one side knows something the other cannot see</strong>. This arena runs the chapter's used-car market. Sellers know their car; buyers know only the odds. A <em>peach</em> is worth <strong>$8</strong> to a buyer and <strong>$7</strong> to its owner; a <em>lemon</em> is worth <strong>$3</strong> to a buyer and <strong>$2</strong> to its owner &mdash; so every car, honestly traded at the right price, creates value. Whether those trades survive depends on one number: &lambda;, the share of lemons hiding in the pool. The Info Detective record saves for reporting back.</p>
+<p>Chapter 16's markets fail for a new reason: <strong>one side knows something the other cannot see</strong>. This arena runs the chapter's used-car market. Sellers know their car; buyers know only the odds. A <em>peach</em> is worth <strong>$8</strong> to a buyer and <strong>$7</strong> to its owner; a <em>lemon</em> is worth <strong>$3</strong> to a buyer and <strong>$2</strong> to its owner &mdash; so every car, honestly traded at the right price, creates value. Whether those trades survive depends on one number: &lambda;, the share of lemons hiding in the pool. Practice as much as you like; the Graded run records to your gradebook.</p>
 
 <!-- ═══ STATION 1: THE UNRAVELING SLIDER ═══ -->
 <h2 class="sb-section"><span class="sb-step">1</span>The unraveling slider</h2>
@@ -188,23 +222,26 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <div class="sb-panel">
   <div class="sb-panel-label">&#9881; Name the mechanism</div>
   <h4>Four diagnoses, one verdict</h4>
-  <div class="sb-case" id="id-story">Press <strong>New case</strong> to open the first file.</div>
-  <div class="sb-diag-grid">
+  <div id="id-mode-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;padding-bottom:0.75rem;border-bottom:1px solid var(--rule);"><span style="font-size:0.8rem;color:var(--ink-muted);">Mode:</span><button class="btn-sb btn-sb-ghost" id="id-mode-practice" onclick="idSetMode('practice')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Practice (unlimited, ungraded)</button><button class="btn-sb btn-sb-primary" id="id-mode-graded" onclick="idSetMode('graded')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Graded run</button></div>
+  <div id="aa-panel" style="margin-bottom:0.75rem;"></div>
+  <div class="sb-case" id="id-story">Choose a mode above. <strong>Practice</strong> is unlimited and ungraded; the <strong>Graded run</strong> is 14 items and counts toward your grade.</div>
+  <div class="sb-diag-grid" id="id-diag-grid">
     <button class="sb-diag-btn" id="id-ADV" onclick="idVerdict('ADV')">Adverse selection &mdash; hidden type, before the deal</button>
     <button class="sb-diag-btn" id="id-MH" onclick="idVerdict('MH')">Moral hazard &mdash; hidden action, after the deal</button>
     <button class="sb-diag-btn" id="id-SIG" onclick="idVerdict('SIG')">Signaling &mdash; the informed side proves itself, costly-to-fake</button>
     <button class="sb-diag-btn" id="id-SCR" onclick="idVerdict('SCR')">Screening &mdash; the uninformed side designs a sorting device</button>
   </div>
+  <div class="sb-diag-grid" id="id-concept" style="display:none;grid-template-columns:1fr;"></div>
   <div class="sb-readout" id="id-readout">The case file awaits your diagnosis.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
-    <button class="btn-sb btn-sb-primary" onclick="newIdCase()">New case</button>
+    <button class="btn-sb btn-sb-primary" id="id-newcase" onclick="newIdCase()">New case</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetIdScore()">Reset my record</button>
   </div>
 </div>
 
 <!-- ═══ RESULTS ═══ -->
-<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
-<p>Your Info Detective record is saved in this browser. Report the numbers below if this arena was assigned; below 80%, re-run the cases with the two sorting questions: is the hidden thing a <em>type</em> or an <em>action</em>? and which side of the deal is doing something about it?</p>
+<h2 class="sb-section"><span class="sb-step">5</span>Your practice record</h2>
+<p>These numbers track your <strong>Practice</strong> attempts on this device only &mdash; they’re for your own feedback and don’t affect your grade. Your <strong>Graded run</strong> records automatically to the gradebook when you’re signed in. Below 80%, re-run the cases with the two sorting questions: is the hidden thing a <em>type</em> or an <em>action</em>? and which side of the deal is doing something about it?</p>
 
 <div class="sb-stat-row">
   <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">cases diagnosed</div></div>
@@ -436,8 +473,38 @@ var ID_CASES = [
     why: "The insurer constructs a choice whose terms sort drivers — the safe accept monitoring, the risky reveal themselves by refusing. Designed by the uninformed party: screening." }
 ];
 
+var ID_CONCEPT = [
+  { case_index: 12,
+    q: "Both adverse selection and moral hazard come from hidden information. What single question separates them every time?",
+    opts: [
+      { code: "A", text: "Whether the buyer or the seller is richer" },
+      { code: "B", text: "TIMING: adverse selection is a hidden TYPE that exists BEFORE the deal (bad risks select in); moral hazard is a hidden ACTION taken AFTER the deal (behavior changes once covered)" },
+      { code: "C", text: "Adverse selection is always about cars; moral hazard is always about insurance" },
+      { code: "D", text: "Whether a contract was signed at all" }
+    ] },
+  { case_index: 13,
+    q: "A job applicant earns an expensive degree to prove ability; an insurer offers a menu of deductibles to sort risks. Both fight hidden information \u2014 how do signaling and screening differ?",
+    opts: [
+      { code: "A", text: "They're the same move under two names" },
+      { code: "B", text: "Signaling is done by the UNINFORMED side; screening by the informed side" },
+      { code: "C", text: "The INFORMED side signals (takes a costly action to reveal its type); the UNINFORMED side screens (designs a choice that makes types sort themselves)" },
+      { code: "D", text: "Signaling works only for cars, screening only for loans" }
+    ] }
+];
+function idConceptByIndex(ci) {
+  for (var i = 0; i < ID_CONCEPT.length; i++) { if (ID_CONCEPT[i].case_index === ci) { return ID_CONCEPT[i]; } }
+  return null;
+}
+
 var ID = { attempted: 0, correct: 0, streak: 0, best: 0 };
 var currentId = null;
+var currentIdIndex = -1;
+var idMode = "practice";
+var idHasAccess = false;
+var idGradedOrder = [];
+var idGradedPos = 0;
+var idCurrentConcept = null;
+function idShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var idAnswered = true;
 
 function loadId() {
@@ -492,8 +559,172 @@ function setIdButtons(disabled) {
   }
 }
 
+function idShowConcept(on) {
+  var grid = document.getElementById("id-diag-grid");
+  var box = document.getElementById("id-concept");
+  if (grid) { grid.style.display = on ? "none" : ""; }
+  if (box) { box.style.display = on ? "" : "none"; }
+}
+function idReviewData() {
+  if (currentIdIndex >= 12 && idCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < idCurrentConcept.opts.length; i++) { labels[idCurrentConcept.opts[i].code] = idCurrentConcept.opts[i].text; }
+    return { prompt_text: idCurrentConcept.q, labels: labels };
+  }
+  if (currentId) { return { prompt_text: currentId.story, labels: ID_NAMES }; }
+  return null;
+}
+function idSetMode(mode) {
+  idMode = mode;
+  var bp = document.getElementById("id-mode-practice");
+  var bg = document.getElementById("id-mode-graded");
+  if (bp) { bp.className = "btn-sb " + (mode === "practice" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  if (bg) { bg.className = "btn-sb " + (mode === "graded" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  var story = document.getElementById("id-story");
+  var nb = document.getElementById("id-newcase");
+  if (mode === "graded") {
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.init({
+        slug: "lemons-arena",
+        caseCount: Math.min(12, ID_CASES.length) + ID_CONCEPT.length,
+        mount: "aa-panel",
+        onStartAttempt: function (info) {
+          var cl = idShuffle(ID_CASES.length).slice(0, Math.min(12, ID_CASES.length));
+          var co = [];
+          for (var ci = 0; ci < ID_CONCEPT.length; ci++) { co.push(ID_CONCEPT[ci].case_index); }
+          idGradedOrder = cl.concat(co);
+          idGradedPos = 0;
+          idDealGradedCase();
+        },
+        onAttemptEnd: function (info) {
+          idShowConcept(false);
+          setIdButtons(true);
+          var st = document.getElementById("id-story");
+          if (st) { st.innerHTML = "Attempt complete. See the panel above for your score and options."; }
+          var nb2 = document.getElementById("id-newcase");
+          if (nb2) { nb2.style.display = "none"; }
+        }
+      });
+    }
+    if (nb) { nb.textContent = "Start graded run"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll work through 14 items \u2014 12 cases plus 2 concept questions. You have two attempts and the second is optional \u2014 if you take it, your grade is the average of both."; }
+    setIdButtons(true);
+    idGradedOrder = [];
+    idGradedPos = 0;
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.render();
+      if (ArenaAttempts.isLocked()) {
+        if (nb) { nb.style.display = "none"; }
+        if (story) { story.innerHTML = "You\u2019ve already used both graded attempts for this arena (from a previous session). See your score in the panel above. Use <strong>Reset my record</strong> to retake if your instructor allows."; }
+      }
+    }
+  } else {
+    if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }
+    var panel = document.getElementById("aa-panel");
+    if (panel) { panel.innerHTML = ""; }
+    idShowConcept(false);
+    if (nb) { nb.textContent = "New case"; nb.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Practice mode.</strong> Unlimited cases, ungraded. Press <strong>New case</strong> to begin."; }
+    setIdButtons(true);
+  }
+}
+function idDealGradedCase() {
+  if (idGradedPos >= idGradedOrder.length) { return; }
+  currentIdIndex = idGradedOrder[idGradedPos];
+  idGradedPos += 1;
+  idAnswered = false;
+  var nb = document.getElementById("id-newcase");
+  if (nb) { nb.style.display = "none"; }
+  if (currentIdIndex >= 12) {
+    idRenderConcept(idConceptByIndex(currentIdIndex));
+  } else {
+    idShowConcept(false);
+    currentId = ID_CASES[currentIdIndex];
+    setIdButtons(false);
+    var story = document.getElementById("id-story");
+    if (story) { story.innerHTML = "<strong>The case:</strong> " + currentId.story; }
+    var out = document.getElementById("id-readout");
+    if (out) { out.innerHTML = "The case file awaits your diagnosis."; }
+  }
+}
+function idRenderConcept(cq) {
+  if (!cq) { return; }
+  idCurrentConcept = cq;
+  idShowConcept(true);
+  var story = document.getElementById("id-story");
+  if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
+  var box = document.getElementById("id-concept");
+  if (box) {
+    var html = "", i;
+    for (i = 0; i < cq.opts.length; i++) {
+      html += '<button class="sb-diag-btn" onclick="idConceptVerdict(\'' + cq.opts[i].code + '\')">' + cq.opts[i].code + ". " + cq.opts[i].text + "</button>";
+    }
+    box.innerHTML = html;
+  }
+  var out = document.getElementById("id-readout");
+  if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function idConceptVerdict(code) {
+  if (idAnswered) { return; }
+  if (idMode !== "graded") { return; }
+  idAnswered = true;
+  var box = document.getElementById("id-concept");
+  if (box) { var bs = box.getElementsByTagName("button"); for (var i = 0; i < bs.length; i++) { bs[i].disabled = true; } }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("lemons-arena", currentIdIndex, code, function (res) {
+      if (res && res.needEnroll) {
+        idAnswered = false;
+        if (box) { var b2 = box.getElementsByTagName("button"); for (var j = 0; j < b2.length; j++) { b2[j].disabled = false; } }
+        var o = document.getElementById("id-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        var out = document.getElementById("id-readout");
+        if (out) { out.innerHTML = res.correct ? "<strong>Correct.</strong> Recorded." : "<strong>Not quite.</strong> Recorded \u2014 revisit this idea in Practice mode."; }
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setTimeout(function () { idDealGradedCase(); }, 1600); }
+        }
+      } else {
+        idAnswered = false;
+        if (box) { var b3 = box.getElementsByTagName("button"); for (var k = 0; k < b3.length; k++) { b3[k].disabled = false; } }
+        var o3 = document.getElementById("id-readout");
+        if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), idReviewData());
+  } else {
+    idAnswered = false;
+    var o4 = document.getElementById("id-readout");
+    if (o4) { o4.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in."; }
+  }
+}
 function newIdCase() {
-  currentId = ID_CASES[Math.floor(Math.random() * ID_CASES.length)];
+  if (idMode === "graded") {
+    try {
+      if (typeof ArenaAttempts === "undefined") { return; }
+      if (!idHasAccess) {
+        var story0 = document.getElementById("id-story");
+        if (story0) { story0.innerHTML = "<strong>Graded run is for enrolled students.</strong> This account isn't enrolled, so answers won't record and the run can't be scored. To preview the questions, switch to <strong>Practice</strong> mode above."; }
+        var out0 = document.getElementById("id-readout");
+        if (out0) { out0.innerHTML = ""; }
+        return;
+      }
+      if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+        var lo = document.getElementById("id-readout");
+        if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
+        return;
+      }
+      if (!(ArenaAttempts.isAttemptActive && ArenaAttempts.isAttemptActive())) {
+        ArenaAttempts.startAttempt(true);
+      } else {
+        idDealGradedCase();
+      }
+    } catch (err) { try { console.error("GRADED id:", err); } catch (e) {} }
+    return;
+  }
+  currentIdIndex = Math.floor(Math.random() * ID_CASES.length);
+  currentId = ID_CASES[currentIdIndex];
   idAnswered = false;
   setIdButtons(false);
   var story = document.getElementById("id-story");
@@ -502,36 +733,60 @@ function newIdCase() {
   if (out) { out.innerHTML = "The case file awaits your diagnosis."; }
 }
 
-function idVerdict(choice) {
-  if (!currentId || idAnswered) { return; }
-  idAnswered = true;
-  setIdButtons(true);
+function idLocalVerdict(choice) {
   var correct = choice === currentId.key;
   var btnChosen = document.getElementById("id-" + choice);
   var btnRight = document.getElementById("id-" + currentId.key);
   if (btnRight) { btnRight.classList.add("correct"); }
   if (!correct && btnChosen) { btnChosen.classList.add("wrong"); }
-
-  ID.attempted += 1;
-  if (correct) {
-    ID.correct += 1;
-    ID.streak += 1;
-    if (ID.streak > ID.best) { ID.best = ID.streak; }
-  } else {
-    ID.streak = 0;
-  }
-  saveId();
-  renderIdStats();
-
   var out = document.getElementById("id-readout");
   if (out) {
+    var tail = (idMode === "graded") ? "" : " Press <strong>New case</strong> for another.";
     if (correct) {
-      out.innerHTML = "<strong>Correct</strong> — this is " + ID_NAMES[currentId.key] + ". " + currentId.why +
-        " Streak: <strong>" + ID.streak + "</strong>. Press <strong>New case</strong> for another.";
+      out.innerHTML = "<strong>Correct</strong> \u2014 this is " + ID_NAMES[currentId.key] + ". " + currentId.why + tail;
     } else {
-      out.innerHTML = "<strong>Not this one.</strong> This is " + ID_NAMES[currentId.key] + ". " + currentId.why +
-        " Sort with the two questions: type or action? and which side is acting? Next case when ready.";
+      out.innerHTML = "<strong>Not this one.</strong> This is " + ID_NAMES[currentId.key] + ". " + currentId.why + tail;
     }
+  }
+  return correct;
+}
+function idVerdict(choice) {
+  if (!currentId || idAnswered) { return; }
+  idAnswered = true;
+  setIdButtons(true);
+  if (idMode !== "graded") {
+    var c = idLocalVerdict(choice);
+    ID.attempted += 1;
+    if (c) { ID.correct += 1; ID.streak += 1; if (ID.streak > ID.best) { ID.best = ID.streak; } }
+    else { ID.streak = 0; }
+    saveId();
+    renderIdStats();
+    return;
+  }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("lemons-arena", currentIdIndex, choice, function (res) {
+      if (res && res.needEnroll) {
+        idAnswered = false; setIdButtons(false);
+        var o = document.getElementById("id-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        idLocalVerdict(choice);
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setIdButtons(true); setTimeout(function () { idDealGradedCase(); }, 1500); }
+        }
+      } else {
+        idAnswered = false; setIdButtons(false);
+        var o2 = document.getElementById("id-readout");
+        if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), idReviewData());
+  } else {
+    idAnswered = false; setIdButtons(false);
+    var o3 = document.getElementById("id-readout");
+    if (o3) { o3.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in. Switch to Practice to explore."; }
   }
 }
 
@@ -542,17 +797,95 @@ function resetIdScore() {
   ID.best = 0;
   saveId();
   renderIdStats();
+  if (idMode === "graded" && typeof ArenaAttempts !== "undefined" && ArenaAttempts.resetLocal) {
+    ArenaAttempts.resetLocal();
+    var nbr = document.getElementById("id-newcase");
+    if (nbr) { nbr.style.display = ""; nbr.textContent = "Start graded run"; }
+    var str = document.getElementById("id-story");
+    if (str) { str.innerHTML = "Graded attempts reset. Press <strong>Start graded run</strong> to begin."; }
+    setIdButtons(true);
+    return;
+  }
   var out = document.getElementById("id-readout");
   if (out) { out.innerHTML = "Record cleared. Press <strong>New case</strong> to start fresh."; }
 }
 
 /* ══════════ Boot ══════════ */
+function imShowMsg(msg) { var el = document.getElementById("im-auth-msg"); if (el) { el.textContent = msg || ""; } }
+function imRenderAuth() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) { return; }
+  var bar = document.getElementById("im-authbar");
+  if (bar) {
+    bar.style.display = "block";
+    var mains = document.getElementsByTagName("main");
+    function setMainOffset() { if (mains && mains[0]) { var h = bar.offsetHeight || 52; mains[0].style.marginTop = (60 + h + 8) + "px"; } }
+    setMainOffset();
+    setTimeout(setMainOffset, 300);
+    if (window.addEventListener) { window.addEventListener("resize", setMainOffset); }
+  }
+  IMBackend.getSession(function (session) {
+    var out = document.getElementById("im-auth-signedout");
+    var inn = document.getElementById("im-auth-signedin");
+    if (session && session.user) {
+      try { console.log("%carena: SIGNED IN as " + (session.user.email || session.user.id) + " -- grades WILL record", "color:#166534;font-weight:bold"); } catch (e) {}
+      if (out) { out.style.display = "none"; }
+      if (inn) { inn.style.display = "flex"; }
+      var who = document.getElementById("im-who");
+      if (who) { who.textContent = session.user.email || "signed in"; }
+      IMBackend.checkAccess(function (ok) {
+        try { console.log("%carena: access check = " + ok, ok ? "color:#166534" : "color:#991b1b;font-weight:bold"); } catch (e) {}
+        idHasAccess = !!ok;
+        var b = document.getElementById("im-access-badge");
+        if (b) {
+          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
+          else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
+        }
+        var ctas = document.getElementsByClassName("sb-cta");
+        var ci;
+        for (ci = 0; ci < ctas.length; ci++) { ctas[ci].style.display = ok ? "none" : ""; }
+      });
+    } else {
+      try { console.warn("arena: SIGNED OUT -- not logged in ON THIS PAGE, so plays will NOT record. Use the sign-in bar at the top."); } catch (e) {}
+      if (out) { out.style.display = "flex"; }
+      if (inn) { inn.style.display = "none"; }
+    }
+  });
+}
+function imDoSignIn() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signIn(e.value, p.value, function (res) { if (res && res.ok) { imRenderAuth(); } else { imShowMsg(res && res.error ? res.error : "Sign-in failed."); } });
+}
+function imDoSignUp() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signUp(e.value, p.value, null, function (res) {
+    if (res && res.ok) { imShowMsg(res.needsConfirm ? "Account created \u2014 check your email to confirm, then sign in." : "Account created \u2014 you can sign in now."); }
+    else { imShowMsg(res && res.error ? res.error : "Sign-up failed."); }
+  });
+}
+function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
+
+var LEMONS_ARENA_BUILD = "lemons-2026-08-concept+review-v1";
 function boot() {
+  try { console.log("%clemons-arena build: " + LEMONS_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
+  try {
+    var stamp = document.createElement("div");
+    stamp.textContent = "build " + LEMONS_ARENA_BUILD;
+    stamp.style.cssText = "position:fixed;bottom:4px;right:6px;z-index:9999;font:11px monospace;color:#94a3b8;background:rgba(255,255,255,0.8);padding:1px 5px;border-radius:4px;pointer-events:none;";
+    document.body.appendChild(stamp);
+  } catch (e) {}
+  if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadId();
   renderIdStats();
   initLm();
   dsReset();
   fxSet("war");
+  imRenderAuth();
 }
 
 if (document.readyState === "loading") {
