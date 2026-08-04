@@ -291,7 +291,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="det-readout">Your verdict, detective?</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" onclick="newCase()">New case</button>
-    <button class="btn-sb btn-sb-ghost" onclick="resetScore()">Reset my record</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetScore()">Clear practice tally (this device)</button>
   </div>
 </div>
 
@@ -760,6 +760,11 @@ function diagnose(choice) {
 }
 
 function resetScore() {
+  // Local-only: this clears the on-page practice tally saved in THIS browser.
+  // It does NOT touch your recorded graded attempts or your grade (those live
+  // on the server and are shown in My Progress). Confirm to avoid an accidental wipe.
+  if (typeof window !== "undefined" && window.confirm &&
+      !window.confirm("Clear your local practice tally on this device? This does NOT affect your graded results or your grade \u2014 those are saved separately and shown in My Progress.")) { return; }
   DETECTIVE.attempted = 0;
   DETECTIVE.correct = 0;
   DETECTIVE.streak = 0;
@@ -821,7 +826,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var MARKET_ARENA_BUILD = "market-sandbox-2026-08-record+review-v2";
+var MARKET_ARENA_BUILD = "market-sandbox-2026-08-record+review-v2+safereset";
 function boot() {
   try { console.log("%cmarket-sandbox build: " + MARKET_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {

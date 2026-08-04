@@ -296,7 +296,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="wd-readout">The pay file awaits your diagnosis.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="wd-newcase" onclick="newWdCase()">New case</button>
-    <button class="btn-sb btn-sb-ghost" onclick="resetWdScore()">Reset my record</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetWdScore()">Clear practice tally (this device)</button>
   </div>
 </div>
 
@@ -651,6 +651,7 @@ var wdMode = "practice";
 var wdHasAccess = false;
 var wdGradedOrder = [];
 var wdGradedPos = 0;
+var wdCurrentConcept = null;   // concept question on screen (for review data)
 function wdShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var wdAnswered = true;
 
@@ -787,6 +788,7 @@ function wdDealGradedCase() {
 }
 function wdRenderConcept(cq) {
   if (!cq) { return; }
+  wdCurrentConcept = cq;
   wdShowConcept(true);
   var story = document.getElementById("wd-story");
   if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
@@ -800,6 +802,15 @@ function wdRenderConcept(cq) {
   }
   var out = document.getElementById("wd-readout");
   if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function wdReviewData() {
+  if (currentWdIndex >= 12 && wdCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < wdCurrentConcept.opts.length; i++) { labels[wdCurrentConcept.opts[i].code] = wdCurrentConcept.opts[i].text; }
+    return { prompt_text: wdCurrentConcept.q, labels: labels };
+  }
+  if (currentWd) { return { prompt_text: currentWd.story, labels: WD_NAMES }; }
+  return null;
 }
 function wdConceptVerdict(code) {
   if (wdAnswered) { return; }
@@ -829,7 +840,7 @@ function wdConceptVerdict(code) {
         var o3 = document.getElementById("wd-readout");
         if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), wdReviewData());
   } else {
     wdAnswered = false;
     var o4 = document.getElementById("wd-readout");
@@ -920,7 +931,7 @@ function wdVerdict(choice) {
         var o2 = document.getElementById("wd-readout");
         if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), wdReviewData());
   } else {
     wdAnswered = false; setWdButtons(false);
     var o3 = document.getElementById("wd-readout");
@@ -929,6 +940,11 @@ function wdVerdict(choice) {
 }
 
 function resetWdScore() {
+  // Local-only: this clears the on-page practice tally saved in THIS browser.
+  // It does NOT touch your recorded graded attempts or your grade (those live
+  // on the server and are shown in My Progress). Confirm to avoid an accidental wipe.
+  if (typeof window !== "undefined" && window.confirm &&
+      !window.confirm("Clear your local practice tally on this device? This does NOT affect your graded results or your grade \u2014 those are saved separately and shown in My Progress.")) { return; }
   WD.attempted = 0;
   WD.correct = 0;
   WD.streak = 0;
@@ -1008,7 +1024,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var LABOR_ARENA_BUILD = "labor-2026-08-concept+mobile-v1";
+var LABOR_ARENA_BUILD = "labor-2026-08-review-v2+safereset";
 function boot() {
   try { console.log("%clabor-lab build: " + LABOR_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {

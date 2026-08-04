@@ -278,7 +278,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="cd-readout">The lineup awaits your identification.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="cd-newcase" onclick="newClue()">New clue</button>
-    <button class="btn-sb btn-sb-ghost" onclick="resetCurveScore()">Reset my record</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetCurveScore()">Clear practice tally (this device)</button>
   </div>
 </div>
 
@@ -610,6 +610,7 @@ var cdMode = "practice";
 var cdHasAccess = false;
 var cdGradedOrder = [];
 var cdGradedPos = 0;
+var cdCurrentConcept = null;   // concept question on screen (for review data)
 function cdShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var cdAnswered = true;
 
@@ -740,6 +741,7 @@ function cdDealGradedCase() {
 }
 function cdRenderConcept(cq) {
   if (!cq) { return; }
+  cdCurrentConcept = cq;
   cdShowConcept(true);
   var story = document.getElementById("cd-story");
   if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
@@ -753,6 +755,15 @@ function cdRenderConcept(cq) {
   }
   var out = document.getElementById("cd-readout");
   if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function cdReviewData() {
+  if (currentCdIndex >= 12 && cdCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < cdCurrentConcept.opts.length; i++) { labels[cdCurrentConcept.opts[i].code] = cdCurrentConcept.opts[i].text; }
+    return { prompt_text: cdCurrentConcept.q, labels: labels };
+  }
+  if (currentCd) { return { prompt_text: currentCd.clue, labels: { AFC: "AFC (average fixed cost)", AVC: "AVC (average variable cost)", ATC: "ATC (average total cost)", MC: "MC (marginal cost)" } }; }
+  return null;
 }
 function cdConceptVerdict(code) {
   if (cdAnswered) { return; }
@@ -782,7 +793,7 @@ function cdConceptVerdict(code) {
         var o3 = document.getElementById("cd-readout");
         if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), cdReviewData());
   } else {
     cdAnswered = false;
     var o4 = document.getElementById("cd-readout");
@@ -872,7 +883,7 @@ function curveGuess(choice) {
         var o2 = document.getElementById("cd-readout");
         if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), cdReviewData());
   } else {
     cdAnswered = false; setCdButtons(false);
     var o3 = document.getElementById("cd-readout");
@@ -881,6 +892,11 @@ function curveGuess(choice) {
 }
 
 function resetCurveScore() {
+  // Local-only: this clears the on-page practice tally saved in THIS browser.
+  // It does NOT touch your recorded graded attempts or your grade (those live
+  // on the server and are shown in My Progress). Confirm to avoid an accidental wipe.
+  if (typeof window !== "undefined" && window.confirm &&
+      !window.confirm("Clear your local practice tally on this device? This does NOT affect your graded results or your grade \u2014 those are saved separately and shown in My Progress.")) { return; }
   CD.attempted = 0;
   CD.correct = 0;
   CD.streak = 0;
@@ -960,7 +976,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var COSTLAB_ARENA_BUILD = "cost-2026-08-concept+mobile-v1";
+var COSTLAB_ARENA_BUILD = "cost-2026-08-review-v2+safereset";
 function boot() {
   try { console.log("%ccost-lab build: " + COSTLAB_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {

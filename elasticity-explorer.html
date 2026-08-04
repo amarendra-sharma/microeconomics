@@ -272,7 +272,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="est-readout">Your estimate, analyst?</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="est-newcase" onclick="newEst()">New data</button>
-    <button class="btn-sb btn-sb-ghost" onclick="resetEstScore()">Reset my record</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetEstScore()">Clear practice tally (this device)</button>
   </div>
 </div>
 
@@ -546,6 +546,7 @@ var estMode = "practice";
 var estHasAccess = false;
 var estGradedOrder = [];
 var estGradedPos = 0;
+var estCurrentConcept = null;   // concept question on screen (for review data)
 function estShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 
 function loadEst() {
@@ -690,6 +691,7 @@ function estDealGradedCase() {
 
 function estRenderConcept(cq) {
   if (!cq) { return; }
+  estCurrentConcept = cq;
   estShowConcept(true);
   var story = document.getElementById("est-story");
   if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
@@ -706,6 +708,15 @@ function estRenderConcept(cq) {
   if (out) { out.innerHTML = "Choose the best answer."; }
 }
 
+function estReviewData() {
+  if (currentEstIndex >= 12 && estCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < estCurrentConcept.opts.length; i++) { labels[estCurrentConcept.opts[i].code] = estCurrentConcept.opts[i].text; }
+    return { prompt_text: estCurrentConcept.q, labels: labels };
+  }
+  if (currentEst) { return { prompt_text: "Price " + currentEst.p1 + " to " + currentEst.p2 + ", quantity " + currentEst.q1 + " to " + currentEst.q2 + " for " + currentEst.good + ". Elastic, unit, or inelastic?", labels: EST_NAMES }; }
+  return null;
+}
 function estConceptVerdict(code) {
   if (estAnswered) { return; }
   if (estMode !== "graded") { return; }
@@ -734,7 +745,7 @@ function estConceptVerdict(code) {
         var o3 = document.getElementById("est-readout");
         if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), estReviewData());
   } else {
     estAnswered = false;
     var o4 = document.getElementById("est-readout");
@@ -851,7 +862,7 @@ function classify(choice) {
         var o2 = document.getElementById("est-readout");
         if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), estReviewData());
   } else {
     estAnswered = false; setEstButtons(false);
     var o3 = document.getElementById("est-readout");
@@ -860,6 +871,11 @@ function classify(choice) {
 }
 
 function resetEstScore() {
+  // Local-only: this clears the on-page practice tally saved in THIS browser.
+  // It does NOT touch your recorded graded attempts or your grade (those live
+  // on the server and are shown in My Progress). Confirm to avoid an accidental wipe.
+  if (typeof window !== "undefined" && window.confirm &&
+      !window.confirm("Clear your local practice tally on this device? This does NOT affect your graded results or your grade \u2014 those are saved separately and shown in My Progress.")) { return; }
   EST.attempted = 0;
   EST.correct = 0;
   EST.streak = 0;
@@ -943,7 +959,7 @@ function imDoSignUp() {
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
 /* Boot */
-var ELASTICITY_ARENA_BUILD = "elasticity-2026-08-concept+mobile-v2";
+var ELASTICITY_ARENA_BUILD = "elasticity-2026-08-review-v3+safereset";
 function boot() {
   try { console.log("%celasticity-explorer build: " + ELASTICITY_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {

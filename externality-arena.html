@@ -241,7 +241,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="fd-readout">The case file awaits your diagnosis.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="fd-newcase" onclick="newFdCase()">New case</button>
-    <button class="btn-sb btn-sb-ghost" onclick="resetFdScore()">Reset my record</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetFdScore()">Clear practice tally (this device)</button>
   </div>
 </div>
 
@@ -811,6 +811,11 @@ function fdVerdict(choice) {
 }
 
 function resetFdScore() {
+  // Local-only: this clears the on-page practice tally saved in THIS browser.
+  // It does NOT touch your recorded graded attempts or your grade (those live
+  // on the server and are shown in My Progress). Confirm to avoid an accidental wipe.
+  if (typeof window !== "undefined" && window.confirm &&
+      !window.confirm("Clear your local practice tally on this device? This does NOT affect your graded results or your grade \u2014 those are saved separately and shown in My Progress.")) { return; }
   FD.attempted = 0;
   FD.correct = 0;
   FD.streak = 0;
@@ -890,7 +895,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var EXTERNALITY_ARENA_BUILD = "externality-2026-08-concept+review-v1";
+var EXTERNALITY_ARENA_BUILD = "externality-2026-08-concept+review-v1+safereset";
 function boot() {
   try { console.log("%cexternality-arena build: " + EXTERNALITY_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {

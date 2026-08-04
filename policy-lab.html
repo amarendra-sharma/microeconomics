@@ -303,7 +303,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="pv-readout">The court awaits your ruling.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="pv-newcase" onclick="newVerdictCase()">New case</button>
-    <button class="btn-sb btn-sb-ghost" onclick="resetVerdictScore()">Reset my record</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetVerdictScore()">Clear practice tally (this device)</button>
   </div>
 </div>
 
@@ -652,6 +652,7 @@ var pvMode = "practice";
 var pvHasAccess = false;
 var pvGradedOrder = [];
 var pvGradedPos = 0;
+var pvCurrentConcept = null;   // concept question on screen (for review data)
 function pvShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var pvAnswered = true;
 
@@ -791,6 +792,7 @@ function pvDealGradedCase() {
 
 function pvRenderConcept(cq) {
   if (!cq) { return; }
+  pvCurrentConcept = cq;
   pvShowConcept(true);
   var story = document.getElementById("pv-story");
   if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
@@ -807,6 +809,15 @@ function pvRenderConcept(cq) {
   if (out) { out.innerHTML = "Choose the best answer."; }
 }
 
+function pvReviewData() {
+  if (currentPvIndex >= 12 && pvCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < pvCurrentConcept.opts.length; i++) { labels[pvCurrentConcept.opts[i].code] = pvCurrentConcept.opts[i].text; }
+    return { prompt_text: pvCurrentConcept.q, labels: labels };
+  }
+  if (currentPv) { return { prompt_text: currentPv.story, labels: PV_NAMES }; }
+  return null;
+}
 function pvConceptVerdict(code) {
   if (pvAnswered) { return; }
   if (pvMode !== "graded") { return; }
@@ -835,7 +846,7 @@ function pvConceptVerdict(code) {
         var o3 = document.getElementById("pv-readout");
         if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), pvReviewData());
   } else {
     pvAnswered = false;
     var o4 = document.getElementById("pv-readout");
@@ -930,7 +941,7 @@ function verdict(choice) {
         var o2 = document.getElementById("pv-readout");
         if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), pvReviewData());
   } else {
     pvAnswered = false; setPvButtons(false);
     var o3 = document.getElementById("pv-readout");
@@ -939,6 +950,11 @@ function verdict(choice) {
 }
 
 function resetVerdictScore() {
+  // Local-only: this clears the on-page practice tally saved in THIS browser.
+  // It does NOT touch your recorded graded attempts or your grade (those live
+  // on the server and are shown in My Progress). Confirm to avoid an accidental wipe.
+  if (typeof window !== "undefined" && window.confirm &&
+      !window.confirm("Clear your local practice tally on this device? This does NOT affect your graded results or your grade \u2014 those are saved separately and shown in My Progress.")) { return; }
   PV.attempted = 0;
   PV.correct = 0;
   PV.streak = 0;
@@ -1018,7 +1034,7 @@ function imDoSignUp() {
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
 /* Boot */
-var POLICY_ARENA_BUILD = "policy-2026-08-concept+mobile-v1";
+var POLICY_ARENA_BUILD = "policy-2026-08-review-v2+safereset";
 function boot() {
   try { console.log("%cpolicy-lab build: " + POLICY_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {

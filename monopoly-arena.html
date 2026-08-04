@@ -303,7 +303,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="mk-readout">The case file awaits your classification.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="mk-newcase" onclick="newMarketCase()">New case</button>
-    <button class="btn-sb btn-sb-ghost" onclick="resetMarketScore()">Reset my record</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetMarketScore()">Clear practice tally (this device)</button>
   </div>
 </div>
 
@@ -733,6 +733,7 @@ var mkMode = "practice";       // 'practice' (unlimited, ungraded) or 'graded'
 var mkHasAccess = false;        // set by checkAccess; graded run needs enrollment
 var mkGradedOrder = [];        // shuffled case indices for the current graded attempt
 var mkGradedPos = 0;           // position within mkGradedOrder
+var mkCurrentConcept = null;   // concept question on screen (for review data)
 
 function mkShuffle(n) {
   var a = [], i, j, t;
@@ -852,6 +853,7 @@ function mkShowConcept(on) {
 
 function mkRenderConcept(cq) {
   if (!cq) { return; }
+  mkCurrentConcept = cq;
   mkShowConcept(true);
   var story = document.getElementById("mk-story");
   if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
@@ -954,6 +956,15 @@ function mkApplyVerdict(choice, correctCode, serverScore, isPractice) {
 
 // Graded concept question (Regulator / Price Discrimination). Records the A-D
 // answer through the same server path as classify cases, then advances the run.
+function mkReviewData() {
+  if (currentMkIndex >= 12 && mkCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < mkCurrentConcept.opts.length; i++) { labels[mkCurrentConcept.opts[i].code] = mkCurrentConcept.opts[i].text; }
+    return { prompt_text: mkCurrentConcept.q, labels: labels };
+  }
+  if (currentMk) { return { prompt_text: currentMk.story, labels: MK_NAMES }; }
+  return null;
+}
 function conceptVerdict(code) {
   if (mkAnswered) { return; }
   if (mkMode !== "graded") { return; }   // concept questions appear only in the graded run
@@ -989,7 +1000,7 @@ function conceptVerdict(code) {
         var o3 = document.getElementById("mk-readout");
         if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), mkReviewData());
   } else {
     mkAnswered = false;
     var o4 = document.getElementById("mk-readout");
@@ -1035,7 +1046,7 @@ function marketVerdict(choice) {
         if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page, so this graded case didn't save. Sign in at the top, then start the run again."; }
         mkAnswered = false; setMkButtons(false);
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), mkReviewData());
   } else {
     var o3 = document.getElementById("mk-readout");
     if (o3) { o3.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in. Switch to Practice mode to explore ungraded."; }
@@ -1044,6 +1055,11 @@ function marketVerdict(choice) {
 }
 
 function resetMarketScore() {
+  // Local-only: this clears the on-page practice tally saved in THIS browser.
+  // It does NOT touch your recorded graded attempts or your grade (those live
+  // on the server and are shown in My Progress). Confirm to avoid an accidental wipe.
+  if (typeof window !== "undefined" && window.confirm &&
+      !window.confirm("Clear your local practice tally on this device? This does NOT affect your graded results or your grade \u2014 those are saved separately and shown in My Progress.")) { return; }
   MK.attempted = 0;
   MK.correct = 0;
   MK.streak = 0;
@@ -1144,7 +1160,7 @@ function imDoSignOut() {
   IMBackend.signOut(function () { imRenderAuth(); });
 }
 
-var MONOPOLY_ARENA_BUILD = "monopoly-2026-08-concept+mobile-v3";
+var MONOPOLY_ARENA_BUILD = "monopoly-2026-08-review-v4+safereset";
 function boot() {
   try { console.log("%cmonopoly-arena build: " + MONOPOLY_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   // Visible build stamp so it's obvious on the page which version is deployed.

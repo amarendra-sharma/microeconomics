@@ -339,7 +339,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="bc-readout">The basket awaits inspection.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="bc-newcase" onclick="newBasketCase()">New basket</button>
-    <button class="btn-sb btn-sb-ghost" onclick="resetBasketScore()">Reset my record</button>
+    <button class="btn-sb btn-sb-ghost" onclick="resetBasketScore()">Clear practice tally (this device)</button>
   </div>
 </div>
 
@@ -734,6 +734,7 @@ var bcMode = "practice";
 var bcHasAccess = false;
 var bcGradedOrder = [];
 var bcGradedPos = 0;
+var bcCurrentConcept = null;   // concept question on screen (for review data)
 function bcShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var bcAnswered = true;
 
@@ -870,6 +871,7 @@ function bcDealGradedCase() {
 }
 function bcRenderConcept(cq) {
   if (!cq) { return; }
+  bcCurrentConcept = cq;
   bcShowConcept(true);
   var story = document.getElementById("bc-story");
   if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
@@ -883,6 +885,15 @@ function bcRenderConcept(cq) {
   }
   var out = document.getElementById("bc-readout");
   if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function bcReviewData() {
+  if (currentBcIndex >= 12 && bcCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < bcCurrentConcept.opts.length; i++) { labels[bcCurrentConcept.opts[i].code] = bcCurrentConcept.opts[i].text; }
+    return { prompt_text: bcCurrentConcept.q, labels: labels };
+  }
+  if (currentBc) { return { prompt_text: currentBc.story, labels: BC_NAMES }; }
+  return null;
 }
 function bcConceptVerdict(code) {
   if (bcAnswered) { return; }
@@ -912,7 +923,7 @@ function bcConceptVerdict(code) {
         var o3 = document.getElementById("bc-readout");
         if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), bcReviewData());
   } else {
     bcAnswered = false;
     var o4 = document.getElementById("bc-readout");
@@ -1003,7 +1014,7 @@ function basketCheck(choice) {
         var o2 = document.getElementById("bc-readout");
         if (o2) { o2.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
       }
-    });
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), bcReviewData());
   } else {
     bcAnswered = false; setBcButtons(false);
     var o3 = document.getElementById("bc-readout");
@@ -1012,6 +1023,11 @@ function basketCheck(choice) {
 }
 
 function resetBasketScore() {
+  // Local-only: this clears the on-page practice tally saved in THIS browser.
+  // It does NOT touch your recorded graded attempts or your grade (those live
+  // on the server and are shown in My Progress). Confirm to avoid an accidental wipe.
+  if (typeof window !== "undefined" && window.confirm &&
+      !window.confirm("Clear your local practice tally on this device? This does NOT affect your graded results or your grade \u2014 those are saved separately and shown in My Progress.")) { return; }
   BC.attempted = 0;
   BC.correct = 0;
   BC.streak = 0;
@@ -1091,7 +1107,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var CHOICE_ARENA_BUILD = "choice-2026-08-concept+mobile-v1";
+var CHOICE_ARENA_BUILD = "choice-2026-08-review-v2+safereset";
 function boot() {
   try { console.log("%cchoice-sandbox build: " + CHOICE_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {
