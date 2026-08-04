@@ -423,7 +423,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-arena-review';
+var SA_BUILD = 'intro-micro-portal-2026-08-deadline-control';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2223,11 +2223,175 @@ function renderGrading(host){
     '<div class="inline-actions" style="margin-bottom:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="itemStatsBtn">Item analysis</button></div>' +
     '<div class="card" id="graderKeyCard" style="margin-bottom:16px;"></div>' +
     '<div class="card" id="workBrowser" style="margin-bottom:16px;"></div>' +
+    '<div class="card" id="reviewDeadlineCard" style="margin-bottom:16px;"></div>' +
+    '<div class="card" id="arenaAttemptsCard" style="margin-bottom:16px;"></div>' +
     '<div id="gradingBody">' + loadingCard() + '</div>';
   if($('itemStatsBtn')){ $('itemStatsBtn').addEventListener('click', function(){ openItemStats(State.teachCourseId); }); }
   renderGraderKeyCard();
   renderWorkBrowser();
+  renderReviewDeadlines();
+  renderArenaAttempts();
   loadPendingWritten();
+}
+
+/* Admin control for arena review deadlines. Students can review their wrong
+   graded cases only AFTER an arena's review_available_at date (blank = open now).
+   Writes go through im_set_review_deadline (admin-gated, SECURITY DEFINER) since
+   im_arena_config is vault-locked. Admin-only; hidden for non-admin staff. */
+function renderReviewDeadlines(){
+  var card=$('reviewDeadlineCard'); if(!card){ return; }
+  if(State.role!=='admin'){ card.style.display='none'; return; }
+  card.style.display='';
+  card.innerHTML='<h3 style="font-size:16px;margin-bottom:4px;">Arena review deadlines</h3>'+
+    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Students can review their wrong graded answers only after an arena\u2019s date passes. Leave blank to open review immediately. Times are your local time.</div>'+
+    '<div class="inline-actions" style="gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">'+
+      '<label style="font-size:12.5px;">Set ALL arenas to:</label>'+
+      '<input type="datetime-local" id="rdAllInput" class="input" style="max-width:220px;">'+
+      '<button class="btn btn-primary btn-sm" id="rdAllBtn">Apply to all</button>'+
+      '<button class="btn btn-ghost btn-sm" id="rdClearAllBtn">Open all now</button>'+
+      '<span id="rdAllMsg" style="font-size:12px;color:var(--text-muted);"></span>'+
+    '</div>'+
+    '<div id="rdListBody">'+loadingCard()+'</div>';
+
+  function isoToLocalInput(iso){
+    if(!iso){ return ''; }
+    var d=new Date(iso); if(isNaN(d.getTime())){ return ''; }
+    // to yyyy-MM-ddThh:mm in local time
+    var pad=function(n){ return (n<10?'0':'')+n; };
+    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+  }
+  function localInputToISO(v){
+    if(!v){ return null; }
+    var d=new Date(v); if(isNaN(d.getTime())){ return null; }
+    return d.toISOString();
+  }
+
+  function load(){
+    sb.rpc('im_list_review_deadlines').then(function(r){
+      var body=$('rdListBody'); if(!body){ return; }
+      if(r.error){ body.innerHTML='<div class="card empty">Deadline controls aren\u2019t available yet. If this persists, migration im_45 (im_set_review_deadline) may need to be deployed.</div>'; return; }
+      var rows=r.data?r.data:[];
+      // only show the graded classifier arenas (skip market/profit which have no key review)
+      var html='<table class="tbl"><thead><tr><th>Arena</th><th>Review opens</th><th></th></tr></thead><tbody>';
+      rows.forEach(function(row){
+        var title=ARENA_TITLE[row.arena_slug]||row.arena_slug;
+        html+='<tr data-slug="'+esc(row.arena_slug)+'">'+
+          '<td>'+esc(title)+'</td>'+
+          '<td><input type="datetime-local" class="input rd-one" data-slug="'+esc(row.arena_slug)+'" value="'+esc(isoToLocalInput(row.review_available_at))+'" style="max-width:210px;"></td>'+
+          '<td><button class="btn btn-ghost btn-sm rd-save" data-slug="'+esc(row.arena_slug)+'">Save</button> '+
+              '<button class="btn btn-ghost btn-sm rd-clear" data-slug="'+esc(row.arena_slug)+'">Open now</button></td></tr>';
+      });
+      html+='</tbody></table>';
+      body.innerHTML=html;
+      Array.prototype.forEach.call(body.querySelectorAll('.rd-save'), function(b){
+        b.addEventListener('click', function(){
+          var slug=b.getAttribute('data-slug');
+          var inp=body.querySelector('.rd-one[data-slug="'+slug+'"]');
+          setOne(slug, localInputToISO(inp?inp.value:''), b);
+        });
+      });
+      Array.prototype.forEach.call(body.querySelectorAll('.rd-clear'), function(b){
+        b.addEventListener('click', function(){ setOne(b.getAttribute('data-slug'), null, b); });
+      });
+    });
+  }
+  function setOne(slug, iso, btn){
+    var old=btn?btn.textContent:''; if(btn){ btn.textContent='\u2026'; btn.disabled=true; }
+    sb.rpc('im_set_review_deadline', { p_arena_slug: slug, p_when: iso }).then(function(r){
+      if(btn){ btn.textContent=old; btn.disabled=false; }
+      if(r.error){ alert('Could not update: '+(r.error.message||'error')); return; }
+      load();
+    });
+  }
+  function setAll(iso){
+    var msg=$('rdAllMsg'); if(msg){ msg.textContent='Saving\u2026'; }
+    sb.rpc('im_set_review_deadline', { p_arena_slug: null, p_when: iso }).then(function(r){
+      if(r.error){ if(msg){ msg.textContent=''; } alert('Could not update all: '+(r.error.message||'error')); return; }
+      if(msg){ msg.textContent='Updated '+(r.data!==null&&r.data!==undefined?r.data:'')+' arenas.'; setTimeout(function(){ if(msg){ msg.textContent=''; } }, 3000); }
+      load();
+    });
+  }
+  if($('rdAllBtn')){ $('rdAllBtn').addEventListener('click', function(){ var v=$('rdAllInput').value; if(!v){ alert('Pick a date first, or use \u201cOpen all now\u201d.'); return; } setAll(new Date(v).toISOString()); }); }
+  if($('rdClearAllBtn')){ $('rdClearAllBtn').addEventListener('click', function(){ if(confirm('Open review immediately for ALL arenas?')){ setAll(null); } }); }
+  load();
+}
+
+/* Instructor view of ALL graded arena attempts: a per-student list of attempts
+   (from im_arena_attempt_rollup, one row per student/arena/attempt), each of
+   which drills into that attempt's individual cases (question, the student's
+   answer, correct answer). Reads respect RLS: staff see their section only. */
+function renderArenaAttempts(){
+  var card=$('arenaAttemptsCard'); if(!card){ return; }
+  card.innerHTML='<h3 style="font-size:16px;margin-bottom:4px;">Arena attempts</h3>'+
+    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Every student\u2019s graded arena runs. Click an attempt to see each case \u2014 the question, the student\u2019s answer, and the correct answer.</div>'+
+    '<div id="arenaAttemptsBody">'+loadingCard()+'</div>';
+  var cid=State.teachCourseId;
+  // Pull enrolled students (for names) and the attempt rollup in parallel.
+  Promise.all([
+    sb.from('im_enrollment').select('student_id, user_id, im_person(user_id,email,full_name)').eq('course_id',cid).eq('status','active'),
+    sb.from('im_arena_attempt_rollup').select('user_id, arena_slug, attempt_no, cases, correct, pct, finished_at').eq('course_id',cid).order('finished_at',{ascending:false}).limit(3000)
+  ]).then(function(r){
+    var body=$('arenaAttemptsBody'); if(!body){ return; }
+    var enroll=r[0].data?r[0].data:[];
+    var att=r[1].data?r[1].data:[];
+    if(r[1].error){ body.innerHTML='<div class="card empty">Arena attempt data isn\u2019t available yet. If this persists, migration im_40 (im_arena_attempt_rollup) may need to be deployed.</div>'; return; }
+    if(att.length===0){ body.innerHTML='<div class="card empty">No graded arena attempts yet in this course.</div>'; return; }
+    // name map by user_id
+    var nameOf={};
+    enroll.forEach(function(e){
+      var p=e.im_person||{}; var uid=p.user_id||e.user_id||e.student_id;
+      if(uid){ nameOf[uid]= p.full_name || p.email || uid; }
+    });
+    // group attempts by student
+    var byStu={};
+    att.forEach(function(a){ if(!byStu[a.user_id]){ byStu[a.user_id]=[]; } byStu[a.user_id].push(a); });
+    var studentIds=Object.keys(byStu);
+    // sort students by name
+    studentIds.sort(function(x,y){ return (nameOf[x]||x).localeCompare(nameOf[y]||y); });
+    var idx=0; var store={};
+    var html='<table class="tbl"><thead><tr><th>Student</th><th>Arena</th><th>Attempt</th><th>Score</th><th>When</th><th></th></tr></thead><tbody>';
+    studentIds.forEach(function(uid){
+      byStu[uid].forEach(function(a){
+        var k='aa'+(idx++); store[k]={ uid:uid, slug:a.arena_slug, attempt_no:a.attempt_no };
+        var title=ARENA_TITLE[a.arena_slug]||a.arena_slug;
+        var when=a.finished_at?new Date(a.finished_at).toLocaleString():'';
+        html+='<tr><td>'+esc(nameOf[uid]||uid)+'</td><td>'+esc(title)+'</td><td>#'+esc(String(a.attempt_no))+'</td>'+
+          '<td class="mono">'+esc(String(a.correct))+'/'+esc(String(a.cases))+' ('+esc(String(a.pct))+'%)</td>'+
+          '<td>'+esc(when)+'</td>'+
+          '<td><button class="btn btn-ghost btn-sm" data-aadrill="'+k+'">Cases</button></td></tr>';
+      });
+    });
+    html+='</tbody></table>';
+    body.innerHTML=html;
+    body.addEventListener('click', function(ev){
+      var k=ev.target&&ev.target.getAttribute?ev.target.getAttribute('data-aadrill'):null;
+      if(!k){ return; }
+      var meta=store[k]; if(!meta){ return; }
+      var tr=ev.target.closest?ev.target.closest('tr'):null; if(!tr){ return; }
+      if(tr.nextSibling && tr.nextSibling.getAttribute && tr.nextSibling.getAttribute('data-aapanel')){ tr.parentNode.removeChild(tr.nextSibling); return; }
+      var panel=document.createElement('tr'); panel.setAttribute('data-aapanel','1');
+      panel.innerHTML='<td colspan="6" style="background:var(--surface-strong);padding:10px 12px;"><div style="font-size:12px;color:var(--text-muted);">Loading cases\u2026</div></td>';
+      if(tr.nextSibling){ tr.parentNode.insertBefore(panel,tr.nextSibling); } else { tr.parentNode.appendChild(panel); }
+      sb.from('im_attempt').select('case_index, is_correct, prompt_text, chosen_label, correct_label, submitted')
+        .eq('user_id',meta.uid).eq('arena_slug',meta.slug).eq('attempt_no',meta.attempt_no)
+        .order('case_index',{ascending:true}).then(function(cr){
+          var cases=cr.data?cr.data:[];
+          if(cases.length===0){ panel.querySelector('td').innerHTML='<div style="font-size:12px;color:var(--text-subtle);">No case detail recorded for this attempt.</div>'; return; }
+          var h='<div style="font-size:12.5px;line-height:1.5;">';
+          cases.forEach(function(c){
+            var mark=c.is_correct?'<span class="tag green">correct</span>':'<span class="tag rose">wrong</span>';
+            var yours=c.chosen_label?esc(c.chosen_label):(c.submitted?esc(c.submitted):'\u2014');
+            var right=c.correct_label?esc(c.correct_label):'\u2014';
+            h+='<div style="padding:6px 0;border-bottom:1px solid var(--border);">'+
+              '<div style="margin-bottom:3px;">'+mark+' <span style="color:var(--text-subtle);">case '+esc(String(c.case_index))+'</span></div>';
+            if(c.prompt_text){ h+='<div><b>Q:</b> '+esc(c.prompt_text)+'</div>'; }
+            h+='<div><b>Answer given:</b> '+yours+''+(c.is_correct?'':' \u00b7 <b>correct:</b> '+right)+'</div></div>';
+          });
+          h+='</div>';
+          panel.querySelector('td').innerHTML=h;
+        });
+    });
+  });
 }
 
 /* Item analysis: how the class did on each graded question, hardest first.

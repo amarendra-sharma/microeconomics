@@ -138,7 +138,20 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); 
 footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
 
 @media (max-width: 640px) {
-  main { padding: 2rem 1.1rem 3rem; }
+  main { padding: 2rem 1.1rem 3rem; 
+  #im-authbar { padding: 0.6rem 1rem; }
+  #im-auth-signedout { flex-direction: column; align-items: stretch !important; gap: 0.4rem !important; }
+  #im-auth-signedout input, #im-auth-signedout button { width: 100%; box-sizing: border-box; }
+}
+#im-email, #im-pass { font-size: 16px !important; min-height: 40px; }
+#im-authbar button { min-height: 40px; }
+.aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
+.aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
+.aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
+.aa-card.aa-done { border-color: var(--gold, #b87408); background: var(--gold-lt, #fdf6ec); }
+.aa-btn { font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--rule); cursor: pointer; background: var(--bg-card); }
+.aa-btn-primary { background: var(--accent, #0f3d9e); color: #fff; border-color: var(--accent, #0f3d9e); }
+.aa-btn-ghost { background: transparent; }
   h1.sb-title { font-size: 2rem; }
   .sb-diag-grid { grid-template-columns: 1fr; }
 }
@@ -154,6 +167,22 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <a class="sb-header-btn" href="index.html" style="margin-right:0.4rem;">&larr; Portal</a>
   <a class="sb-header-btn" href="intro-micro-textbook.html">Textbook</a>
 </header>
+
+<div id="im-authbar" style="display:none;position:fixed;top:60px;left:0;right:0;z-index:150;background:#f5f0e8;border-bottom:1px solid #e2e8f0;padding:0.5rem 1.5rem;font-family:'Inter',system-ui,sans-serif;font-size:0.8125rem;color:#334155;">
+  <div id="im-auth-signedout" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-weight:600;">Intro Micro account:</span>
+    <input id="im-email" type="email" placeholder="email" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <input id="im-pass" type="password" placeholder="password" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <button id="im-signin-btn" onclick="imDoSignIn()" style="padding:0.35rem 0.8rem;border:none;border-radius:6px;background:#0f3d9e;color:#fff;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign in</button>
+    <button id="im-signup-btn" onclick="imDoSignUp()" style="padding:0.35rem 0.8rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Create account</button>
+    <span id="im-auth-msg" style="color:#991b1b;"></span>
+  </div>
+  <div id="im-auth-signedin" style="display:none;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span id="im-who" style="font-weight:600;"></span>
+    <span id="im-access-badge"></span>
+    <button id="im-signout-btn" onclick="imDoSignOut()" style="padding:0.3rem 0.7rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign out</button>
+  </div>
+</div>
 
 <main>
 
@@ -580,6 +609,8 @@ var CASES = [
 
 var DETECTIVE = { attempted: 0, correct: 0, streak: 0, best: 0 };
 var currentCase = null;
+var currentCaseIndex = -1;
+var msHasAccess = false;
 var caseAnswered = true;
 
 function loadDetective() {
@@ -629,7 +660,8 @@ function setDiagButtons(disabled) {
 }
 
 function newCase() {
-  currentCase = CASES[Math.floor(Math.random() * CASES.length)];
+  currentCaseIndex = Math.floor(Math.random() * CASES.length);
+  currentCase = CASES[currentCaseIndex];
   caseAnswered = false;
   setDiagButtons(false);
 
@@ -686,10 +718,18 @@ function diagnose(choice) {
   }
   saveDetective();
   renderStats();
-  // Record this case to the database so it counts toward the arena grade.
+  // Record this case through the grading Edge Function (server-side, tamper-proof).
+  // market-sandbox is a FREE preview arena, so the function records it without
+  // requiring an enrollment. We pass review text so wrong cases are reviewable.
   try {
-    var _mod = (typeof SAProgress !== 'undefined') ? SAProgress : ((typeof IMProgress !== 'undefined') ? IMProgress : null);
-    if (_mod && _mod.recordArenaCase) { _mod.recordArenaCase('market-sandbox', DETECTIVE.attempted, correct); }
+    if (typeof IMBackend !== "undefined" && IMBackend.isOnline() && IMBackend.gradeCase) {
+      IMBackend.gradeCase("market-sandbox", currentCaseIndex, choice, function (res) {
+        try {
+          if (res && res.offline) { console.warn("market-sandbox: offline, case not recorded"); }
+          else if (res && typeof res.correct === "boolean") { console.log("market-sandbox: case recorded (correct=" + res.correct + ")"); }
+        } catch (e) {}
+      }, 1, { prompt_text: currentCase.story, labels: DIAG_NAMES });
+    }
   } catch (e) {}
 
   var e0 = eqm(BASE_A, BASE_B);
@@ -724,13 +764,72 @@ function resetScore() {
 }
 
 /* ══════════ Boot ══════════ */
+function imShowMsg(msg) { var el = document.getElementById("im-auth-msg"); if (el) { el.textContent = msg || ""; } }
+function imRenderAuth() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) { return; }
+  var bar = document.getElementById("im-authbar");
+  if (bar) {
+    bar.style.display = "block";
+    var mains = document.getElementsByTagName("main");
+    function setMainOffset() { if (mains && mains[0]) { var h = bar.offsetHeight || 52; mains[0].style.marginTop = (60 + h + 8) + "px"; } }
+    setMainOffset();
+    setTimeout(setMainOffset, 300);
+    if (window.addEventListener) { window.addEventListener("resize", setMainOffset); }
+  }
+  IMBackend.getSession(function (session) {
+    var out = document.getElementById("im-auth-signedout");
+    var inn = document.getElementById("im-auth-signedin");
+    if (session && session.user) {
+      try { console.log("%carena: SIGNED IN as " + (session.user.email || session.user.id) + " -- plays WILL record (free arena)", "color:#166534;font-weight:bold"); } catch (e) {}
+      if (out) { out.style.display = "none"; }
+      if (inn) { inn.style.display = "flex"; }
+      var who = document.getElementById("im-who");
+      if (who) { who.textContent = session.user.email || "signed in"; }
+      msHasAccess = true;
+      var b = document.getElementById("im-access-badge");
+      if (b) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; free arena &mdash; plays record</span>"; }
+    } else {
+      try { console.warn("arena: SIGNED OUT -- sign in (top bar) so your plays record. This is a FREE arena; no enrollment needed."); } catch (e) {}
+      if (out) { out.style.display = "flex"; }
+      if (inn) { inn.style.display = "none"; }
+    }
+  });
+}
+function imDoSignIn() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signIn(e.value, p.value, function (res) { if (res && res.ok) { imRenderAuth(); } else { imShowMsg(res && res.error ? res.error : "Sign-in failed."); } });
+}
+function imDoSignUp() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signUp(e.value, p.value, null, function (res) {
+    if (res && res.ok) { imShowMsg(res.needsConfirm ? "Account created \u2014 check your email to confirm, then sign in." : "Account created \u2014 you can sign in now."); }
+    else { imShowMsg(res && res.error ? res.error : "Sign-up failed."); }
+  });
+}
+function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
+
+var MARKET_ARENA_BUILD = "market-sandbox-2026-08-record+review-v1";
 function boot() {
+  try { console.log("%cmarket-sandbox build: " + MARKET_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
+  try {
+    var stamp = document.createElement("div");
+    stamp.textContent = "build " + MARKET_ARENA_BUILD;
+    stamp.style.cssText = "position:fixed;bottom:4px;right:6px;z-index:9999;font:11px monospace;color:#94a3b8;background:rgba(255,255,255,0.8);padding:1px 5px;border-radius:4px;pointer-events:none;";
+    document.body.appendChild(stamp);
+  } catch (e) {}
   var sub = document.getElementById("sb-subscribe");
   if (sub) { sub.setAttribute("href", SUBSCRIBE_URL); }
   loadDetective();
   renderStats();
   initLab();
   initPx();
+  imRenderAuth();
 }
 
 if (document.readyState === "loading") {

@@ -132,9 +132,18 @@
     postGrade(payload, cb);
   }
 
-  /* gradePerformance: profit-arena. Posts achieved vs round_max. */
-  function gradePerformance(arenaSlug, achieved, roundMax, cb) {
-    postGrade({ arena_slug: arenaSlug, achieved: achieved, round_max: roundMax }, cb);
+  /* gradePerformance: profit-arena. Posts achieved vs round_max. Optional
+     caseIndex/attemptNo/review let the Manager's Round group rounds into graded
+     attempts and carry review text, same as keyed arenas. */
+  function gradePerformance(arenaSlug, achieved, roundMax, cb, caseIndex, attemptNo, review) {
+    var payload = { arena_slug: arenaSlug, achieved: achieved, round_max: roundMax };
+    if (typeof caseIndex === "number") { payload.case_index = caseIndex; }
+    if (typeof attemptNo === "number" && attemptNo >= 1) { payload.attempt_no = attemptNo; }
+    if (review && typeof review === "object") {
+      if (review.prompt_text) { payload.prompt_text = review.prompt_text; }
+      if (review.labels) { payload.labels = review.labels; }
+    }
+    postGrade(payload, cb);
   }
 
   function postGrade(payload, cb) {

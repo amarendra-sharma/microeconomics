@@ -7,6 +7,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
+<script src="sa-progress.js"></script>
+<script src="arena-attempts.js"></script>
 
 <style>
 :root {
@@ -125,7 +129,20 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-warm); 
 footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--ink-faint); border-top: 1px solid var(--rule); margin-top: 2rem; }
 
 @media (max-width: 640px) {
-  main { padding: 2rem 1.1rem 3rem; }
+  main { padding: 2rem 1.1rem 3rem; 
+  #im-authbar { padding: 0.6rem 1rem; }
+  #im-auth-signedout { flex-direction: column; align-items: stretch !important; gap: 0.4rem !important; }
+  #im-auth-signedout input, #im-auth-signedout button { width: 100%; box-sizing: border-box; }
+}
+#im-email, #im-pass { font-size: 16px !important; min-height: 40px; }
+#im-authbar button { min-height: 40px; }
+.aa-card { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.875rem 1rem; margin-bottom: 0.5rem; background: var(--bg-card); }
+.aa-card .aa-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem; }
+.aa-card .aa-note { font-size: 0.82rem; color: var(--ink-muted); line-height: 1.5; }
+.aa-card.aa-done { border-color: var(--gold, #b87408); background: var(--gold-lt, #fdf6ec); }
+.aa-btn { font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--rule); cursor: pointer; background: var(--bg-card); }
+.aa-btn-primary { background: var(--accent, #0f3d9e); color: #fff; border-color: var(--accent, #0f3d9e); }
+.aa-btn-ghost { background: transparent; }
   h1.sb-title { font-size: 2rem; }
   .sb-lossbar-label { flex-basis: 130px; }
 }
@@ -138,8 +155,25 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-logo"><span>Introduction to Microeconomics</span> &middot; Profit-Max Arena</div>
   <span class="sb-course-tag">Course Arena</span>
   <div class="sb-spacer"></div>
-  <a class="sb-header-btn" href="intro-micro-textbook.html">&larr; Back to the textbook</a>
+  <a class="sb-header-btn" href="index.html" style="margin-right:0.4rem;">&larr; Portal</a>
+  <a class="sb-header-btn" href="intro-micro-textbook.html">Textbook</a>
 </header>
+
+<div id="im-authbar" style="display:none;position:fixed;top:60px;left:0;right:0;z-index:150;background:#f5f0e8;border-bottom:1px solid #e2e8f0;padding:0.5rem 1.5rem;font-family:'Inter',system-ui,sans-serif;font-size:0.8125rem;color:#334155;">
+  <div id="im-auth-signedout" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-weight:600;">Intro Micro account:</span>
+    <input id="im-email" type="email" placeholder="email" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <input id="im-pass" type="password" placeholder="password" style="padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8125rem;">
+    <button id="im-signin-btn" onclick="imDoSignIn()" style="padding:0.35rem 0.8rem;border:none;border-radius:6px;background:#0f3d9e;color:#fff;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign in</button>
+    <button id="im-signup-btn" onclick="imDoSignUp()" style="padding:0.35rem 0.8rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Create account</button>
+    <span id="im-auth-msg" style="color:#991b1b;"></span>
+  </div>
+  <div id="im-auth-signedin" style="display:none;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span id="im-who" style="font-weight:600;"></span>
+    <span id="im-access-badge"></span>
+    <button id="im-signout-btn" onclick="imDoSignOut()" style="padding:0.3rem 0.7rem;border:1.5px solid #cbd5e1;border-radius:6px;background:transparent;color:#334155;font-weight:600;cursor:pointer;font-size:0.8125rem;">Sign out</button>
+  </div>
+</div>
 
 <main>
 
@@ -148,7 +182,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <p class="sb-subtitle">Run Mara's cart for real: feel your way up the profit hill, face the coldest decision in the book &mdash; operate at a loss or shut the cart &mdash; watch entry and exit squeeze every profit to zero, then take the Manager's Round, where you must read the diagram like a professional because the profit number stays hidden until you commit.</p>
 <hr class="sb-divider">
 
-<p>Chapter 10 hands the competitive firm exactly one lever &mdash; how much to produce &mdash; and one rule for pulling it: <strong>P = MC</strong>. This arena runs the chapter's exact cost structure, <code>TC = 48 + 3.6q &minus; 0.12q&sup2; + 0.006q&sup3;</code>, with its two famous thresholds: the <strong>$3 shutdown floor</strong> (minimum AVC, at 10 cups) and the <strong>$6 break-even price</strong> (minimum ATC, at 20 cups). Everything below is that one formula, weaponized. The Manager's Round record saves for reporting back.</p>
+<p>Chapter 10 hands the competitive firm exactly one lever &mdash; how much to produce &mdash; and one rule for pulling it: <strong>P = MC</strong>. This arena runs the chapter's exact cost structure, <code>TC = 48 + 3.6q &minus; 0.12q&sup2; + 0.006q&sup3;</code>, with its two famous thresholds: the <strong>$3 shutdown floor</strong> (minimum AVC, at 10 cups) and the <strong>$6 break-even price</strong> (minimum ATC, at 20 cups). Everything below is that one formula, weaponized. Practice as much as you like; the Graded run records to your gradebook.</p>
 
 <!-- ═══ STATION 1: THE PROFIT HILL ═══ -->
 <h2 class="sb-section"><span class="sb-step">1</span>The profit hill</h2>
@@ -238,7 +272,9 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
 <div class="sb-panel">
   <div class="sb-panel-label">&#9881; Read the diagram, then commit</div>
   <h4>No profit meter. Just you and the curves.</h4>
-  <div class="sb-case" id="mg-story">Press <strong>New round</strong> to receive your first market price.</div>
+  <div id="mg-mode-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;padding-bottom:0.75rem;border-bottom:1px solid var(--rule);"><span style="font-size:0.8rem;color:var(--ink-muted);">Mode:</span><button class="btn-sb btn-sb-ghost" id="mg-mode-practice" onclick="mgSetMode('practice')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Practice (unlimited, ungraded)</button><button class="btn-sb btn-sb-primary" id="mg-mode-graded" onclick="mgSetMode('graded')" style="font-size:0.8rem;padding:0.3rem 0.7rem;">Graded run</button></div>
+  <div id="aa-panel" style="margin-bottom:0.75rem;"></div>
+  <div class="sb-case" id="mg-story">Choose a mode above. <strong>Practice</strong> is unlimited and ungraded; the <strong>Graded run</strong> is 14 items (12 market rounds + 2 concept questions) and counts toward your grade.</div>
   <div class="sb-controls">
     <div>
       <label for="mg-q">Your output (cups per day) &mdash; <span id="mg-q-val"></span></label>
@@ -246,17 +282,18 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
     </div>
   </div>
   <div class="sb-chart-box"><canvas id="mg-canvas" height="280"></canvas></div>
+  <div class="sb-diag-grid" id="mg-concept" style="display:none;grid-template-columns:1fr;margin-bottom:0.75rem;"></div>
   <div class="sb-readout" id="mg-readout">The market is waiting for your first round.</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <button class="btn-sb btn-sb-primary" id="mg-commit-btn" onclick="mgCommit()" disabled>Commit this output</button>
-    <button class="btn-sb btn-sb-ghost" onclick="mgNewRound()">New round</button>
+    <button class="btn-sb btn-sb-ghost" id="mg-newround-btn" onclick="mgNewRound()">New round</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetMgScore()">Reset my record</button>
   </div>
 </div>
 
 <!-- ═══ RESULTS ═══ -->
-<h2 class="sb-section"><span class="sb-step">5</span>Your record</h2>
-<p>Your Manager's Round record is saved in this browser. Report the numbers below if this arena was assigned; below 80% optimal calls, drill Station 1's hill until "price meets rising MC" is the first thing your eye finds &mdash; and never forget the floor.</p>
+<h2 class="sb-section"><span class="sb-step">5</span>Your practice record</h2>
+<p>These numbers track your <strong>Practice</strong> rounds on this device only &mdash; they’re for your own feedback and don’t affect your grade. Your <strong>Graded run</strong> (12 rounds + 2 concept questions) records automatically to the gradebook when you’re signed in. Below 80% optimal calls, drill Station 1’s hill until "price meets rising MC" is the first thing your eye finds &mdash; and never forget the floor.</p>
 
 <div class="sb-stat-row">
   <div class="sb-stat"><div class="sb-stat-num" id="stat-attempted">0</div><div class="sb-stat-label">rounds managed</div></div>
@@ -530,6 +567,42 @@ function updateLr(story) {
 
 /* ══════════ STATION 4 — the manager's round ══════════ */
 var MG_PRICES = [2.5, 2.8, 3.5, 4, 4.5, 5, 6, 7, 8, 9];
+
+// A fixed graded sequence of 12 market prices (includes trap/shutdown rounds so
+// the graded run always exercises the floor). Shuffled per attempt.
+var MG_GRADED_PRICES = [2.5, 2.8, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 3.5, 5.5];
+
+// Concept questions (cases 12-13): the rising-MC branch of the P=MC rule, and the
+// shutdown vs break-even decision. Keys 12=C, 13=B.
+var MG_CONCEPT = [
+  { case_index: 12,
+    q: "The competitive firm's one rule is 'produce where P = MC.' But MC first falls, then rises, so a price line can cross MC twice. Which crossing maximizes profit, and why?",
+    opts: [
+      { code: "A", text: "The first (falling-MC) crossing, because costs are lower there" },
+      { code: "B", text: "Either crossing gives the same profit" },
+      { code: "C", text: "The second crossing, on the RISING branch of MC: only there does producing one more unit cost more than the price it earns, so stopping there maximizes profit (the falling-MC crossing is a profit minimum)" },
+      { code: "D", text: "Neither; the firm should produce where MC is at its minimum" }
+    ] },
+  { case_index: 13,
+    q: "This firm has a $3 shutdown price (min AVC) and a $6 break-even price (min ATC). At a market price of $4, what should it do in the short run?",
+    opts: [
+      { code: "A", text: "Shut down, because $4 is below the $6 break-even price and it's losing money" },
+      { code: "B", text: "Keep producing: $4 is above the $3 shutdown floor, so revenue covers all variable cost plus part of fixed cost \u2014 operating loses less than closing, which still owes the full fixed cost" },
+      { code: "C", text: "Produce, and it will earn a profit because $4 is above $3" },
+      { code: "D", text: "It's indifferent between producing and shutting down at $4" }
+    ] }
+];
+function mgConceptByIndex(ci) {
+  for (var i = 0; i < MG_CONCEPT.length; i++) { if (MG_CONCEPT[i].case_index === ci) { return MG_CONCEPT[i]; } }
+  return null;
+}
+var mgMode = "practice";
+var mgHasAccess = false;
+var mgCurrentIndex = -1;
+var mgGradedOrder = [];
+var mgGradedPos = 0;
+var mgCurrentConcept = null;
+function mgShuffle(n) { var a = [], i, j, t; for (i = 0; i < n; i++) { a.push(i); } for (i = n - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 var mgChart = null;
 var mgP = null, mgQ = 15, mgCommitted = true;
 var MG = { attempted: 0, correct: 0, streak: 0, best: 0 };
@@ -589,7 +662,186 @@ function updateMgChart() {
   if (qv) { qv.textContent = mgQ + " cups" + (mgQ === 0 ? " (shut down)" : ""); }
 }
 
+function mgShowConcept(on) {
+  var controls = document.querySelector("#mg-story");
+  var box = document.getElementById("mg-concept");
+  var slider = document.querySelector(".sb-controls");
+  var chart = document.querySelector("#mg-canvas");
+  var commit = document.getElementById("mg-commit-btn");
+  if (box) { box.style.display = on ? "" : "none"; }
+  // hide the output slider + chart + commit during a concept question
+  var mgControls = commit ? commit.parentNode : null;
+  if (slider) { slider.style.display = on ? "none" : ""; }
+  if (commit) { commit.style.display = on ? "none" : ""; }
+}
+function mgReviewData() {
+  if (mgCurrentIndex >= 12 && mgCurrentConcept) {
+    var labels = {}; var i;
+    for (i = 0; i < mgCurrentConcept.opts.length; i++) { labels[mgCurrentConcept.opts[i].code] = mgCurrentConcept.opts[i].text; }
+    return { prompt_text: mgCurrentConcept.q, labels: labels };
+  }
+  if (mgP !== null) {
+    return { prompt_text: "Market price " + fmt2(mgP) + " per cup: choose the profit-maximizing output (0 = shut down).",
+             labels: { optimal: "an optimal call (within $2 of best profit)", suboptimal: "a suboptimal output" } };
+  }
+  return null;
+}
+function mgSetMode(mode) {
+  mgMode = mode;
+  var bp = document.getElementById("mg-mode-practice");
+  var bg = document.getElementById("mg-mode-graded");
+  if (bp) { bp.className = "btn-sb " + (mode === "practice" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  if (bg) { bg.className = "btn-sb " + (mode === "graded" ? "btn-sb-primary" : "btn-sb-ghost"); }
+  var story = document.getElementById("mg-story");
+  var nb = document.getElementById("mg-newround-btn");
+  var commit = document.getElementById("mg-commit-btn");
+  if (mode === "graded") {
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.init({
+        slug: "profit-arena",
+        caseCount: MG_GRADED_PRICES.length + MG_CONCEPT.length,
+        mount: "aa-panel",
+        onStartAttempt: function (info) {
+          var order = mgShuffle(MG_GRADED_PRICES.length);
+          mgGradedOrder = [];
+          for (var i = 0; i < order.length; i++) { mgGradedOrder.push({ kind: "round", price: MG_GRADED_PRICES[order[i]], idx: i }); }
+          for (var c = 0; c < MG_CONCEPT.length; c++) { mgGradedOrder.push({ kind: "concept", case_index: MG_CONCEPT[c].case_index }); }
+          mgGradedPos = 0;
+          mgDealGradedCase();
+        },
+        onAttemptEnd: function (info) {
+          mgShowConcept(false);
+          var st = document.getElementById("mg-story");
+          if (st) { st.innerHTML = "Attempt complete. See the panel above for your score and options."; }
+          var nb2 = document.getElementById("mg-newround-btn");
+          if (nb2) { nb2.style.display = "none"; }
+          var cb = document.getElementById("mg-commit-btn");
+          if (cb) { cb.style.display = "none"; }
+        }
+      });
+    }
+    if (nb) { nb.textContent = "Start graded run"; nb.style.display = ""; }
+    if (commit) { commit.style.display = "none"; }
+    if (story) { story.innerHTML = "<strong>Graded run.</strong> Press <strong>Start graded run</strong> to begin. You'll play 12 market rounds (set output, commit) plus 2 concept questions \u2014 14 items. Two attempts; the second is optional \u2014 if you take it, your grade is the average of both."; }
+    mgGradedOrder = [];
+    mgGradedPos = 0;
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.render();
+      if (ArenaAttempts.isLocked()) {
+        if (nb) { nb.style.display = "none"; }
+        if (story) { story.innerHTML = "You\u2019ve already used both graded attempts for this arena (from a previous session). See your score in the panel above. Use <strong>Reset my record</strong> to retake if your instructor allows."; }
+      }
+    }
+  } else {
+    if (typeof ArenaAttempts !== "undefined") { ArenaAttempts.render(); }
+    var panel = document.getElementById("aa-panel");
+    if (panel) { panel.innerHTML = ""; }
+    mgShowConcept(false);
+    if (nb) { nb.textContent = "New round"; nb.style.display = ""; }
+    if (commit) { commit.style.display = ""; }
+    if (story) { story.innerHTML = "<strong>Practice mode.</strong> Unlimited rounds, ungraded. Press <strong>New round</strong> to begin."; }
+  }
+}
+function mgDealGradedCase() {
+  if (mgGradedPos >= mgGradedOrder.length) { return; }
+  var item = mgGradedOrder[mgGradedPos];
+  mgGradedPos += 1;
+  var nb = document.getElementById("mg-newround-btn");
+  if (nb) { nb.style.display = "none"; }
+  if (item.kind === "concept") {
+    mgCurrentIndex = item.case_index;
+    mgRenderConcept(mgConceptByIndex(item.case_index));
+  } else {
+    mgShowConcept(false);
+    mgCurrentIndex = item.idx;
+    mgP = item.price;
+    mgCommitted = false;
+    var commit = document.getElementById("mg-commit-btn");
+    if (commit) { commit.style.display = ""; commit.disabled = false; }
+    var slider = document.querySelector(".sb-controls");
+    if (slider) { slider.style.display = ""; }
+    var story = document.getElementById("mg-story");
+    if (story) { story.innerHTML = "<strong>Round " + (mgGradedPos) + " of 12 \u2014 this morning's price: " + fmt2(mgP) + " per cup.</strong> Read the diagram, set your output (0 = shut down), and commit."; }
+    var out = document.getElementById("mg-readout");
+    if (out) { out.innerHTML = "The ledger stays closed until you commit."; }
+    updateMgChart();
+  }
+}
+function mgRenderConcept(cq) {
+  if (!cq) { return; }
+  mgCurrentConcept = cq;
+  mgShowConcept(true);
+  var story = document.getElementById("mg-story");
+  if (story) { story.innerHTML = "<strong>Concept check:</strong> " + cq.q; }
+  var box = document.getElementById("mg-concept");
+  if (box) {
+    var html = "", i;
+    for (i = 0; i < cq.opts.length; i++) {
+      html += '<button class="sb-diag-btn" onclick="mgConceptVerdict(\'' + cq.opts[i].code + '\')">' + cq.opts[i].code + ". " + cq.opts[i].text + "</button>";
+    }
+    box.innerHTML = html;
+  }
+  var out = document.getElementById("mg-readout");
+  if (out) { out.innerHTML = "Choose the best answer."; }
+}
+function mgConceptVerdict(code) {
+  if (mgMode !== "graded") { return; }
+  var box = document.getElementById("mg-concept");
+  var already = box && box.getAttribute("data-answered") === "1";
+  if (already) { return; }
+  if (box) { box.setAttribute("data-answered", "1"); var bs = box.getElementsByTagName("button"); for (var i = 0; i < bs.length; i++) { bs[i].disabled = true; } }
+  if (typeof IMBackend !== "undefined" && IMBackend.isOnline()) {
+    IMBackend.gradeCase("profit-arena", mgCurrentIndex, code, function (res) {
+      if (res && res.needEnroll) {
+        if (box) { box.removeAttribute("data-answered"); var b2 = box.getElementsByTagName("button"); for (var j = 0; j < b2.length; j++) { b2[j].disabled = false; } }
+        var o = document.getElementById("mg-readout");
+        if (o) { o.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; }
+        return;
+      }
+      if (res && !res.offline && typeof res.correct === "boolean") {
+        var out = document.getElementById("mg-readout");
+        if (out) { out.innerHTML = res.correct ? "<strong>Correct.</strong> Recorded." : "<strong>Not quite.</strong> Recorded \u2014 revisit this idea in Practice mode."; }
+        if (box) { box.removeAttribute("data-answered"); }
+        if (typeof ArenaAttempts !== "undefined") {
+          ArenaAttempts.caseAnswered(res.correct);
+          if (ArenaAttempts.isAttemptActive()) { setTimeout(function () { mgDealGradedCase(); }, 1600); }
+        }
+      } else {
+        if (box) { box.removeAttribute("data-answered"); var b3 = box.getElementsByTagName("button"); for (var k = 0; k < b3.length; k++) { b3[k].disabled = false; } }
+        var o3 = document.getElementById("mg-readout");
+        if (o3) { o3.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+      }
+    }, (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), mgReviewData());
+  } else {
+    if (box) { box.removeAttribute("data-answered"); }
+    var o4 = document.getElementById("mg-readout");
+    if (o4) { o4.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in."; }
+  }
+}
 function mgNewRound() {
+  if (mgMode === "graded") {
+    try {
+      if (typeof ArenaAttempts === "undefined") { return; }
+      if (!mgHasAccess) {
+        var s0 = document.getElementById("mg-story");
+        if (s0) { s0.innerHTML = "<strong>Graded run is for enrolled students.</strong> This account isn't enrolled, so rounds won't record and the run can't be scored. To preview it, switch to <strong>Practice</strong> mode above."; }
+        var o0 = document.getElementById("mg-readout");
+        if (o0) { o0.innerHTML = ""; }
+        return;
+      }
+      if (ArenaAttempts.isLocked && ArenaAttempts.isLocked()) {
+        var lo = document.getElementById("mg-readout");
+        if (lo) { lo.innerHTML = "You've used both graded attempts. See the panel above for your final score."; }
+        return;
+      }
+      if (!(ArenaAttempts.isAttemptActive && ArenaAttempts.isAttemptActive())) {
+        ArenaAttempts.startAttempt(true);
+      } else {
+        mgDealGradedCase();
+      }
+    } catch (err) { try { console.error("GRADED mg:", err); } catch (e) {} }
+    return;
+  }
   mgP = MG_PRICES[Math.floor(Math.random() * MG_PRICES.length)];
   mgCommitted = false;
   var btn = document.getElementById("mg-commit-btn");
@@ -615,6 +867,41 @@ function mgCommit() {
   var best = maxProfit(mgP);
   var gap = best - yours;
   var optimal = gap <= 2.0001;
+
+  if (mgMode === "graded") {
+    // Graded round: don't touch the local practice tally; record correctness and
+    // advance through the run. "Correct" = an optimal call (within $2 of best).
+    var gout = document.getElementById("mg-readout");
+    if (gout) {
+      var gBest = qs > 0
+        ? "produce &asymp; <strong>" + (Math.round(qs * 10) / 10) + " cups</strong>, earning " + fmt2(best)
+        : "<strong>shut down</strong> (price below the $3 floor)";
+      gout.innerHTML = "The ledger opens: your " + mgQ + " cups made <strong>" + fmt2(yours) + "</strong>. Best was to " + gBest + ". " +
+        (optimal ? "<strong>Optimal call.</strong> Recorded." : "<strong>" + fmt2(gap) + " left on the table.</strong> Recorded.");
+    }
+    if (typeof IMBackend !== "undefined" && IMBackend.isOnline() && IMBackend.gradePerformance) {
+      IMBackend.gradePerformance("profit-arena", yours, best, function (res) {
+        try {
+          if (res && res.needEnroll) { if (gout) { gout.innerHTML = "<strong>Enrollment required.</strong> <a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\">Unlock the suite</a>."; } return; }
+          if (!(res && !res.offline && typeof res.correct === "boolean")) {
+            if (gout) { gout.innerHTML = "<strong>Not recorded.</strong> You appear to be signed out on this page. Sign in at the top, then start the run again."; }
+            return;
+          }
+          if (typeof ArenaAttempts !== "undefined") {
+            ArenaAttempts.caseAnswered(res.correct);
+            if (ArenaAttempts.isAttemptActive()) { setTimeout(function () { mgDealGradedCase(); }, 1700); }
+          }
+        } catch (e) {}
+      }, mgCurrentIndex,
+         (typeof ArenaAttempts !== "undefined" && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1),
+         { prompt_text: "Market price " + fmt2(mgP) + " per cup: choose the profit-maximizing output (0 = shut down).",
+           chosen_label: mgQ + " cups" + (mgQ === 0 ? " (shut down)" : "") + " \u2014 " + (optimal ? "optimal (within $2)" : "off by " + fmt2(gap)),
+           correct_label: (qs > 0 ? ("about " + (Math.round(qs * 10) / 10) + " cups") : "shut down (0 cups)") });
+    } else {
+      if (gout) { gout.innerHTML = "<strong>Offline.</strong> Graded runs need a connection and sign-in. Switch to Practice to explore."; }
+    }
+    return;
+  }
 
   MG.attempted += 1;
   if (optimal) {
@@ -659,13 +946,82 @@ function resetMgScore() {
 }
 
 /* ══════════ Boot ══════════ */
+function imShowMsg(msg) { var el = document.getElementById("im-auth-msg"); if (el) { el.textContent = msg || ""; } }
+function imRenderAuth() {
+  if (typeof IMBackend === "undefined" || !IMBackend.isOnline()) { return; }
+  var bar = document.getElementById("im-authbar");
+  if (bar) {
+    bar.style.display = "block";
+    var mains = document.getElementsByTagName("main");
+    function setMainOffset() { if (mains && mains[0]) { var h = bar.offsetHeight || 52; mains[0].style.marginTop = (60 + h + 8) + "px"; } }
+    setMainOffset();
+    setTimeout(setMainOffset, 300);
+    if (window.addEventListener) { window.addEventListener("resize", setMainOffset); }
+  }
+  IMBackend.getSession(function (session) {
+    var out = document.getElementById("im-auth-signedout");
+    var inn = document.getElementById("im-auth-signedin");
+    if (session && session.user) {
+      try { console.log("%carena: SIGNED IN as " + (session.user.email || session.user.id) + " -- grades WILL record", "color:#166534;font-weight:bold"); } catch (e) {}
+      if (out) { out.style.display = "none"; }
+      if (inn) { inn.style.display = "flex"; }
+      var who = document.getElementById("im-who");
+      if (who) { who.textContent = session.user.email || "signed in"; }
+      IMBackend.checkAccess(function (ok) {
+        try { console.log("%carena: access check = " + ok, ok ? "color:#166534" : "color:#991b1b;font-weight:bold"); } catch (e) {}
+        mgHasAccess = !!ok;
+        var b = document.getElementById("im-access-badge");
+        if (b) {
+          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
+          else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
+        }
+        var ctas = document.getElementsByClassName("sb-cta");
+        var ci;
+        for (ci = 0; ci < ctas.length; ci++) { ctas[ci].style.display = ok ? "none" : ""; }
+      });
+    } else {
+      try { console.warn("arena: SIGNED OUT -- not logged in ON THIS PAGE, so plays will NOT record. Use the sign-in bar at the top."); } catch (e) {}
+      if (out) { out.style.display = "flex"; }
+      if (inn) { inn.style.display = "none"; }
+    }
+  });
+}
+function imDoSignIn() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signIn(e.value, p.value, function (res) { if (res && res.ok) { imRenderAuth(); } else { imShowMsg(res && res.error ? res.error : "Sign-in failed."); } });
+}
+function imDoSignUp() {
+  imShowMsg("");
+  var e = document.getElementById("im-email");
+  var p = document.getElementById("im-pass");
+  if (!e || !p || !e.value || !p.value) { imShowMsg("Enter email and password."); return; }
+  IMBackend.signUp(e.value, p.value, null, function (res) {
+    if (res && res.ok) { imShowMsg(res.needsConfirm ? "Account created \u2014 check your email to confirm, then sign in." : "Account created \u2014 you can sign in now."); }
+    else { imShowMsg(res && res.error ? res.error : "Sign-up failed."); }
+  });
+}
+function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
+
+var PROFIT_ARENA_BUILD = "profit-2026-08-graded+review-v1";
 function boot() {
+  try { console.log("%cprofit-arena build: " + PROFIT_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
+  try {
+    var stamp = document.createElement("div");
+    stamp.textContent = "build " + PROFIT_ARENA_BUILD;
+    stamp.style.cssText = "position:fixed;bottom:4px;right:6px;z-index:9999;font:11px monospace;color:#94a3b8;background:rgba(255,255,255,0.8);padding:1px 5px;border-radius:4px;pointer-events:none;";
+    document.body.appendChild(stamp);
+  } catch (e) {}
+  if (typeof IMBackend !== "undefined") { IMBackend.gateContent(); }
   loadMg();
   renderMgStats();
   initPh();
   initSd();
   initLr();
   initMg();
+  imRenderAuth();
 }
 
 if (document.readyState === "loading") {
