@@ -725,8 +725,15 @@ function diagnose(choice) {
     if (typeof IMBackend !== "undefined" && IMBackend.isOnline() && IMBackend.gradeCase) {
       IMBackend.gradeCase("market-sandbox", currentCaseIndex, choice, function (res) {
         try {
-          if (res && res.offline) { console.warn("market-sandbox: offline, case not recorded"); }
-          else if (res && typeof res.correct === "boolean") { console.log("market-sandbox: case recorded (correct=" + res.correct + ")"); }
+          if (res && res.needEnroll) {
+            console.warn("market-sandbox: server returned 403 (needEnroll). The deployed im-grade Edge Function is missing the FREE_ARENAS allowance \u2014 redeploy it. Case NOT recorded.");
+          } else if (res && res.offline) {
+            console.warn("market-sandbox: case NOT recorded (offline / signed out, or server error such as a missing answer key \u2014 check that im_46 ran).");
+          } else if (res && typeof res.correct === "boolean") {
+            console.log("market-sandbox: case recorded (correct=" + res.correct + ")");
+          } else {
+            console.warn("market-sandbox: case NOT recorded (unexpected response).", res);
+          }
         } catch (e) {}
       }, 1, { prompt_text: currentCase.story, labels: DIAG_NAMES });
     }
@@ -814,7 +821,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var MARKET_ARENA_BUILD = "market-sandbox-2026-08-record+review-v1";
+var MARKET_ARENA_BUILD = "market-sandbox-2026-08-record+review-v2";
 function boot() {
   try { console.log("%cmarket-sandbox build: " + MARKET_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {
