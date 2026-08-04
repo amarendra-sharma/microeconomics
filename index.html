@@ -423,7 +423,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-perarena-deadlines';
+var SA_BUILD = 'intro-micro-portal-2026-08-progress-courseid-fix';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -5543,6 +5543,8 @@ function gradeExam(auto) {
 function loadProgress() {
   if (!State.user) { return; }
   var uid = State.user.id;
+  // the student's course (for per-arena review-open checks); may be null
+  var courseId = State.payCourseId || State.selfCourseId || State.currentCourseId || null;
   // attempts (graded), most recent first
   sb.from('im_exam_attempt')
     .select('item_id, is_correct, points_earned, graded_at, im_assessment_item(chapter)')
