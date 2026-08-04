@@ -423,7 +423,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-deadline-in-platform';
+var SA_BUILD = 'intro-micro-portal-2026-08-percourse-review';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1012,7 +1012,7 @@ function openCourseModal(courseId){
       '<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cmRevQ" '+(v.review_quizzes?'checked':'')+'> Quizzes</label>'+
       '<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cmRevA" '+(v.review_arenas?'checked':'')+'> Arena results</label>'+
       '<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cmRevE" '+(v.review_exams?'checked':'')+'> Exams</label>'+
-    '</div><div style="font-size:11.5px;color:var(--text-subtle);margin-top:5px;">When on, students can reopen the attempt and see which answers were right. Leave off during an active term.</div></div>'+
+    '</div><div style="font-size:11.5px;color:var(--text-subtle);margin-top:5px;">When on, students can reopen a graded attempt and see which answers were right &mdash; but only <strong>after the &ldquo;Access ends&rdquo; date above</strong> has passed. So arena review for your section opens on your course&rsquo;s own deadline; leave these off during an active term.</div></div>'+
     '<div class="field"><label>Grade weights — must sum to 100%</label>'+
     '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">'+
       wInput('cmWr','Reading',v.wr)+wInput('cmWq','Quizzes',v.wq)+wInput('cmWa','Arenas',v.wa)+wInput('cmWm','Midterm',v.wm)+wInput('cmWf','Final',v.wf)+
@@ -2223,98 +2223,15 @@ function renderGrading(host){
     '<div class="inline-actions" style="margin-bottom:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="itemStatsBtn">Item analysis</button></div>' +
     '<div class="card" id="graderKeyCard" style="margin-bottom:16px;"></div>' +
     '<div class="card" id="workBrowser" style="margin-bottom:16px;"></div>' +
-    '<div class="card" id="reviewDeadlineCard" style="margin-bottom:16px;"></div>' +
     '<div class="card" id="arenaAttemptsCard" style="margin-bottom:16px;"></div>' +
     '<div id="gradingBody">' + loadingCard() + '</div>';
   if($('itemStatsBtn')){ $('itemStatsBtn').addEventListener('click', function(){ openItemStats(State.teachCourseId); }); }
   renderGraderKeyCard();
   renderWorkBrowser();
-  renderReviewDeadlines();
   renderArenaAttempts();
   loadPendingWritten();
 }
 
-/* Admin control for arena review deadlines. Students can review their wrong
-   graded cases only AFTER an arena's review_available_at date (blank = open now).
-   Writes go through im_set_review_deadline (admin-gated, SECURITY DEFINER) since
-   im_arena_config is vault-locked. Admin-only; hidden for non-admin staff. */
-function renderReviewDeadlines(){
-  var card=$('reviewDeadlineCard'); if(!card){ return; }
-  if(State.role!=='admin'){ card.style.display='none'; return; }
-  card.style.display='';
-  card.innerHTML='<h3 style="font-size:16px;margin-bottom:4px;">Arena review deadlines</h3>'+
-    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Students can review their wrong graded answers only after an arena\u2019s date passes. Leave blank to open review immediately. Times are your local time.</div>'+
-    '<div class="inline-actions" style="gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">'+
-      '<label style="font-size:12.5px;">Set ALL arenas to:</label>'+
-      '<input type="datetime-local" id="rdAllInput" class="input" style="max-width:220px;">'+
-      '<button class="btn btn-primary btn-sm" id="rdAllBtn">Apply to all</button>'+
-      '<button class="btn btn-ghost btn-sm" id="rdClearAllBtn">Open all now</button>'+
-      '<span id="rdAllMsg" style="font-size:12px;color:var(--text-muted);"></span>'+
-    '</div>'+
-    '<div id="rdListBody">'+loadingCard()+'</div>';
-
-  function isoToLocalInput(iso){
-    if(!iso){ return ''; }
-    var d=new Date(iso); if(isNaN(d.getTime())){ return ''; }
-    // to yyyy-MM-ddThh:mm in local time
-    var pad=function(n){ return (n<10?'0':'')+n; };
-    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
-  }
-  function localInputToISO(v){
-    if(!v){ return null; }
-    var d=new Date(v); if(isNaN(d.getTime())){ return null; }
-    return d.toISOString();
-  }
-
-  function load(){
-    sb.rpc('im_list_review_deadlines').then(function(r){
-      var body=$('rdListBody'); if(!body){ return; }
-      if(r.error){ body.innerHTML='<div class="card empty">Deadline controls aren\u2019t available yet. If this persists, migration im_45 (im_set_review_deadline) may need to be deployed.</div>'; return; }
-      var rows=r.data?r.data:[];
-      // only show the graded classifier arenas (skip market/profit which have no key review)
-      var html='<table class="tbl"><thead><tr><th>Arena</th><th>Review opens</th><th></th></tr></thead><tbody>';
-      rows.forEach(function(row){
-        var title=ARENA_TITLE[row.arena_slug]||row.arena_slug;
-        html+='<tr data-slug="'+esc(row.arena_slug)+'">'+
-          '<td>'+esc(title)+'</td>'+
-          '<td><input type="datetime-local" class="input rd-one" data-slug="'+esc(row.arena_slug)+'" value="'+esc(isoToLocalInput(row.review_available_at))+'" style="max-width:210px;"></td>'+
-          '<td><button class="btn btn-ghost btn-sm rd-save" data-slug="'+esc(row.arena_slug)+'">Save</button> '+
-              '<button class="btn btn-ghost btn-sm rd-clear" data-slug="'+esc(row.arena_slug)+'">Open now</button></td></tr>';
-      });
-      html+='</tbody></table>';
-      body.innerHTML=html;
-      Array.prototype.forEach.call(body.querySelectorAll('.rd-save'), function(b){
-        b.addEventListener('click', function(){
-          var slug=b.getAttribute('data-slug');
-          var inp=body.querySelector('.rd-one[data-slug="'+slug+'"]');
-          setOne(slug, localInputToISO(inp?inp.value:''), b);
-        });
-      });
-      Array.prototype.forEach.call(body.querySelectorAll('.rd-clear'), function(b){
-        b.addEventListener('click', function(){ setOne(b.getAttribute('data-slug'), null, b); });
-      });
-    });
-  }
-  function setOne(slug, iso, btn){
-    var old=btn?btn.textContent:''; if(btn){ btn.textContent='\u2026'; btn.disabled=true; }
-    sb.rpc('im_set_review_deadline', { p_arena_slug: slug, p_when: iso }).then(function(r){
-      if(btn){ btn.textContent=old; btn.disabled=false; }
-      if(r.error){ alert('Could not update: '+(r.error.message||'error')); return; }
-      load();
-    });
-  }
-  function setAll(iso){
-    var msg=$('rdAllMsg'); if(msg){ msg.textContent='Saving\u2026'; }
-    sb.rpc('im_set_review_deadline', { p_arena_slug: null, p_when: iso }).then(function(r){
-      if(r.error){ if(msg){ msg.textContent=''; } alert('Could not update all: '+(r.error.message||'error')); return; }
-      if(msg){ msg.textContent='Updated '+(r.data!==null&&r.data!==undefined?r.data:'')+' arenas.'; setTimeout(function(){ if(msg){ msg.textContent=''; } }, 3000); }
-      load();
-    });
-  }
-  if($('rdAllBtn')){ $('rdAllBtn').addEventListener('click', function(){ var v=$('rdAllInput').value; if(!v){ alert('Pick a date first, or use \u201cOpen all now\u201d.'); return; } setAll(new Date(v).toISOString()); }); }
-  if($('rdClearAllBtn')){ $('rdClearAllBtn').addEventListener('click', function(){ if(confirm('Open review immediately for ALL arenas?')){ setAll(null); } }); }
-  load();
-}
 
 /* Instructor view of ALL graded arena attempts: a per-student list of attempts
    (from im_arena_attempt_rollup, one row per student/arena/attempt), each of
@@ -3611,8 +3528,7 @@ function renderPlatform(host){
     '<div class="field"><label>Subtitle (optional — leave blank to keep the founder line)</label><input id="pfSub" value="'+esc(s.author_subtitle||'')+'"></div>'+
     '<div class="field"><label>Photo URL (optional)</label><input id="pfPhoto" value="'+esc(s.author_photo_url||'')+'" placeholder="https://..."></div>'+
     '<div class="field"><label>Bio (HTML allowed; leave blank to use the built-in bio)</label><textarea id="pfBio">'+esc(s.author_bio_html||'')+'</textarea></div>'+
-    '<button class="btn btn-primary" id="pfSaveBio">Save bio</button></div>' +
-    '<div class="card" id="reviewDeadlineCard" style="max-width:680px;margin-bottom:18px;"></div>';
+    '<button class="btn btn-primary" id="pfSaveBio">Save bio</button></div>';
   $('pfSavePricing').addEventListener('click', function(){
     var cents=Math.round(parseFloat($('pfPrice').value||'0')*100);
     savePlatform({ price_cents:cents, currency:$('pfCur').value.trim()||'usd', stripe_link:$('pfStripe').value.trim(), notify_email:$('pfNotify').value.trim() }, 'Pricing saved.');
@@ -3623,7 +3539,6 @@ function renderPlatform(host){
   if($('pfSaveSelfStudy')){ $('pfSaveSelfStudy').addEventListener('click', function(){
     savePlatform({ self_study_enabled: $('pfSelfStudy').checked }, $('pfSelfStudy').checked?'Self-study turned on for everyone.':'Self-study turned off for everyone.');
   }); }
-  renderReviewDeadlines();
 }
 function savePlatform(patch, okMsg){
   patch.id=1; patch.updated_by=State.user.id;
@@ -5592,29 +5507,29 @@ function loadProgress() {
       if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="dim" style="color:var(--text-subtle);">No attempts yet — try the Practice tab.</td></tr>'; }
     });
   // arena results: per-arena summary + a filterable table with post-deadline
-  // review of wrong cases. We pull the review columns (added in im_41) and the
-  // per-arena review_available_at deadline from im_arena_config.
+  // review of wrong cases. Gating is PER-COURSE: a student may review arena
+  // results once their instructor has released arena review AND the course
+  // deadline has passed. That rule lives in im_review_open(course,'arena',...)
+  // — which for arenas depends only on the course (review_arenas switch +
+  // access_ends), so one call gates every arena in this course.
   Promise.all([
     sb.from('im_attempt')
       .select('arena_slug, is_correct, created_at, attempt_no, case_index, prompt_text, chosen_label, correct_label')
       .eq('user_id', uid).order('created_at', { ascending: false }).limit(2000),
-    sb.from('im_arena_config').select('arena_slug, review_available_at')
+    (courseId
+      ? sb.rpc('im_review_open', { p_course: courseId, p_kind: 'arena', p_ref: '' })
+      : Promise.resolve({ data: false }))
   ]).then(function(results) {
       var res = results[0];
-      var cfgRes = results[1];
+      var openRes = results[1];
       var rows = res.data ? res.data : [];
       var tb = $('arenaTbl').querySelector('tbody');
       var summaryHost = $('arenaSummary');
       var pick = $('arena-filter-pick');
 
-      var reviewAt = {};
-      (cfgRes && cfgRes.data ? cfgRes.data : []).forEach(function(c){ reviewAt[c.arena_slug] = c.review_available_at ? new Date(c.review_available_at) : null; });
-      function reviewOpen(slug){
-        var d = reviewAt[slug];
-        if (d === undefined) { return true; }
-        if (d === null) { return true; }
-        return (new Date()) >= d;
-      }
+      // Single per-course verdict: is arena review open right now?
+      var arenaReviewOpen = !!(openRes && openRes.data === true);
+      function reviewOpen(slug){ return arenaReviewOpen; }
 
       var bd = arenaBreakdown(rows);
       if (summaryHost) {
@@ -5654,8 +5569,7 @@ function loadProgress() {
             reviewStore[rk] = r;
             reviewCell = '<button class="btn btn-ghost btn-sm" data-arenareview="'+rk+'">Review</button>';
           } else if (!r.is_correct && r.prompt_text && !reviewOpen(r.arena_slug)) {
-            var da = reviewAt[r.arena_slug];
-            reviewCell = '<span style="font-size:11px;color:var(--text-subtle);">Review opens '+(da?da.toLocaleDateString():'')+'</span>';
+            reviewCell = '<span style="font-size:11px;color:var(--text-subtle);">Review opens after the deadline</span>';
           }
           tb.innerHTML += '<tr><td>' + esc(t) + '</td><td>' + result + '</td><td>' + when + '</td><td>' + reviewCell + '</td></tr>';
           shown++;
