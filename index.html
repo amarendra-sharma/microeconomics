@@ -423,7 +423,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-deadline-control';
+var SA_BUILD = 'intro-micro-portal-2026-08-deadline-in-platform';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3611,7 +3611,8 @@ function renderPlatform(host){
     '<div class="field"><label>Subtitle (optional — leave blank to keep the founder line)</label><input id="pfSub" value="'+esc(s.author_subtitle||'')+'"></div>'+
     '<div class="field"><label>Photo URL (optional)</label><input id="pfPhoto" value="'+esc(s.author_photo_url||'')+'" placeholder="https://..."></div>'+
     '<div class="field"><label>Bio (HTML allowed; leave blank to use the built-in bio)</label><textarea id="pfBio">'+esc(s.author_bio_html||'')+'</textarea></div>'+
-    '<button class="btn btn-primary" id="pfSaveBio">Save bio</button></div>';
+    '<button class="btn btn-primary" id="pfSaveBio">Save bio</button></div>' +
+    '<div class="card" id="reviewDeadlineCard" style="max-width:680px;margin-bottom:18px;"></div>';
   $('pfSavePricing').addEventListener('click', function(){
     var cents=Math.round(parseFloat($('pfPrice').value||'0')*100);
     savePlatform({ price_cents:cents, currency:$('pfCur').value.trim()||'usd', stripe_link:$('pfStripe').value.trim(), notify_email:$('pfNotify').value.trim() }, 'Pricing saved.');
@@ -3622,6 +3623,7 @@ function renderPlatform(host){
   if($('pfSaveSelfStudy')){ $('pfSaveSelfStudy').addEventListener('click', function(){
     savePlatform({ self_study_enabled: $('pfSelfStudy').checked }, $('pfSelfStudy').checked?'Self-study turned on for everyone.':'Self-study turned off for everyone.');
   }); }
+  renderReviewDeadlines();
 }
 function savePlatform(patch, okMsg){
   patch.id=1; patch.updated_by=State.user.id;
