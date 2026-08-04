@@ -423,7 +423,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-percourse-review';
+var SA_BUILD = 'intro-micro-portal-2026-08-perarena-deadlines';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2073,10 +2073,11 @@ function openSubmissions(asgId, title, points){
 
 function renderExams(host){
   if(!needCourse(host)){ return; }
-  host.innerHTML='<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-primary" id="newExamBtn">+ Assemble exam</button><button class="btn btn-ghost" id="libBtn">\uD83D\uDCDA Use a ready-made exam</button><button class="btn btn-ghost" id="qdlBtn">\u23F0 Quiz deadlines</button><button class="btn btn-ghost" id="rlBtn">\uD83D\uDCCB Reschedules</button></div><div id="examList">'+loadingCard()+'</div>';
+  host.innerHTML='<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-primary" id="newExamBtn">+ Assemble exam</button><button class="btn btn-ghost" id="libBtn">\uD83D\uDCDA Use a ready-made exam</button><button class="btn btn-ghost" id="qdlBtn">\u23F0 Quiz deadlines</button><button class="btn btn-ghost" id="adlBtn">\u23F0 Arena deadlines</button><button class="btn btn-ghost" id="rlBtn">\uD83D\uDCCB Reschedules</button></div><div id="examList">'+loadingCard()+'</div>';
   $('newExamBtn').addEventListener('click', function(){ openAssembler(); });
   $('libBtn').addEventListener('click', function(){ openExamLibrary(); });
   $('qdlBtn').addEventListener('click', function(){ openQuizDeadlines(); });
+  $('adlBtn').addEventListener('click', function(){ openArenaDeadlines(); });
   if($('rlBtn')){ $('rlBtn').addEventListener('click', function(){ openRescheduleList(State.teachCourseId); }); }
   loadExams();
 }
@@ -2128,6 +2129,65 @@ function openQuizDeadlines(){
     var work=[];
     if(ups.length){ work.push(sb.from('im_quiz_deadline').upsert(ups,{ onConflict:'course_id,chapter' })); }
     if(dels.length){ work.push(sb.from('im_quiz_deadline').delete().eq('course_id',State.teachCourseId).in('chapter',dels)); }
+    Promise.all(work).then(function(rs){
+      btn.disabled=false; btn.textContent='Save deadlines';
+      var failed=false; rs.forEach(function(r){ if(r && r.error){ failed=true; } });
+      if(failed){ alert('Some deadlines could not be saved.'); return; }
+      shut();
+    }, function(){ btn.disabled=false; btn.textContent='Save deadlines'; alert('Could not save deadlines.'); });
+  });
+}
+/* Per-arena review deadlines, mirroring openQuizDeadlines. Writes to
+   im_arena_deadline (course_id, arena_slug) -> closes_at. A blank field means
+   that arena falls back to the course's "Access ends" date. Only the graded
+   arenas are listed (market-sandbox is a free ungated preview). */
+function openArenaDeadlines(){
+  if(!State.teachCourseId){ alert('Select a course first.'); return; }
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  ov.innerHTML='<div class="modal" style="max-width:600px;"><h3 style="margin-bottom:6px;">Arena review deadlines</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Set a close date and time for each arena. After that arena\u2019s deadline, students can review the cases they missed in it. Leave an arena blank to fall back to the course\u2019s <b>Access ends</b> date. Requires the <b>Arena results</b> review switch (in course settings) to be on.</p>'+
+    '<div id="adlBody">'+loadingCard()+'</div>'+
+    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="adlClose">Close</button><button class="btn btn-primary btn-sm" id="adlSave">Save deadlines</button></div></div>';
+  document.body.appendChild(ov);
+  function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
+  $('adlClose').addEventListener('click', shut);
+  ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
+  function notInstalled(){
+    $('adlBody').innerHTML='<div class="msg err" style="display:block;">Arena deadlines aren\u2019t installed yet. Run <b>im_49_arena_deadlines.sql</b> in the SQL editor, then reopen this window.</div>';
+    var sv=$('adlSave'); if(sv){ sv.disabled=true; }
+  }
+  // graded arenas only (skip the free ungated preview)
+  var GRADED_ARENAS=ARENA_SLUGS.filter(function(s){ return s!=='market-sandbox'; });
+  sb.from('im_arena_deadline').select('arena_slug,closes_at').eq('course_id',State.teachCourseId).then(function(res){
+    if(res && res.error){ notInstalled(); return; }
+    var have={}; ((res && res.data)?res.data:[]).forEach(function(r){ have[r.arena_slug]=r.closes_at; });
+    var rowsHtml='';
+    GRADED_ARENAS.forEach(function(slug){
+      var val='';
+      if(have[slug]){
+        var d=new Date(have[slug]); var pad=function(x){ return (x<10?'0':'')+x; };
+        val=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+      }
+      var title=ARENA_TITLE[slug]||slug;
+      rowsHtml+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><label style="flex:1;font-size:13px;">'+esc(title)+'</label>'+
+        '<input type="datetime-local" data-adl-slug="'+esc(slug)+'" value="'+val+'" style="font-size:13px;padding:5px 8px;"></div>';
+    });
+    $('adlBody').innerHTML=rowsHtml;
+  }, function(){ notInstalled(); });
+  $('adlSave').addEventListener('click', function(){
+    var inputs=ov.querySelectorAll('[data-adl-slug]');
+    if(!inputs || inputs.length===0){ shut(); return; }
+    var ups=[], dels=[];
+    Array.prototype.forEach.call(inputs, function(inp){
+      var slug=inp.getAttribute('data-adl-slug');
+      var v=inp.value;
+      if(v){ ups.push({ course_id:State.teachCourseId, arena_slug:slug, closes_at:new Date(v).toISOString(), updated_at:new Date().toISOString() }); }
+      else { dels.push(slug); }
+    });
+    var btn=$('adlSave'); btn.disabled=true; btn.textContent='Saving\u2026';
+    var work=[];
+    if(ups.length){ work.push(sb.from('im_arena_deadline').upsert(ups,{ onConflict:'course_id,arena_slug' })); }
+    if(dels.length){ work.push(sb.from('im_arena_deadline').delete().eq('course_id',State.teachCourseId).in('arena_slug',dels)); }
     Promise.all(work).then(function(rs){
       btn.disabled=false; btn.textContent='Save deadlines';
       var failed=false; rs.forEach(function(r){ if(r && r.error){ failed=true; } });
@@ -5507,30 +5567,37 @@ function loadProgress() {
       if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="dim" style="color:var(--text-subtle);">No attempts yet — try the Practice tab.</td></tr>'; }
     });
   // arena results: per-arena summary + a filterable table with post-deadline
-  // review of wrong cases. Gating is PER-COURSE: a student may review arena
-  // results once their instructor has released arena review AND the course
-  // deadline has passed. That rule lives in im_review_open(course,'arena',...)
-  // — which for arenas depends only on the course (review_arenas switch +
-  // access_ends), so one call gates every arena in this course.
-  Promise.all([
-    sb.from('im_attempt')
-      .select('arena_slug, is_correct, created_at, attempt_no, case_index, prompt_text, chosen_label, correct_label')
-      .eq('user_id', uid).order('created_at', { ascending: false }).limit(2000),
-    (courseId
-      ? sb.rpc('im_review_open', { p_course: courseId, p_kind: 'arena', p_ref: '' })
-      : Promise.resolve({ data: false }))
-  ]).then(function(results) {
-      var res = results[0];
-      var openRes = results[1];
+  // review of wrong cases. Gating is PER-COURSE and PER-ARENA: a student may
+  // review a given arena once the instructor has released arena review AND that
+  // arena's deadline has passed (im_arena_deadline, else the course access_ends).
+  // im_review_open(course,'arena',<slug>) encodes that rule; we call it once per
+  // arena the student has played.
+  sb.from('im_attempt')
+    .select('arena_slug, is_correct, created_at, attempt_no, case_index, prompt_text, chosen_label, correct_label')
+    .eq('user_id', uid).order('created_at', { ascending: false }).limit(2000)
+    .then(function(res) {
       var rows = res.data ? res.data : [];
       var tb = $('arenaTbl').querySelector('tbody');
       var summaryHost = $('arenaSummary');
       var pick = $('arena-filter-pick');
 
-      // Single per-course verdict: is arena review open right now?
-      var arenaReviewOpen = !!(openRes && openRes.data === true);
-      function reviewOpen(slug){ return arenaReviewOpen; }
+      var slugsSeen = {};
+      rows.forEach(function(r){ if(r.arena_slug){ slugsSeen[r.arena_slug]=true; } });
+      var slugList = Object.keys(slugsSeen);
+      var openBySlug = {};
+      function afterOpen(){ renderAll(function(slug){ return openBySlug[slug] === true; }); }
+      if (!courseId || slugList.length === 0) {
+        afterOpen();
+      } else {
+        var checks = slugList.map(function(slug){
+          return sb.rpc('im_review_open', { p_course: courseId, p_kind: 'arena', p_ref: slug })
+            .then(function(r){ openBySlug[slug] = !!(r && r.data === true); },
+                  function(){ openBySlug[slug] = false; });
+        });
+        Promise.all(checks).then(afterOpen, afterOpen);
+      }
 
+      function renderAll(reviewOpen) {
       var bd = arenaBreakdown(rows);
       if (summaryHost) {
         if (bd.length) {
@@ -5615,6 +5682,7 @@ function loadProgress() {
           }
         });
       }
+      } // end renderAll
     });
   loadBadges();
   loadCompletion();
