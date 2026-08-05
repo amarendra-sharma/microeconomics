@@ -424,14 +424,14 @@
 <script src="im-diagrams.js"></script>
 <script src="im-generators.js"></script>
 <script src="im-quiz.js"></script>
-<script src="im-backend.js"></script>
+<script src="im-backend.js?v=attendance2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 /* ====================================================================
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attendance-diag';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-cachebust';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing

@@ -153,12 +153,13 @@
      no session / network error. Used by the attendance gate (im-attendance). */
   function fnBase() { return SUPABASE_URL + "/functions/v1"; }
   function callFn(name, payload, cb) {
-    if (!init()) { cb({ offline: true }); return; }
+    if (!init()) { try { console.error("callFn(" + name + "): backend not initialized"); } catch (e) {} cb({ offline: true }); return; }
     sb.auth.getSession().then(function (sres) {
       var sess = sres && sres.data ? sres.data.session : null;
       if (sess) { session = sess; }
-      if (!sess || !sess.access_token) { cb({ offline: true }); return; }
-      global.fetch(fnBase() + "/" + name, {
+      if (!sess || !sess.access_token) { try { console.error("callFn(" + name + "): no session/access_token — user not signed in on this page"); } catch (e) {} cb({ offline: true }); return; }
+      var url = fnBase() + "/" + name;
+      global.fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -167,13 +168,20 @@
         },
         body: JSON.stringify(payload)
       }).then(function (r) {
-        return r.json().then(function (data) {
-          if (data && typeof data === "object") { data.__status = r.status; }
+        return r.text().then(function (txt) {
+          var data = null;
+          try { data = JSON.parse(txt); } catch (e) { data = null; }
+          if (!data) {
+            try { console.error("callFn(" + name + "): non-JSON response, HTTP " + r.status + ": " + txt.slice(0, 300)); } catch (e2) {}
+            return { offline: true, __status: r.status };
+          }
+          if (typeof data === "object") { data.__status = r.status; }
+          if (r.status >= 400) { try { console.warn("callFn(" + name + "): HTTP " + r.status, data); } catch (e3) {} }
           return data;
-        }).catch(function () { return { offline: true, __status: r.status }; });
+        });
       }).then(function (data) { cb(data || { offline: true }); })
-        .catch(function () { cb({ offline: true }); });
-    }).catch(function () { cb({ offline: true }); });
+        .catch(function (err) { try { console.error("callFn(" + name + "): fetch failed (network/CORS?) ->", err && err.message ? err.message : err, "URL:", url); } catch (e) {} cb({ offline: true }); });
+    }).catch(function (err) { try { console.error("callFn(" + name + "): getSession failed ->", err); } catch (e) {} cb({ offline: true }); });
   }
 
   function postGrade(payload, cb) {
