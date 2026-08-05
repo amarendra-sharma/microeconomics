@@ -431,7 +431,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attendance-qrfix';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-diag';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -728,7 +728,9 @@ function enterApp(user){
     maybeHandleInboundCourse();
   });
   // teaching data (only matters if they teach, but harmless otherwise)
-  var wantsAtt = /(#|&)att=[0-9a-f\-]+:[0-9a-f]+/i.test(window.location.hash||'');
+  // A scanned QR may have set STU_ATT_PENDING (captured at load). Route there.
+  var wantsAtt = !!(typeof STU_ATT_PENDING !== 'undefined' && STU_ATT_PENDING) ||
+                 /(#|&)att=[0-9a-f\-]+:[0-9a-f]+/i.test(window.location.hash||'');
   if(role==='professor' || role==='admin'){
     loadCourses().then(function(){ switchView(wantsAtt?'stuattend':'home'); });
   } else {
@@ -2179,8 +2181,18 @@ function attShowProjector(s, closeAt){
   function refreshToken(){
     if(stopped){ return; }
     IMBackend.callFn('im-attendance', { action:'token', session_id:s.id }, function(res){
-      if(stopped||!res){ return; }
-      if(res.error){ $('attCode').textContent='error'; return; }
+      if(stopped){ return; }
+      if(!res || res.offline){
+        $('attCode').textContent='\u2014\u2014\u2014\u2014\u2014\u2014';
+        var q0=$('attQR'); if(q0){ q0.innerHTML='<div style="color:#991b1b;font-size:13px;padding:10px;text-align:center;">Can\u2019t reach the attendance service.<br>Deploy the <b>im-attendance</b> function, or check your connection.</div>'; }
+        return;
+      }
+      if(res.error){
+        $('attCode').textContent='error';
+        var q1=$('attQR'); if(q1){ q1.innerHTML='<div style="color:#991b1b;font-size:13px;padding:10px;text-align:center;">'+esc(res.error==='staff only'?'This account can\u2019t project attendance for this course (not the owner/staff).':res.error)+'</div>'; }
+        return;
+      }
+      if(!res.code6){ $('attCode').textContent='\u2014\u2014\u2014\u2014\u2014\u2014'; return; }
       // QR payload = a deep link to the portal that auto-starts check-in:
       //   <portal>#att=<sessionId>:<token>
       // Scanning opens the student's browser straight to the check-in flow.
@@ -2255,11 +2267,26 @@ function openAttCheckins(sessionId){
 // #att=<sessionId>:<token>) or type the 6-digit code. Then geolocation (if the
 // session requires it) and the pop quiz. One check-in per student per session.
 var STU_ATT = { sessionId:null, token:null, items:[], answers:{} };
+// A scanned QR sets the URL hash (#att=<sid>:<token>). We capture it ONCE at
+// load and stash it, so the pending check-in survives even if the student lands
+// on another view first and taps Attendance manually a moment later.
+var STU_ATT_PENDING = null;
+function attCapturePendingFromHash(){
+  var h=window.location.hash||'';
+  var m=h.match(/att=([0-9a-f\-]+):([0-9a-f]+)/i);
+  if(m){
+    STU_ATT_PENDING={ sessionId:m[1], token:m[2] };
+    try{ history.replaceState(null,'',window.location.pathname+window.location.search); }catch(e){}
+  }
+}
+// capture immediately at script parse time (before any nav can clear the hash)
+attCapturePendingFromHash();
 
 function loadStudentAttendance(){
   var host=$('stuAttHost'); if(!host){ return; }
-  // did we arrive via a scanned QR? (#att=<sid>:<token>)
-  var pre=parseAttHash();
+  // did we arrive via a scanned QR? (captured at load into STU_ATT_PENDING)
+  if(!STU_ATT_PENDING){ attCapturePendingFromHash(); }
+  var pre=STU_ATT_PENDING;
   var courseId = State.payCourseId || State.selfCourseId || State.currentCourseId || null;
   host.innerHTML=
     '<div class="card" style="max-width:560px;">'+
@@ -2287,10 +2314,9 @@ function loadStudentAttendance(){
 
   loadStuAttHistory(courseId);
 
-  // auto-start if arrived via QR
+  // auto-start if arrived via QR (consume the stash so it fires once)
   if(pre && pre.sessionId && pre.token){
-    // clear the hash so a refresh doesn't re-trigger
-    try{ history.replaceState(null,'',window.location.pathname+window.location.search); }catch(e){}
+    STU_ATT_PENDING=null;
     stuAttBeginCheckin(pre.sessionId, pre.token, null);
   }
 }
