@@ -431,7 +431,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attendance-full';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-qrfix';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2130,7 +2130,7 @@ function attShowProjector(s, closeAt){
       '<button class="btn btn-ghost btn-sm" id="attProjClose" style="color:#fff;border-color:#3a4d80;">Close &amp; stop</button>'+
     '</div>'+
     '<div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center;align-items:center;margin:10px 0;">'+
-      '<div id="attQR" style="background:#fff;padding:16px;border-radius:14px;width:300px;height:300px;display:flex;align-items:center;justify-content:center;"></div>'+
+      '<div id="attQR" style="background:#fff;padding:16px;border-radius:14px;width:360px;height:360px;max-width:70vw;max-height:70vw;display:flex;align-items:center;justify-content:center;image-rendering:pixelated;"></div>'+
       '<div style="text-align:left;min-width:220px;">'+
         '<div style="font-size:13px;color:#9fb0dd;text-transform:uppercase;letter-spacing:.08em;">Or type this code</div>'+
         '<div id="attCode" style="font-size:64px;font-weight:800;letter-spacing:.12em;color:#fff;font-variant-numeric:tabular-nums;">\u2022\u2022\u2022\u2022\u2022\u2022</div>'+
@@ -2165,11 +2165,15 @@ function attShowProjector(s, closeAt){
   function drawQR(payload){
     try{
       var host=$('attQR'); if(!host){ return; }
-      if(typeof qrcode==='undefined'){ host.innerHTML='<div style="color:#333;font-size:12px;">QR library not loaded \u2014 use the code.</div>'; return; }
+      if(typeof qrcode==='undefined'){ host.innerHTML='<div style="color:#333;font-size:12px;">QR library not loaded \u2014 students can type the 6-digit code.</div>'; return; }
       var qr=qrcode(0,'M'); qr.addData(payload); qr.make();
-      host.innerHTML=qr.createImgTag(6,8);
-      var img=host.querySelector('img'); if(img){ img.style.width='100%'; img.style.height='100%'; }
-    }catch(e){ }
+      // Render as SVG (crisp at any size — a downscaled GIF blurs and won't scan).
+      // cell size 8, margin 4 quiet-zone modules, then let the SVG fill the box.
+      var svg=qr.createSvgTag({ cellSize:8, margin:4, scalable:true });
+      host.innerHTML=svg;
+      var el=host.querySelector('svg');
+      if(el){ el.style.width='100%'; el.style.height='100%'; el.setAttribute('shape-rendering','crispEdges'); }
+    }catch(e){ try{ console.error('QR draw failed:', e); }catch(_){} }
   }
 
   function refreshToken(){
