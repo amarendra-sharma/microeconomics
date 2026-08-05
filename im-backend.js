@@ -146,6 +146,36 @@
     postGrade(payload, cb);
   }
 
+  /* ---- GENERIC EDGE-FUNCTION CALL ----------------------------------------
+     callFn(name, payload, cb): POSTs to /functions/v1/<name> with the live
+     session's bearer token. cb receives the parsed JSON body on ANY status
+     (so callers can read {error, code, ...}), or { offline:true } if there is
+     no session / network error. Used by the attendance gate (im-attendance). */
+  function fnBase() { return SUPABASE_URL + "/functions/v1"; }
+  function callFn(name, payload, cb) {
+    if (!init()) { cb({ offline: true }); return; }
+    sb.auth.getSession().then(function (sres) {
+      var sess = sres && sres.data ? sres.data.session : null;
+      if (sess) { session = sess; }
+      if (!sess || !sess.access_token) { cb({ offline: true }); return; }
+      global.fetch(fnBase() + "/" + name, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + sess.access_token
+        },
+        body: JSON.stringify(payload)
+      }).then(function (r) {
+        return r.json().then(function (data) {
+          if (data && typeof data === "object") { data.__status = r.status; }
+          return data;
+        }).catch(function () { return { offline: true, __status: r.status }; });
+      }).then(function (data) { cb(data || { offline: true }); })
+        .catch(function () { cb({ offline: true }); });
+    }).catch(function () { cb({ offline: true }); });
+  }
+
   function postGrade(payload, cb) {
     if (!init()) { cb({ offline: true }); return; }
     // Fetch the CURRENT session from the client (reads localStorage / refreshes
@@ -343,6 +373,8 @@
     gradeCase: gradeCase,
     gradePerformance: gradePerformance,
     gradeQuiz: gradeQuiz,
+    callFn: callFn,
+    fnBase: fnBase,
     getMyScores: getMyScores,
     gateContent: gateContent,
     getPricing: getPricing,

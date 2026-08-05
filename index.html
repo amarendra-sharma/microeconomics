@@ -282,6 +282,7 @@
       <div class="nav-item" data-view="gradebook"><span class="ico">&#128202;</span> Gradebook</div>
       <div class="nav-item" data-view="analytics"><span class="ico">&#128293;</span> Analytics</div>
       <div class="nav-item" data-view="exams"><span class="ico">&#128221;</span> Exams</div>
+      <div class="nav-item" data-view="attendance"><span class="ico">&#128197;</span> Attendance</div>
       <div class="nav-item" data-view="assignments"><span class="ico">&#128206;</span> Assignments</div>
       <div class="nav-item" data-view="grading"><span class="ico">&#9999;</span> Grade Written</div>
     </div>
@@ -418,12 +419,13 @@
 <script src="im-generators.js"></script>
 <script src="im-quiz.js"></script>
 <script src="im-backend.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 /* ====================================================================
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-progress-courseid-fix';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-instructor';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -817,7 +819,7 @@ Array.prototype.forEach.call(document.querySelectorAll('.nav-item'), function(it
   });
 });
 function isStudentView(v){ for(var i=0;i<STUDENT_VIEWS.length;i++){ if(STUDENT_VIEWS[i]===v){ return true; } } return false; }
-var INSTRUCTOR_VIEWS = ['dashboard','courses','roster','materials','announce','gradebook','analytics','exams','assignments','grading'];
+var INSTRUCTOR_VIEWS = ['dashboard','courses','roster','materials','announce','gradebook','analytics','exams','attendance','assignments','grading'];
 var ADMIN_VIEWS = ['platform','people','subscriptions','diagnostics'];
 function viewAllowed(view){
   // A guest (no account) may only browse the free preview: home, chapters, arenas.
@@ -892,6 +894,7 @@ function rerenderCurrentView(){
   else if(currentView==='gradebook'){ renderGradebook(host); }
   else if(currentView==='analytics'){ renderAnalytics(host); }
   else if(currentView==='exams'){ renderExams(host); }
+  else if(currentView==='attendance'){ renderAttendance(host); }
   else if(currentView==='assignments'){ renderAssignments(host); }
   else if(currentView==='grading'){ renderGrading(host); }
   else if(currentView==='subscriptions'){ renderSubscriptions(host); }
@@ -1896,6 +1899,341 @@ function heatColor(acc){
 /* ====================================================================
    EXAMS — list + assembler
    ==================================================================== */
+// ============================ ATTENDANCE (instructor) ======================
+// Sessions list + create-session builder + live "Start & project" screen.
+// Anti-proxy gate: rotating QR + synchronized 6-digit code (im-attendance edge
+// fn), optional geofence, timed window. Grade = base credit + pop-quiz score.
+var ATT_BANK = {};        // itemId -> item (for the builder)
+var ATT_PICKED = [];      // hand-picked itemIds
+var ATT_PROJECT = null;   // { timer, sessionId } while projecting
+
+function attFnUrl(){ return (window.IMBackend && IMBackend.fnBase ? IMBackend.fnBase() : '') + '/im-attendance'; }
+
+function renderAttendance(host){
+  if(!needCourse(host)){ return; }
+  host.innerHTML =
+    '<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+
+      '<button class="btn btn-primary" id="attNewBtn">+ New attendance session</button>'+
+      '<span style="font-size:12.5px;color:var(--text-muted);">Project a rotating code in class; students scan or type it to check in. Presence + a quick quiz, graded as its own component.</span>'+
+    '</div>'+
+    '<div id="attList">'+loadingCard()+'</div>';
+  $('attNewBtn').addEventListener('click', function(){ openAttBuilder(); });
+  loadAttSessions();
+}
+
+function loadAttSessions(){
+  var host=$('attList'); if(!host){ return; }
+  sb.from('im_attendance_session').select('id,title,is_open,open_at,close_at,geo_required,base_points,quiz_points,assembled_items,created_at')
+    .eq('course_id',State.teachCourseId).order('created_at',{ascending:false})
+    .then(function(res){
+      if(res && res.error){ host.innerHTML='<div class="msg err" style="display:block;">Attendance isn\u2019t installed yet. Run <b>im_50_attendance.sql</b>, then reload.</div>'; return; }
+      var rows=res.data?res.data:[];
+      if(!rows.length){ host.innerHTML='<div class="card empty">No attendance sessions yet. Create one to take attendance in class.</div>'; return; }
+      // fetch check-in counts per session
+      var ids=rows.map(function(r){ return r.id; });
+      sb.from('im_attendance_checkin').select('session_id,present').in('session_id',ids).then(function(cc){
+        var counts={}; (cc && cc.data?cc.data:[]).forEach(function(x){ counts[x.session_id]=(counts[x.session_id]||0)+1; });
+        var html='<div class="card" style="padding:0;overflow:hidden;"><table class="tbl" style="margin:0;"><thead><tr>'+
+          '<th>Session</th><th>Status</th><th>Checked in</th><th>Quiz</th><th>Geo</th><th></th></tr></thead><tbody>';
+        rows.forEach(function(r){
+          var when=r.created_at?new Date(r.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'';
+          var nItems=(r.assembled_items&&r.assembled_items.length)?r.assembled_items.length:0;
+          var status=r.is_open?'<span style="color:var(--ok,#166534);font-weight:600;">\u25cf Open</span>':'<span style="color:var(--text-subtle);">Closed</span>';
+          html+='<tr>'+
+            '<td><b>'+esc(r.title||('Session '+when))+'</b><div style="font-size:11px;color:var(--text-subtle);">'+when+'</div></td>'+
+            '<td>'+status+'</td>'+
+            '<td>'+(counts[r.id]||0)+'</td>'+
+            '<td>'+(nItems?(nItems+' q'):'\u2014')+'</td>'+
+            '<td>'+(r.geo_required?'on':'off')+'</td>'+
+            '<td style="white-space:nowrap;text-align:right;">'+
+              '<button class="btn btn-primary btn-sm" data-att-start="'+r.id+'">Start &amp; project</button> '+
+              '<button class="btn btn-ghost btn-sm" data-att-view="'+r.id+'">Check-ins</button>'+
+            '</td></tr>';
+        });
+        html+='</tbody></table></div>';
+        host.innerHTML=html;
+        var sb1=host.querySelectorAll('[data-att-start]');
+        Array.prototype.forEach.call(sb1,function(b){ b.addEventListener('click',function(){ openAttProject(b.getAttribute('data-att-start')); }); });
+        var sb2=host.querySelectorAll('[data-att-view]');
+        Array.prototype.forEach.call(sb2,function(b){ b.addEventListener('click',function(){ openAttCheckins(b.getAttribute('data-att-view')); }); });
+      });
+    });
+}
+
+// ---------------------------- builder --------------------------------------
+function openAttBuilder(){
+  ATT_PICKED=[]; ATT_BANK={};
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  var chOpts='<option value="">Choose chapter\u2026</option>';
+  for(var i=0;i<STUDENT_CHAPTERS.length;i++){ chOpts+='<option value="'+STUDENT_CHAPTERS[i].n+'">Ch '+STUDENT_CHAPTERS[i].n+' \u2014 '+esc(STUDENT_CHAPTERS[i].title)+'</option>'; }
+  ov.innerHTML='<div class="modal" style="max-width:720px;max-height:88vh;overflow:auto;"><h3 style="margin-bottom:4px;">New attendance session</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Set up the pop quiz and the presence gate. In class you\u2019ll press <b>Start &amp; project</b> to show a rotating code.</p>'+
+    '<div id="attMsg" class="msg"></div>'+
+    '<label class="fld">Title (optional)<input id="attTitle" placeholder="e.g. Lecture 12 \u2014 Supply &amp; Demand"></label>'+
+    '<div class="fld"><b>Pop quiz questions</b><div style="font-size:11.5px;color:var(--text-subtle);margin-bottom:6px;">Pull from the practice bank. Random-draw from a chapter and/or hand-pick specific questions \u2014 mix freely. (Written/free-response items are skipped; only auto-gradable questions count.)</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:8px;">'+
+        '<label style="flex:1;min-width:160px;">Chapter<select id="attCh">'+chOpts+'</select></label>'+
+        '<label style="width:120px;">Random-draw N<input id="attDrawN" type="number" min="0" value="0"></label>'+
+        '<button class="btn btn-ghost btn-sm" id="attLoadBank" type="button">Show questions</button>'+
+      '</div>'+
+      '<div id="attBank" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px;display:none;"></div>'+
+      '<div id="attPickedInfo" style="font-size:12px;color:var(--text-muted);margin-top:6px;"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+
+      '<label class="fld" style="flex:1;min-width:130px;">Base points (presence)<input id="attBase" type="number" step="0.5" min="0" value="1"></label>'+
+      '<label class="fld" style="flex:1;min-width:130px;">Window (minutes)<input id="attWin" type="number" min="1" value="5"></label>'+
+      '<label class="fld" style="flex:1;min-width:130px;">Code rotates every (sec)<input id="attRot" type="number" min="5" value="15"></label>'+
+    '</div>'+
+    '<div class="fld" style="border:1px solid var(--border);border-radius:8px;padding:10px;">'+
+      '<label style="display:flex;align-items:center;gap:8px;font-weight:600;"><input type="checkbox" id="attGeo"> Require students to be in the classroom (geofence)</label>'+
+      '<div id="attGeoBox" style="display:none;margin-top:8px;font-size:12.5px;">'+
+        '<button class="btn btn-ghost btn-sm" id="attGeoCapture" type="button">\u{1F4CD} Use my current location as the classroom</button>'+
+        '<span id="attGeoStatus" style="margin-left:8px;color:var(--text-muted);"></span>'+
+        '<div style="margin-top:6px;">Radius (meters): <input id="attGeoR" type="number" min="10" value="60" style="width:80px;"></div>'+
+        '<div style="font-size:11px;color:var(--text-subtle);margin-top:4px;">Tip: capture this while standing in the classroom. Indoor GPS can drift, so 60\u2013100m is usually right.</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="attCancel">Cancel</button><button class="btn btn-primary btn-sm" id="attCreate">Create session</button></div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
+  $('attCancel').addEventListener('click',shut);
+  ov.addEventListener('click',function(e){ if(e.target===ov){ shut(); } });
+
+  var geoData={lat:null,lng:null};
+  $('attGeo').addEventListener('change',function(){ $('attGeoBox').style.display=this.checked?'block':'none'; });
+  $('attGeoCapture').addEventListener('click',function(){
+    var s=$('attGeoStatus'); s.textContent='Getting location\u2026';
+    if(!navigator.geolocation){ s.textContent='Geolocation not available in this browser.'; return; }
+    navigator.geolocation.getCurrentPosition(function(pos){
+      geoData.lat=pos.coords.latitude; geoData.lng=pos.coords.longitude;
+      s.innerHTML='<span style="color:var(--ok,#166534);">\u2713 captured ('+geoData.lat.toFixed(5)+', '+geoData.lng.toFixed(5)+')</span>';
+    },function(){ s.textContent='Could not get location (permission denied?).'; },{enableHighAccuracy:true,timeout:8000});
+  });
+
+  $('attLoadBank').addEventListener('click',function(){ attFillBank(); });
+  $('attCreate').addEventListener('click',function(){ attCreateSession(shut, geoData); });
+}
+
+function attFillBank(){
+  var ch=$('attCh').value; var host=$('attBank');
+  host.style.display='block'; host.innerHTML='<div style="padding:8px;color:var(--text-muted);">Loading\u2026</div>';
+  var q=sb.from('im_assessment_item').select('id,chapter,concept_tag,difficulty,item_type,points,prompt').eq('is_active',true).order('id');
+  if(ch){ q=q.eq('chapter',parseInt(ch,10)); }
+  q.then(function(res){
+    var items=res.data?res.data:[];
+    // only auto-gradable types
+    items=items.filter(function(it){ return it.item_type!=='free_response' && it.item_type!=='short'; });
+    if(!items.length){ host.innerHTML='<div style="padding:8px;color:var(--text-subtle);">No auto-gradable questions'+(ch?(' in Ch '+ch):'')+'.</div>'; return; }
+    var html='';
+    items.forEach(function(it){
+      ATT_BANK[it.id]=it;
+      var picked=ATT_PICKED.indexOf(it.id)>=0;
+      var pr=(it.prompt||'').replace(/<[^>]+>/g,'').slice(0,90);
+      html+='<label style="display:flex;gap:8px;align-items:flex-start;padding:5px 4px;border-bottom:1px solid var(--border);font-size:12.5px;cursor:pointer;">'+
+        '<input type="checkbox" data-att-pick="'+it.id+'"'+(picked?' checked':'')+'>'+
+        '<span><b>Ch'+(it.chapter||'?')+'</b> \u00b7 '+esc(it.difficulty||'')+' \u00b7 '+esc(it.item_type||'')+'<br>'+esc(pr)+'\u2026</span></label>';
+    });
+    host.innerHTML=html;
+    var cbs=host.querySelectorAll('[data-att-pick]');
+    Array.prototype.forEach.call(cbs,function(cb){
+      cb.addEventListener('change',function(){
+        var id=cb.getAttribute('data-att-pick');
+        var idx=ATT_PICKED.indexOf(id);
+        if(cb.checked && idx<0){ ATT_PICKED.push(id); }
+        else if(!cb.checked && idx>=0){ ATT_PICKED.splice(idx,1); }
+        attUpdatePicked();
+      });
+    });
+    attUpdatePicked();
+  });
+}
+function attUpdatePicked(){
+  var el=$('attPickedInfo'); if(!el){ return; }
+  var n=ATT_PICKED.length; var drawN=parseInt(($('attDrawN')||{}).value||'0',10)||0;
+  el.textContent='Hand-picked: '+n+(drawN>0?('  \u2022  plus '+drawN+' random from the chosen chapter'):'');
+}
+
+function attCreateSession(shut, geoData){
+  var msg=$('attMsg'); msg.className='msg'; msg.textContent='';
+  var title=$('attTitle').value.trim();
+  var ch=$('attCh').value; var drawN=parseInt($('attDrawN').value||'0',10)||0;
+  var base=parseFloat($('attBase').value||'1')||0;
+  var winMin=parseFloat($('attWin').value||'5')||5;
+  var rot=parseInt($('attRot').value||'15',10)||15; if(rot<5){ rot=5; }
+  var geoOn=$('attGeo').checked;
+
+  // resolve assembled_items = hand-picked + random-draw
+  var picked=ATT_PICKED.slice();
+  function finalize(drawIds){
+    var all=picked.concat(drawIds||[]);
+    // de-dupe
+    var seen={}, items=[];
+    all.forEach(function(id){ if(!seen[id]){ seen[id]=1; items.push({itemId:id}); } });
+    if(geoOn && (geoData.lat===null||geoData.lng===null)){ msg.className='msg err'; msg.style.display='block'; msg.textContent='Capture the classroom location first, or turn off geofence.'; return; }
+    var row={
+      course_id:State.teachCourseId, title:title||null, created_by:State.user.id,
+      rotate_seconds:rot, window_seconds:Math.round(winMin*60), is_open:false,
+      geo_required:geoOn, geo_lat:geoOn?geoData.lat:null, geo_lng:geoOn?geoData.lng:null,
+      geo_radius_m:geoOn?(parseInt($('attGeoR').value||'60',10)||60):60,
+      assembled_items:items, base_points:base
+    };
+    sb.from('im_attendance_session').insert(row).select('id').then(function(r){
+      if(r && r.error){ msg.className='msg err'; msg.style.display='block'; msg.textContent='Could not create: '+r.error.message; return; }
+      shut(); loadAttSessions();
+    });
+  }
+  if(drawN>0 && ch){
+    // pull candidate ids from the chapter, exclude already-picked, shuffle, take N
+    sb.from('im_assessment_item').select('id,item_type').eq('is_active',true).eq('chapter',parseInt(ch,10)).then(function(res){
+      var pool=(res.data?res.data:[]).filter(function(it){ return it.item_type!=='free_response'&&it.item_type!=='short'&&picked.indexOf(it.id)<0; }).map(function(it){ return it.id; });
+      // shuffle
+      for(var i=pool.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=pool[i]; pool[i]=pool[j]; pool[j]=t; }
+      finalize(pool.slice(0,drawN));
+    });
+  } else {
+    finalize([]);
+  }
+}
+
+// ---------------------------- project screen -------------------------------
+// Opens the session (is_open=true, sets open_at/close_at), then shows a big
+// rotating QR + 6-digit code + countdown, polling the edge fn for the current
+// token. A live roster fills in as students check in.
+function openAttProject(sessionId){
+  sb.from('im_attendance_session').select('*').eq('id',sessionId).maybeSingle().then(function(res){
+    var s=res.data; if(!s){ alert('Session not found.'); return; }
+    var winSec=s.window_seconds||300;
+    var openAt=new Date();
+    var closeAt=new Date(openAt.getTime()+winSec*1000);
+    // open the window
+    sb.from('im_attendance_session').update({ is_open:true, open_at:openAt.toISOString(), close_at:closeAt.toISOString() }).eq('id',sessionId).then(function(){
+      attShowProjector(s, closeAt);
+    });
+  });
+}
+
+function attShowProjector(s, closeAt){
+  var ov=document.createElement('div'); ov.className='modal-bg'; ov.style.background='rgba(8,12,28,0.97)';
+  ov.innerHTML='<div class="modal" style="max-width:960px;width:94vw;text-align:center;background:#0f1836;color:#fff;border:1px solid #24345f;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'+
+      '<h2 style="margin:0;color:#fff;font-size:22px;">'+esc(s.title||'Attendance')+'</h2>'+
+      '<button class="btn btn-ghost btn-sm" id="attProjClose" style="color:#fff;border-color:#3a4d80;">Close &amp; stop</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center;align-items:center;margin:10px 0;">'+
+      '<div id="attQR" style="background:#fff;padding:16px;border-radius:14px;width:300px;height:300px;display:flex;align-items:center;justify-content:center;"></div>'+
+      '<div style="text-align:left;min-width:220px;">'+
+        '<div style="font-size:13px;color:#9fb0dd;text-transform:uppercase;letter-spacing:.08em;">Or type this code</div>'+
+        '<div id="attCode" style="font-size:64px;font-weight:800;letter-spacing:.12em;color:#fff;font-variant-numeric:tabular-nums;">\u2022\u2022\u2022\u2022\u2022\u2022</div>'+
+        '<div style="font-size:14px;color:#9fb0dd;">refreshes in <span id="attRotLeft">\u2013</span>s</div>'+
+        '<div id="attWinLeft" style="margin-top:10px;font-size:15px;color:#ffd479;"></div>'+
+        '<div style="margin-top:12px;font-size:13px;color:#9fb0dd;">Checked in: <span id="attLiveCount" style="color:#fff;font-weight:700;font-size:18px;">0</span></div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:13px;color:#9fb0dd;">Students: open the course \u2192 <b>Attendance</b> and scan, or go to the check-in page and type the code.</div>'+
+    '<div id="attRoster" style="margin-top:12px;max-height:150px;overflow:auto;text-align:left;font-size:12.5px;color:#c7d2f0;"></div>'+
+    '</div>';
+  document.body.appendChild(ov);
+
+  var stopped=false;
+  function stopAll(){
+    stopped=true;
+    if(ATT_PROJECT && ATT_PROJECT.tokenTimer){ clearInterval(ATT_PROJECT.tokenTimer); }
+    if(ATT_PROJECT && ATT_PROJECT.tickTimer){ clearInterval(ATT_PROJECT.tickTimer); }
+    if(ATT_PROJECT && ATT_PROJECT.rosterTimer){ clearInterval(ATT_PROJECT.rosterTimer); }
+    ATT_PROJECT=null;
+  }
+  function closeProjector(){
+    stopAll();
+    // close the window server-side
+    sb.from('im_attendance_session').update({ is_open:false }).eq('id',s.id).then(function(){ if(ov.parentNode){ document.body.removeChild(ov); } loadAttSessions(); });
+  }
+  $('attProjClose').addEventListener('click', closeProjector);
+
+  ATT_PROJECT={ sessionId:s.id };
+  var lastToken=null;
+
+  function drawQR(payload){
+    try{
+      var host=$('attQR'); if(!host){ return; }
+      if(typeof qrcode==='undefined'){ host.innerHTML='<div style="color:#333;font-size:12px;">QR library not loaded \u2014 use the code.</div>'; return; }
+      var qr=qrcode(0,'M'); qr.addData(payload); qr.make();
+      host.innerHTML=qr.createImgTag(6,8);
+      var img=host.querySelector('img'); if(img){ img.style.width='100%'; img.style.height='100%'; }
+    }catch(e){ }
+  }
+
+  function refreshToken(){
+    if(stopped){ return; }
+    IMBackend.callFn('im-attendance', { action:'token', session_id:s.id }, function(res){
+      if(stopped||!res){ return; }
+      if(res.error){ $('attCode').textContent='error'; return; }
+      // QR payload = a deep link the student page understands: att:<sessionId>:<token>
+      var payload='att:'+s.id+':'+res.token;
+      if(res.token!==lastToken){ drawQR(payload); lastToken=res.token; }
+      $('attCode').textContent=res.code6;
+      window.__attRotEnds = Date.now() + (res.remaining_seconds||res.rotate_seconds||15)*1000;
+    });
+  }
+
+  function tick(){
+    if(stopped){ return; }
+    // rotation countdown
+    var rl=$('attRotLeft'); if(rl && window.__attRotEnds){ rl.textContent=Math.max(0,Math.ceil((window.__attRotEnds-Date.now())/1000)); }
+    // window countdown
+    var wl=$('attWinLeft'); if(wl){
+      var left=Math.max(0,Math.floor((closeAt.getTime()-Date.now())/1000));
+      var mm=Math.floor(left/60), ss=left%60;
+      wl.textContent='Attendance closes in '+mm+':'+(ss<10?'0':'')+ss;
+      if(left<=0){ wl.textContent='Window closed.'; }
+    }
+  }
+
+  function refreshRoster(){
+    if(stopped){ return; }
+    sb.from('im_attendance_checkin').select('user_id,checked_in_at,points_earned,im_person(email)').eq('session_id',s.id).order('checked_in_at',{ascending:false}).then(function(res){
+      if(stopped){ return; }
+      var rows=res.data?res.data:[];
+      $('attLiveCount').textContent=rows.length;
+      var html='';
+      rows.slice(0,60).forEach(function(r){
+        var em=(r.im_person&&r.im_person.email)?r.im_person.email:r.user_id;
+        var t=r.checked_in_at?new Date(r.checked_in_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'';
+        html+='<div style="padding:2px 0;">\u2713 '+esc(em)+' <span style="color:#7f8fbf;">'+t+'</span></div>';
+      });
+      $('attRoster').innerHTML=html;
+    });
+  }
+
+  refreshToken(); tick(); refreshRoster();
+  ATT_PROJECT.tokenTimer=setInterval(refreshToken, 5000);   // re-pull token (server decides current bucket)
+  ATT_PROJECT.tickTimer=setInterval(tick, 500);
+  ATT_PROJECT.rosterTimer=setInterval(refreshRoster, 4000);
+}
+
+// ---------------------------- check-ins viewer -----------------------------
+function openAttCheckins(sessionId){
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  ov.innerHTML='<div class="modal" style="max-width:640px;max-height:86vh;overflow:auto;"><h3 style="margin-bottom:10px;">Check-ins</h3><div id="attCiBody">'+loadingCard()+'</div>'+
+    '<div class="inline-actions" style="margin-top:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="attCiClose">Close</button></div></div>';
+  document.body.appendChild(ov);
+  $('attCiClose').addEventListener('click',function(){ if(ov.parentNode){ document.body.removeChild(ov); } });
+  ov.addEventListener('click',function(e){ if(e.target===ov){ if(ov.parentNode){ document.body.removeChild(ov); } } });
+  sb.from('im_attendance_checkin').select('user_id,checked_in_at,present,quiz_score,points_earned,geo_dist_m,im_person(email)').eq('session_id',sessionId).order('checked_in_at',{ascending:true}).then(function(res){
+    var rows=res.data?res.data:[];
+    if(!rows.length){ $('attCiBody').innerHTML='<div class="card empty">No check-ins yet.</div>'; return; }
+    var html='<table class="tbl"><thead><tr><th>Student</th><th>Time</th><th>Quiz</th><th>Points</th><th>Dist</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var em=(r.im_person&&r.im_person.email)?r.im_person.email:r.user_id;
+      var t=r.checked_in_at?new Date(r.checked_in_at).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+      html+='<tr><td>'+esc(em)+'</td><td>'+t+'</td><td>'+(r.quiz_score!=null?r.quiz_score:'\u2014')+'</td><td>'+(r.points_earned!=null?r.points_earned:'\u2014')+'</td><td>'+(r.geo_dist_m!=null?(Math.round(r.geo_dist_m)+'m'):'\u2014')+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    $('attCiBody').innerHTML=html;
+  });
+}
+
+
 function renderAssignments(host){
   if(!needCourse(host)){ return; }
   host.innerHTML='<div class="card" style="margin-bottom:16px;">'+
