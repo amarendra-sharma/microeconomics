@@ -431,7 +431,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attendance-quizdiag';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-quizfix';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2380,8 +2380,15 @@ function stuAttBeginCheckin(sessionId, token, code6){
 
 function stuAttShowQuiz(s, lat, lng){
   var ids=(s.assembled_items||[]).map(function(x){ return x.itemId; }).filter(Boolean);
-  sb.from('im_assessment_item').select('id,prompt,options,item_type,points').in('id',ids).then(function(res){
-    var byId={}; (res.data||[]).forEach(function(it){ byId[it.id]=it; });
+  // Students CANNOT read im_assessment_item directly (staff-only RLS). Use the
+  // answer-free im_bank_items view (granted to authenticated) — same source the
+  // practice/exam student flows use. Reading the raw table returns nothing for a
+  // student, which is why the quiz appeared empty.
+  sb.from('im_bank_items').select('id,prompt,options,item_type,points').in('id',ids).then(function(res){
+    if(res && res.error){ try{ console.error('attendance quiz load error:', res.error); }catch(e){} }
+    var rows=res && res.data ? res.data : [];
+    try{ console.log('attendance quiz items loaded:', rows.length, 'of', ids.length, 'requested'); }catch(e){}
+    var byId={}; rows.forEach(function(it){ byId[it.id]=it; });
     // preserve the session's item order
     var items=ids.map(function(id){ return byId[id]; }).filter(Boolean);
     STU_ATT.items=items;
