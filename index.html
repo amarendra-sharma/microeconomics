@@ -431,7 +431,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attendance-rpc';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-quizdiag';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2352,10 +2352,11 @@ function stuAttBeginCheckin(sessionId, token, code6){
   STU_ATT={ sessionId:sessionId, token:token, code6:code6, items:[], answers:{} };
   var flow=$('stuAttFlow'); if(flow){ flow.innerHTML='<div class="card"><span class="spinner"></span> &nbsp;Checking you in\u2026</div>'; }
   // load the session to know if geo is required and whether there's a quiz
-  sb.from('im_attendance_session').select('id,title,geo_required,assembled_items,is_open,close_at').eq('id',sessionId).maybeSingle().then(function(res){
+  sb.from('im_attendance_session').select('id,title,geo_required,assembled_items,is_open,close_at,base_points').eq('id',sessionId).maybeSingle().then(function(res){
     var s=res.data;
     if(!s){ stuAttSay('Session not found.', true); if(flow){ flow.innerHTML=''; } return; }
     if(!s.is_open || (s.close_at && new Date(s.close_at).getTime()<Date.now())){ stuAttSay('That attendance window is closed.', true); if(flow){ flow.innerHTML=''; } return; }
+    try{ console.log('attendance session loaded:', s.id, 'items:', (s.assembled_items&&s.assembled_items.length)||0, s.assembled_items); }catch(e){}
     var hasQuiz=(s.assembled_items&&s.assembled_items.length>0);
     // get geolocation if required, then either show quiz or submit presence-only
     function proceed(lat,lng){
