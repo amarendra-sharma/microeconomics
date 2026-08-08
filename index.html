@@ -431,7 +431,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attendance-gengrade';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-cachebust';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2180,27 +2180,28 @@ function attShowProjector(s, closeAt){
 
   function refreshToken(){
     if(stopped){ return; }
-    sb.rpc('im_att_token', { p_session: s.id }).then(function(res){
+    IMBackend.callFn('im-attendance', { action:'token', session_id:s.id }, function(res){
       if(stopped){ return; }
-      var data = res && res.data ? res.data : null;
-      if(res && res.error){
-        $('attCode').textContent='error';
-        var qe=$('attQR'); if(qe){ qe.innerHTML='<div style="color:#991b1b;font-size:13px;padding:10px;text-align:center;">'+esc(res.error.message||'Could not load code. Run im_51_attendance_rpc.sql.')+'</div>'; }
+      if(!res || res.offline){
+        $('attCode').textContent='\u2014\u2014\u2014\u2014\u2014\u2014';
+        var q0=$('attQR'); if(q0){ q0.innerHTML='<div style="color:#991b1b;font-size:13px;padding:10px;text-align:center;">Can\u2019t reach the attendance service.<br>Deploy the <b>im-attendance</b> function, or check your connection.</div>'; }
         return;
       }
-      if(!data){ $('attCode').textContent='\u2014\u2014\u2014\u2014\u2014\u2014'; return; }
-      if(data.error){
+      if(res.error){
         $('attCode').textContent='error';
-        var qe2=$('attQR'); if(qe2){ qe2.innerHTML='<div style="color:#991b1b;font-size:13px;padding:10px;text-align:center;">'+esc(data.error==='staff only'?'This account can\u2019t project attendance for this course (not the owner).':data.error)+'</div>'; }
+        var q1=$('attQR'); if(q1){ q1.innerHTML='<div style="color:#991b1b;font-size:13px;padding:10px;text-align:center;">'+esc(res.error==='staff only'?'This account can\u2019t project attendance for this course (not the owner/staff).':res.error)+'</div>'; }
         return;
       }
-      if(!data.code6){ $('attCode').textContent='\u2014\u2014\u2014\u2014\u2014\u2014'; return; }
+      if(!res.code6){ $('attCode').textContent='\u2014\u2014\u2014\u2014\u2014\u2014'; return; }
+      // QR payload = a deep link to the portal that auto-starts check-in:
+      //   <portal>#att=<sessionId>:<token>
+      // Scanning opens the student's browser straight to the check-in flow.
       var base=window.location.origin+window.location.pathname;
-      var payload=base+'#att='+s.id+':'+data.token;
-      if(data.token!==lastToken){ drawQR(payload); lastToken=data.token; }
-      $('attCode').textContent=data.code6;
-      window.__attRotEnds = Date.now() + (data.remaining_seconds||data.rotate_seconds||15)*1000;
-    }, function(){ if(!stopped){ $('attCode').textContent='\u2014\u2014\u2014\u2014\u2014\u2014'; } });
+      var payload=base+'#att='+s.id+':'+res.token;
+      if(res.token!==lastToken){ drawQR(payload); lastToken=res.token; }
+      $('attCode').textContent=res.code6;
+      window.__attRotEnds = Date.now() + (res.remaining_seconds||res.rotate_seconds||15)*1000;
+    });
   }
 
   function tick(){
@@ -2349,97 +2350,59 @@ function stuAttFindOpenSession(cb){
 
 // core: validate presence gate (+ geo), then show quiz (if any) or finish
 function stuAttBeginCheckin(sessionId, token, code6){
-  STU_ATT={ sessionId:sessionId, token:token, code6:code6, items:[], answers:{}, seeds:{} };
+  STU_ATT={ sessionId:sessionId, token:token, code6:code6, items:[], answers:{} };
   var flow=$('stuAttFlow'); if(flow){ flow.innerHTML='<div class="card"><span class="spinner"></span> &nbsp;Checking you in\u2026</div>'; }
-  sb.from('im_attendance_session').select('id,title,geo_required,assembled_items,is_open,close_at,base_points').eq('id',sessionId).maybeSingle().then(function(res){
+  // load the session to know if geo is required and whether there's a quiz
+  sb.from('im_attendance_session').select('id,title,geo_required,assembled_items,is_open,close_at').eq('id',sessionId).maybeSingle().then(function(res){
     var s=res.data;
     if(!s){ stuAttSay('Session not found.', true); if(flow){ flow.innerHTML=''; } return; }
     if(!s.is_open || (s.close_at && new Date(s.close_at).getTime()<Date.now())){ stuAttSay('That attendance window is closed.', true); if(flow){ flow.innerHTML=''; } return; }
-    STU_ATT.session=s;
-    // Presence is recorded NOW (at scan), before the quiz — so the rotating token
-    // is validated while it's still current, not after the student answers.
-    function doCheckin(lat,lng){
-      var args={ p_session:s.id };
-      if(STU_ATT.token){ args.p_token=STU_ATT.token; }
-      if(STU_ATT.code6){ args.p_code6=STU_ATT.code6; }
-      if(lat!=null&&lng!=null){ args.p_lat=lat; args.p_lng=lng; }
-      sb.rpc('im_att_checkin', args).then(function(r){
-        var d = r && r.data ? r.data : null;
-        if(r && r.error){ stuAttResult(false, 'Could not check in: '+(r.error.message||'server error')+'. (If this persists, re-run im_52_attendance_checkin_v2.sql.)'); return; }
-        if(!d){ stuAttResult(false, 'You appear to be offline or signed out. Sign in and try again.'); return; }
-        if(d.error){
-          var m=d.error;
-          if(d.code==='BAD_TOKEN'){ m='That code has expired \u2014 look at the screen and enter the CURRENT code (it changes every few seconds).'; }
-          else if(d.code==='GEO_FAIL'){ m='You appear to be outside the classroom'+(d.distance_m?(' (~'+d.distance_m+'m away)'):'')+'. Check-in requires being in class.'; }
-          else if(d.code==='GEO_REQUIRED'){ m='Location is required for this check-in. Enable location and try again.'; }
-          else if(d.code==='CLOSED'){ m='Attendance is closed for this session.'; }
-          else if(d.code==='ENROLL_REQUIRED'){ m='You\u2019re not enrolled in this course.'; }
-          else if(d.code==='AUTH'){ m='Please sign in and try again.'; }
-          stuAttResult(false, m);
-          return;
-        }
-        // present recorded. Now the quiz (if any) — no token needed anymore.
-        STU_ATT.basePoints=d.base_points;
-        if(d.has_quiz){ stuAttShowQuiz(s); }
-        else { stuAttResult(true, 'You\u2019re marked present (+'+d.base_points+'). No quiz for this session.'); stuAttSay('', false); var c0=(State.payCourseId||State.selfCourseId||State.currentCourseId||null); loadStuAttHistory(c0); }
-      }, function(){ stuAttResult(false, 'Could not reach the server. Check your connection and try again.'); });
+    var hasQuiz=(s.assembled_items&&s.assembled_items.length>0);
+    // get geolocation if required, then either show quiz or submit presence-only
+    function proceed(lat,lng){
+      if(hasQuiz){ stuAttShowQuiz(s, lat, lng); }
+      else { stuAttSubmit(s, lat, lng, {}); }
     }
     if(s.geo_required){
       if(flow){ flow.innerHTML='<div class="card">Requesting your location\u2026 please allow it.</div>'; }
       if(!navigator.geolocation){ stuAttSay('This device can\u2019t share location, which this session requires.', true); if(flow){ flow.innerHTML=''; } return; }
-      navigator.geolocation.getCurrentPosition(function(pos){ doCheckin(pos.coords.latitude, pos.coords.longitude); },
-        function(){ stuAttSay('Location permission is required for this check-in. Enable it and try again.', true); if(flow){ flow.innerHTML=''; } },
-        { enableHighAccuracy:true, timeout:9000 });
+      navigator.geolocation.getCurrentPosition(function(pos){
+        proceed(pos.coords.latitude, pos.coords.longitude);
+      }, function(){
+        stuAttSay('Location permission is required for this check-in. Enable it and try again.', true);
+        if(flow){ flow.innerHTML=''; }
+      }, { enableHighAccuracy:true, timeout:9000 });
     } else {
-      doCheckin(null,null);
+      proceed(null,null);
     }
   });
 }
 
-function stuAttShowQuiz(s){
+function stuAttShowQuiz(s, lat, lng){
   var ids=(s.assembled_items||[]).map(function(x){ return x.itemId; }).filter(Boolean);
-  // im_bank_items = answer-free view students can read; includes generator_id so
-  // the browser regenerates each question (bank is generator-backed; correct
-  // answers are computed by IMGenerators from a seed, not stored statically).
-  sb.from('im_bank_items').select('id,prompt,options,item_type,points,generator_id,render_kind').in('id',ids).then(function(res){
-    if(res && res.error){ try{ console.error('attendance quiz load error:', res.error); }catch(e){} }
-    var rows=res && res.data ? res.data : [];
-    var byId={}; rows.forEach(function(it){ byId[it.id]=it; });
-    var bankItems=ids.map(function(id){ return byId[id]; }).filter(Boolean);
-    // Generate each question from a fresh seed via IMGenerators (client-side),
-    // so the student sees a concrete instance and we can grade it locally.
-    var items=[];
-    bankItems.forEach(function(it){
-      var seed=Math.floor(Math.random()*2000000000)+1;
-      var gen=null;
-      if(it.generator_id && typeof IMGenerators!=='undefined'){
-        try{ gen=IMGenerators.generate(it.generator_id, seed); }catch(e){ gen=null; }
-      }
-      items.push({ id:it.id, generator_id:it.generator_id, seed:seed, points:it.points||1,
-        item_type:it.item_type,
-        prompt:(gen&&gen.prompt)?gen.prompt:it.prompt,
-        options:(gen&&gen.options)?gen.options:(it.options||[]),
-        kind:(gen&&gen.kind)?gen.kind:(it.item_type==='multiple_choice'?'mc':(it.item_type==='parameterized_decision'?'decision':(it.item_type==='free_response'?'short':'numeric'))) });
-    });
+  sb.from('im_assessment_item').select('id,prompt,options,item_type,points').in('id',ids).then(function(res){
+    var byId={}; (res.data||[]).forEach(function(it){ byId[it.id]=it; });
+    // preserve the session's item order
+    var items=ids.map(function(id){ return byId[id]; }).filter(Boolean);
     STU_ATT.items=items;
     var flow=$('stuAttFlow');
     var html='<div class="card"><h3 style="margin:0 0 4px;">'+esc(s.title||'Pop quiz')+'</h3>'+
       '<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px;">You\u2019re checked in for presence. Answer to earn the quiz points on top.</p>';
     items.forEach(function(it, qi){
       html+='<div class="q-block" style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
-        '<div style="font-weight:600;margin-bottom:8px;">Q'+(qi+1)+'. '+esc(it.prompt)+'</div>';
-      if(it.kind==='mc'){
-        (it.options||[]).forEach(function(opt, oi){
+        '<div style="font-weight:600;margin-bottom:8px;">Q'+(qi+1)+'. '+it.prompt+'</div>';
+      var itype=it.item_type||'mc';
+      if(itype==='mc'||itype==='multiple_choice'){
+        var opts=it.options||[];
+        opts.forEach(function(opt, oi){
           html+='<label style="display:block;padding:6px 8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;">'+
             '<input type="radio" name="stuq_'+it.id+'" value="'+oi+'" style="margin-right:8px;">'+esc(String(opt).replace(/^[A-Z][\).]\s*/,''))+'</label>';
         });
-      } else if(it.kind==='decision'){
+      } else if(itype==='parameterized_decision'||itype==='decision'){
         ['yes','no'].forEach(function(v){
           html+='<label style="display:inline-block;padding:6px 14px;border:1px solid var(--border);border-radius:8px;margin-right:8px;cursor:pointer;">'+
             '<input type="radio" name="stuq_'+it.id+'" value="'+v+'" style="margin-right:6px;">'+v+'</label>';
         });
-      } else if(it.kind==='short'){
-        html+='<div style="font-size:12px;color:var(--text-subtle);">(Written question \u2014 not auto-graded; presence still counts.)</div>';
       } else {
         html+='<input type="text" data-stuq-num="'+it.id+'" placeholder="Your answer" style="width:180px;">';
       }
@@ -2447,43 +2410,52 @@ function stuAttShowQuiz(s){
     });
     html+='<button class="btn btn-primary" id="stuAttSubmit">Submit answers</button></div>';
     flow.innerHTML=html;
-    $('stuAttSubmit').addEventListener('click', function(){ stuAttGradeAndSubmit(s); });
+    $('stuAttSubmit').addEventListener('click', function(){
+      var answers={};
+      items.forEach(function(it){
+        var itype=it.item_type||'mc';
+        if(itype==='mc'||itype==='multiple_choice'||itype==='parameterized_decision'||itype==='decision'){
+          var sel=flow.querySelector('input[name="stuq_'+it.id+'"]:checked');
+          if(sel){ answers[it.id]=sel.value; }
+        } else {
+          var inp=flow.querySelector('[data-stuq-num="'+it.id+'"]');
+          if(inp && inp.value.trim()!==''){ answers[it.id]=inp.value.trim(); }
+        }
+      });
+      stuAttSubmit(s, lat, lng, answers);
+    });
   });
 }
 
-function stuAttGradeAndSubmit(s){
+function stuAttSubmit(s, lat, lng, answers){
   var flow=$('stuAttFlow');
-  var items=STU_ATT.items||[];
-  var score=0, max=0; var answers={};
-  items.forEach(function(it){
-    if(it.kind==='short'){ return; } // not auto-graded, not counted in max
-    max+=(it.points||1);
-    var sub=null;
-    if(it.kind==='mc'||it.kind==='decision'){
-      var sel=flow.querySelector('input[name="stuq_'+it.id+'"]:checked');
-      if(sel){ sub=sel.value; }
-    } else {
-      var inp=flow.querySelector('[data-stuq-num="'+it.id+'"]');
-      if(inp && inp.value.trim()!==''){ sub=inp.value.trim(); }
-    }
-    answers[it.id]=sub;
-    if(sub!=null && it.generator_id && typeof IMGenerators!=='undefined'){
-      try{
-        var g=IMGenerators.grade(it.generator_id, it.seed, sub);
-        if(g && g.correct){ score+=(g.points||it.points||1); }
-      }catch(e){}
-    }
-  });
   if(flow){ flow.innerHTML='<div class="card"><span class="spinner"></span> &nbsp;Submitting\u2026</div>'; }
-  sb.rpc('im_att_quiz', { p_session:s.id, p_quiz_score:score, p_quiz_max:max, p_quiz_answers:answers }).then(function(r){
-    var d=r && r.data ? r.data : null;
-    if(r && r.error){ stuAttResult(false, 'Recorded your presence, but the quiz score didn\u2019t save: '+(r.error.message||'server error')); return; }
-    if(d && d.error){ stuAttResult(false, 'Recorded your presence, but the quiz score didn\u2019t save.'); return; }
-    var base=(STU_ATT.basePoints!=null)?STU_ATT.basePoints:(s.base_points||0);
-    stuAttResult(true, 'You\u2019re marked present (+'+base+'). Quiz: '+score+' / '+max+'. Total this session: '+(d?d.points_earned:(base+score))+'.');
+  var payload={ action:'checkin', session_id:s.id, quiz_answers:answers };
+  if(STU_ATT.token){ payload.token=STU_ATT.token; }
+  if(STU_ATT.code6){ payload.code6=STU_ATT.code6; }
+  if(lat!=null&&lng!=null){ payload.lat=lat; payload.lng=lng; }
+  IMBackend.callFn('im-attendance', payload, function(res){
+    if(!res || res.offline){ stuAttResult(false, 'You appear to be offline or signed out. Sign in and try again.'); return; }
+    if(res.error){
+      var m=res.error;
+      if(res.code==='BAD_TOKEN'){ m='That code has expired \u2014 look at the screen and enter the CURRENT code (it changes every few seconds).'; }
+      else if(res.code==='GEO_FAIL'){ m='You appear to be outside the classroom'+(res.distance_m?(' (~'+res.distance_m+'m away)'):'')+'. Check-in requires being in class.'; }
+      else if(res.code==='GEO_REQUIRED'){ m='Location is required for this check-in. Enable location and try again.'; }
+      else if(res.code==='CLOSED'){ m='Attendance is closed for this session.'; }
+      else if(res.code==='ENROLL_REQUIRED'){ m='You\u2019re not enrolled in this course.'; }
+      stuAttResult(false, m);
+      return;
+    }
+    // success
+    var parts=[];
+    parts.push('You\u2019re marked present (+'+res.base_points+').');
+    if(res.quiz_score!=null){ parts.push('Quiz: '+res.quiz_score+' / '+res.quiz_max+'.'); }
+    parts.push('Total this session: '+res.points_earned+'.');
+    stuAttResult(true, parts.join(' '));
     stuAttSay('', false);
-    var c1=(State.payCourseId||State.selfCourseId||State.currentCourseId||null); loadStuAttHistory(c1);
-  }, function(){ stuAttResult(false, 'Recorded your presence, but couldn\u2019t reach the server to save the quiz score.'); });
+    var courseId = State.payCourseId || State.selfCourseId || State.currentCourseId || null;
+    loadStuAttHistory(courseId);
+  });
 }
 
 function stuAttResult(ok, msg){
@@ -6724,5 +6696,6 @@ try { console.log('%cIntro Micro build: ' + SA_BUILD + ' | tree renderer present
   } catch (e) {}
 })();
 </script>
+<script src="macronations-enhance.js" defer></script>
 </body>
 </html>
