@@ -432,7 +432,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-multi-midterm';
+var SA_BUILD = 'intro-micro-portal-2026-08-enroll-fix';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1067,7 +1067,11 @@ function openCourseModal(courseId){
     op.then(function(res){
       $('cmSave').disabled=false;
       if(res.error){ cmErr(res.error.message); return; }
-      closeM(); loadCourses().then(function(){ rerenderCurrentView(); });
+      // If this course no longer requires payment, activate anyone stuck pending.
+      var nowFree = payload.requires_payment===false;
+      var afterActivate=function(){ closeM(); loadCourses().then(function(){ rerenderCurrentView(); }); };
+      if(nowFree && !isNew){ sb.rpc('im_activate_free_pending', { p_course: courseId }).then(afterActivate, afterActivate); }
+      else { afterActivate(); }
     });
   });
   function cmErr(t){ var e=$('cmMsg'); e.textContent=t; e.className='msg err'; }
@@ -4159,7 +4163,8 @@ function loadCourseWaiver(c){
       } else {
         sb.from('im_fee_waiver').insert({ course_id:State.teachCourseId, student_id:null, waived_by:State.user.id, note:'course-wide waiver' }).then(function(r){
           if(r.error){ alert('Could not waive: '+r.error.message); return; }
-          loadCourseWaiver(c);
+          // Activate any students already stuck 'pending' now that the course is free.
+          sb.rpc('im_activate_free_pending', { p_course: State.teachCourseId }).then(function(){ loadCourseWaiver(c); }, function(){ loadCourseWaiver(c); });
         });
       }
     });
@@ -4204,7 +4209,8 @@ function loadSubs(c){
     Array.prototype.forEach.call($('subBody').querySelectorAll('[data-waive]'), function(b){
       b.addEventListener('click', function(){
         sb.from('im_fee_waiver').insert({ course_id:State.teachCourseId, student_id:b.getAttribute('data-waive'), waived_by:State.user.id, note:'per-student waiver' }).then(function(r){
-          if(r.error){ alert('Could not waive: '+r.error.message); return; } loadSubs(c);
+          if(r.error){ alert('Could not waive: '+r.error.message); return; }
+          sb.rpc('im_activate_free_pending', { p_course: State.teachCourseId }).then(function(){ loadSubs(c); }, function(){ loadSubs(c); });
         });
       });
     });
