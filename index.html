@@ -432,7 +432,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-allcourses-cachebust';
+var SA_BUILD = 'intro-micro-portal-2026-08-multi-midterm';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1031,7 +1031,7 @@ function openCourseModal(courseId){
     '<div class="field"><label>Grade weights — must sum to 100%</label>'+
     '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">'+
       wInput('cmWr','Reading',v.wr)+wInput('cmWq','Quizzes',v.wq)+wInput('cmWa','Arenas',v.wa)+wInput('cmWm','Midterm',v.wm)+wInput('cmWf','Final',v.wf)+
-    '</div><div id="cmWsum" style="font-size:11.5px;color:var(--text-subtle);margin-top:6px;"></div></div>'+
+    '</div><div id="cmWsum" style="font-size:11.5px;color:var(--text-subtle);margin-top:6px;"></div><div style="font-size:11px;color:var(--text-subtle);margin-top:4px;">The <b>Midterm</b> and <b>Final</b> weights here are defaults. If you set a weight on an individual exam (in Exams &rarr; edit), that exam uses its own weight instead \u2014 which is how you run several midterms, each weighted separately.</div></div>'+
     '<div class="inline-actions" style="margin-top:18px;justify-content:flex-end;">'+
       (isNew?'':'<button class="btn btn-danger btn-sm" id="cmArchive">Archive</button>')+
       '<button class="btn btn-ghost" id="cmCancel">Cancel</button>'+
@@ -1585,9 +1585,14 @@ function renderGradebook(host){
     if(r[0] && r[0].error){ host.innerHTML='<div class="card empty">The gradebook list could not load: '+esc(r[0].error.message)+'</div>'; return; }
     var rows=r[0].data?r[0].data:[];
     var exams=r[1].data?r[1].data:[];
-    var midterm=exams.filter(function(e){return e.kind==='midterm';})[0];
-    var fin=exams.filter(function(e){return e.kind==='final';})[0];
-    var examIds=[]; if(midterm){examIds.push(midterm.id);} if(fin){examIds.push(fin.id);}
+    // MULTIPLE EXAMS: every published exam is its own weighted grade column.
+    // Order midterms (by created order) then the final(s) last for a natural layout.
+    var gradedExams=exams.slice().sort(function(a,b){
+      var af=(a.kind==='final')?1:0, bf=(b.kind==='final')?1:0;
+      if(af!==bf){ return af-bf; }
+      return 0; // preserve incoming (created_at asc) order within a kind
+    });
+    var examIds=gradedExams.map(function(e){ return e.id; });
     // Page through the attempts. Without paging this query silently returned a
     // truncated set once a course grew past the server's ~1000-row cap, so every
     // student whose rows fell outside it was under-counted in the gradebook.
@@ -1614,7 +1619,7 @@ function renderGradebook(host){
     var examAttemptsP = fetchAllExamAttempts(examIds);
     withTimeout(examAttemptsP, 'exam attempts', 20000).then(function(ea){
       var attempts=ea.data?ea.data:[];
-      var scoringOf={}; if(midterm){scoringOf[midterm.id]=midterm.attempt_scoring||'highest';} if(fin){scoringOf[fin.id]=fin.attempt_scoring||'highest';}
+      var scoringOf={}; gradedExams.forEach(function(e){ scoringOf[e.id]=e.attempt_scoring||'highest'; });
       // group: student -> exam -> item -> [points...] (in time order)
       var grp={};
       attempts.sort(function(a,b){ return new Date(a.created_at)-new Date(b.created_at); });
@@ -1624,7 +1629,7 @@ function renderGradebook(host){
         if(!grp[a.student_id][a.exam_id][a.item_id]){ grp[a.student_id][a.exam_id][a.item_id]=[]; }
         grp[a.student_id][a.exam_id][a.item_id].push(a.points_earned?Number(a.points_earned):0);
       });
-      var examScore={}; // student -> {midterm: pts, final: pts}
+      var examScore={}; // student -> { <examId>: rawPoints }
       Object.keys(grp).forEach(function(sid){
         examScore[sid]={};
         Object.keys(grp[sid]).forEach(function(eid){
@@ -1637,8 +1642,7 @@ function renderGradebook(host){
             else { v=Math.max.apply(null,arr); } // highest
             total+=v;
           });
-          var key=(midterm&&eid===midterm.id)?'midterm':((fin&&eid===fin.id)?'final':null);
-          if(key){ examScore[sid][key]=total; }
+          examScore[sid][eid]=total; // key by exam id (supports many midterms)
         });
       });
       // assignment averages + manual overrides + arena performance
@@ -1689,7 +1693,7 @@ function renderGradebook(host){
         var asgScore={};
         Object.keys(earn).forEach(function(sid){ asgScore[sid]= poss[sid]>0 ? (earn[sid]/poss[sid]) : null; });
         var overrideOf={}; ovr.forEach(function(o){ overrideOf[o.student_id]={ pct:o.override_pct, note:o.note }; });
-        buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overrideOf,arenaScoreOf);
+        buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf);
       }, function(err){
         host.innerHTML='<div class="card empty">Could not load parts of the gradebook ('+esc(String(err&&err.message?err.message:err))+'). Exam and quiz scores may still be shown \u2014 try reloading.</div>';
       });
@@ -1704,25 +1708,34 @@ function renderGradebook(host){
    during earlier work, which made the gradebook and roster crash.) */
 function subTag(s){ if(s==='active'){return '<span class="tag green">active</span>';} if(s==='pending'){return '<span class="tag amber">pending</span>';} if(s==='expired'){return '<span class="tag rose">expired</span>';} if(s==='comped'){return '<span class="tag violet">comped</span>';} return '<span class="tag dim">'+esc(s)+'</span>'; }
 
-function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overrideOf,arenaScoreOf){
+function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf){
   try {
   asgScore = asgScore || {}; overrideOf = overrideOf || {}; arenaScoreOf = arenaScoreOf || {};
   if(rows.length===0){ host.innerHTML='<div class="card empty">No enrolled students yet. Share the join code <span class="pill-code">'+esc(c.join_code)+'</span> so students can join.</div>'; return; }
+  // Effective point total for an exam (falls back to question count).
+  function examPts(e){ if(!e){ return 0; } if(e.total_points && Number(e.total_points)>0){ return Number(e.total_points); } return (e.item_ids && e.item_ids.length) ? e.item_ids.length : 0; }
+  // Weight for an exam: its own weight if set, else the course-level weight for
+  // its kind (backward compatible). If several exams share a kind-fallback, they
+  // each still count — renormalization handles the sum.
+  function examWeight(e){
+    if(e.weight!==null && e.weight!==undefined && e.weight!==''){ return Number(e.weight); }
+    return (e.kind==='final') ? (weights.final||0) : (weights.midterm||0);
+  }
   var computed=rows.map(function(r){
     var reading=r.chapters_read/14;
     var quizzes=(r.avg_quiz_score!==null&&r.avg_quiz_score!==undefined&&r.avg_quiz_score>0)?Number(r.avg_quiz_score):(r.quizzes_passed/14);
     var arenas=(arenaScoreOf[r.student_id]!==undefined)?arenaScoreOf[r.student_id]:0;
-    // Effective point total: use total_points, but if that's 0/missing on a
-    // published exam that has questions, fall back to the question count (each
-    // question = 1 point) so a mis-saved exam still shows a real % instead of --.
-    function examPts(e){ if(!e){ return 0; } if(e.total_points && Number(e.total_points)>0){ return Number(e.total_points); } return (e.item_ids && e.item_ids.length) ? e.item_ids.length : 0; }
-    var midPts=examPts(midterm), finPts=examPts(fin);
-    var midScore=(midterm&&midPts)?((examScore[r.student_id]&&examScore[r.student_id].midterm?examScore[r.student_id].midterm:0)/midPts):null;
-    var finScore=(fin&&finPts)?((examScore[r.student_id]&&examScore[r.student_id].final?examScore[r.student_id].final:0)/finPts):null;
     // renormalize weights over available components
     var comps=[['reading',reading,weights.reading],['quizzes',quizzes,weights.quizzes],['arenas',arenas,weights.arenas]];
-    if(midScore!==null){ comps.push(['midterm',midScore,weights.midterm]); }
-    if(finScore!==null){ comps.push(['final',finScore,weights.final]); }
+    // one component per published exam, each on its own weight
+    var examScores={}; // examId -> fraction (or null)
+    gradedExams.forEach(function(e){
+      var pts=examPts(e);
+      var raw=(examScore[r.student_id]&&examScore[r.student_id][e.id]!==undefined)?examScore[r.student_id][e.id]:null;
+      var frac=(pts>0 && raw!==null)?(raw/pts):null;
+      examScores[e.id]=frac;
+      if(frac!==null){ comps.push(['exam:'+e.id, frac, examWeight(e)]); }
+    });
     var wsum=comps.reduce(function(s,x){return s+x[2];},0);
     var total=wsum>0?comps.reduce(function(s,x){return s+x[1]*x[2];},0)/wsum:0;
     var asg=(asgScore[r.student_id]!==undefined&&asgScore[r.student_id]!==null)?asgScore[r.student_id]:null;
@@ -1730,18 +1743,28 @@ function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overr
     var finalPct = ovr ? (Number(ovr.pct)/100) : total;
     return { sid:r.student_id, email:r.email, name:r.full_name, sub:r.sub_status, reading:reading, quizzes:quizzes, arenas:arenas,
       practice:(r.practice_attempts>0?r.practice_correct/r.practice_attempts:null),
-      midterm:midScore, final:finScore, assignments:asg, computed:total, override:ovr, finalPct:finalPct };
+      examScores:examScores, assignments:asg, computed:total, override:ovr, finalPct:finalPct };
   });
   var html='<div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'+
     '<div style="font-size:12.5px;color:var(--text-muted);"><b>Grade on work completed so far.</b> The weighted total renormalizes over components that have data. <b>Assignments</b> are shown for reference; to fold them (or participation) into a student\u2019s final grade, use the <b>Override</b> column \u2014 an entered override becomes the Final grade and is what the CSV exports.</div>'+
     '<button class="btn btn-ghost btn-sm" id="csvBtn">Export CSV</button></div>';
-  html+='<div class="tbl-wrap"><table class="tbl"><thead><tr><th scope="col">Student</th><th scope="col">Sub</th><th scope="col">Reading</th><th scope="col">Quizzes</th><th scope="col">Arenas</th><th scope="col">Assign</th><th scope="col">Midterm</th><th scope="col">Final exam</th><th scope="col">Weighted</th><th scope="col">Override %</th><th scope="col">Final</th><th scope="col"></th></tr></thead><tbody>';
+  // build dynamic exam column headers (one per published exam)
+  var examCols=gradedExams.map(function(e){
+    var w=examWeight(e); var wpc=(w!==null&&w!==undefined)?(' '+Math.round(w*100)+'%'):'';
+    var label=esc(e.title||(e.kind==='final'?'Final':'Midterm'));
+    return { id:e.id, label:label+wpc };
+  });
+  var examHeadHtml=examCols.map(function(col){ return '<th scope="col">'+col.label+'</th>'; }).join('');
+  html+='<div class="tbl-wrap"><table class="tbl"><thead><tr><th scope="col">Student</th><th scope="col">Sub</th><th scope="col">Reading</th><th scope="col">Quizzes</th><th scope="col">Arenas</th><th scope="col">Assign</th>'+examHeadHtml+'<th scope="col">Weighted</th><th scope="col">Override %</th><th scope="col">Final</th><th scope="col"></th></tr></thead><tbody>';
   computed.forEach(function(g){
+    var examCells=examCols.map(function(col){
+      var f=g.examScores[col.id];
+      return '<td>'+(f===null||f===undefined?'<span class="tag dim">--</span>':pct(f))+'</td>';
+    }).join('');
     html+='<tr><th scope="row" style="font-weight:500;">'+esc(g.name||g.email)+'</th><td>'+subTag(g.sub)+'</td>'+
       '<td>'+pct(g.reading)+'</td><td>'+pct(g.quizzes)+'</td><td>'+pct(g.arenas)+'</td>'+
       '<td>'+(g.assignments===null?'<span class="tag dim">--</span>':pct(g.assignments))+'</td>'+
-      '<td>'+(g.midterm===null?'<span class="tag dim">--</span>':pct(g.midterm))+'</td>'+
-      '<td>'+(g.final===null?'<span class="tag dim">--</span>':pct(g.final))+'</td>'+
+      examCells+
       '<td>'+pct(g.computed)+'</td>'+
       '<td><label class="sr-only" for="ovr-'+g.sid+'">Override percent for '+esc(g.name||g.email)+'</label><input id="ovr-'+g.sid+'" type="number" min="0" max="100" step="0.1" placeholder="\u2014" value="'+(g.override?g.override.pct:'')+'" style="width:64px;"></td>'+
       '<td style="font-weight:600;color:var(--text-bright);">'+pct(g.finalPct)+(g.override?' <span class="tag violet" title="manual override">ovr</span>':'')+'</td>'+
@@ -1749,7 +1772,7 @@ function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overr
   });
   html+='</tbody></table></div>';
   host.innerHTML=html;
-  $('csvBtn').addEventListener('click', function(){ exportCSV(c,computed); });
+  $('csvBtn').addEventListener('click', function(){ exportCSV(c,computed,examCols); });
   Array.prototype.forEach.call(host.querySelectorAll('[data-saveovr]'), function(b){ b.addEventListener('click', function(){
     var sid=b.getAttribute('data-saveovr');
     var v=$('ovr-'+sid).value;
@@ -1763,7 +1786,7 @@ function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overr
     b.addEventListener('click', function(){
       var sid=b.getAttribute('data-breakdown');
       var gObj=null; for(var i=0;i<computed.length;i++){ if(computed[i].sid===sid){ gObj=computed[i]; break; } }
-      openGradeBreakdown(State.teachCourseId, sid, b.getAttribute('data-bdname'), gObj, weights);
+      openGradeBreakdown(State.teachCourseId, sid, b.getAttribute("data-bdname"), gObj, weights, gradedExams);
     });
   });
   } catch(err){
@@ -1775,7 +1798,7 @@ function buildGradebook(host,c,weights,rows,midterm,fin,examScore,asgScore,overr
    percentage, followed by correct counts per exam and chapter quiz. The weighted
    section uses the SAME figures the gradebook row shows, so the two always agree.
    Ported from and extended beyond the Game Theory course. */
-function openGradeBreakdown(courseId, studentId, studentName, g, weights){
+function openGradeBreakdown(courseId, studentId, studentName, g, weights, gradedExams){
   if(!courseId || !studentId){ return; }
   var ov=document.createElement('div'); ov.className='modal-bg';
   ov.innerHTML='<div class="modal" style="max-width:760px;"><h3 style="margin-bottom:4px;">Score detail \u2014 '+esc(studentName||'student')+'</h3>'+
@@ -1798,8 +1821,15 @@ function openGradeBreakdown(courseId, studentId, studentName, g, weights){
       { key:'Quizzes',   frac:g.quizzes,  w:weights.quizzes },
       { key:'Arenas',    frac:g.arenas,   w:weights.arenas }
     ];
-    if(g.midterm!==null && g.midterm!==undefined){ comps.push({ key:'Midterm', frac:g.midterm, w:weights.midterm }); }
-    if(g.final!==null && g.final!==undefined){ comps.push({ key:'Final exam', frac:g.final, w:weights.final }); }
+    if(gradedExams && gradedExams.length && g.examScores){
+      gradedExams.forEach(function(e){
+        var f=g.examScores[e.id];
+        if(f!==null && f!==undefined){
+          var w=(e.weight!==null&&e.weight!==undefined&&e.weight!=='')?Number(e.weight):((e.kind==='final')?weights.final:weights.midterm);
+          comps.push({ key:(e.title||(e.kind==='final'?'Final exam':'Midterm')), frac:f, w:w });
+        }
+      });
+    }
     var wsum=comps.reduce(function(s,x){ return s+(x.w||0); },0);
     var html='<table class="data-table"><thead><tr><th scope="col">Component</th><th scope="col">Score</th><th scope="col">Weight</th><th scope="col">Effective weight</th><th scope="col">Contribution</th></tr></thead><tbody>';
     comps.forEach(function(x){
@@ -1841,14 +1871,20 @@ function openGradeBreakdown(courseId, studentId, studentName, g, weights){
     b.innerHTML=html;
   }, function(){ var b=$('bdBody'); if(b){ b.innerHTML='<div class="card empty">Could not load correct-answer detail.</div>'; } });
 }
-function exportCSV(c,rows){
-  var head=['Student','Email','Subscription','Reading%','Quizzes%','Arenas%','Assignments%','Midterm%','Final exam%','Weighted%','Override%','Final grade%'];
+function exportCSV(c,rows,examCols){
+  examCols = examCols || [];
+  var examHead = examCols.map(function(col){
+    var t=String(col.label).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").replace(/&quot;/g,'"');
+    return '"'+t.replace(/"/g,'""')+'%"';
+  });
+  var head=['Student','Email','Subscription','Reading%','Quizzes%','Arenas%','Assignments%'].concat(examHead).concat(['Weighted%','Override%','Final grade%']);
   var lines=[head.join(',')];
   rows.forEach(function(g){
     function p(x){ return x===null||x===undefined?'':Math.round(x*100); }
     var ovr = g.override ? g.override.pct : '';
+    var examVals = examCols.map(function(col){ var f=g.examScores?g.examScores[col.id]:null; return p(f); });
     var line=[ '"'+(g.name||'').replace(/"/g,'""')+'"', '"'+(g.email||'')+'"', g.sub,
-      p(g.reading),p(g.quizzes),p(g.arenas),p(g.assignments),p(g.midterm),p(g.final),p(g.computed), ovr, p(g.finalPct) ];
+      p(g.reading),p(g.quizzes),p(g.arenas),p(g.assignments) ].concat(examVals).concat([ p(g.computed), ovr, p(g.finalPct) ]);
     lines.push(line.join(','));
   });
   var blob=new Blob([lines.join('\n')],{type:'text/csv'});
@@ -3598,6 +3634,7 @@ function openExamEditor(examId){
         '<div class="field" style="grid-column:1/3;"><label>Title</label><input id="edTitle" value="'+esc(e.title||'')+'"></div>'+
         '<div class="field" style="grid-column:1/3;"><label>Instructions (shown before the exam)</label><textarea id="edInstr" rows="2">'+esc(e.instructions||'')+'</textarea></div>'+
         '<div class="field"><label>Kind</label><select id="edKind"><option value="midterm"'+(e.kind==='midterm'?' selected':'')+'>Midterm</option><option value="final"'+(e.kind==='final'?' selected':'')+'>Final</option></select></div>'+
+        '<div class="field"><label>Weight (% of final grade)</label><input id="edWeight" type="number" min="0" max="100" step="1" value="'+(e.weight!==null&&e.weight!==undefined?Math.round(Number(e.weight)*100):'')+'" placeholder="e.g. 15"><span style="color:var(--text-subtle);font-size:11px;">Each exam counts on its own weight. Leave blank to use the course-level Midterm/Final weight. You can have several midterms, each with its own weight.</span></div>'+
         '<div class="field"><label>Time limit (minutes)</label><input id="edTime" type="number" min="0" value="'+(e.time_limit_minutes||'')+'"></div>'+
         '<div class="field"><label>Opens at</label><input id="edOpens" type="datetime-local" value="'+dtLocalValue(e.opens_at)+'"></div>'+
         '<div class="field"><label>Closes at</label><input id="edCloses" type="datetime-local" value="'+dtLocalValue(e.closes_at)+'"></div>'+
@@ -3709,6 +3746,7 @@ function openExamEditor(examId){
       title: $('edTitle').value.trim()||EX.title,
       instructions: $('edInstr').value,
       kind: $('edKind').value,
+      weight: ($('edWeight') && $('edWeight').value!=='') ? Math.max(0,Math.min(1, parseFloat($('edWeight').value)/100)) : null,
       time_limit_minutes: $('edTime').value? parseInt($('edTime').value,10): null,
       opens_at: opens, closes_at: closes,
       max_attempts: $('edAtt').value!==''? parseInt($('edAtt').value,10): 1,
@@ -3774,6 +3812,7 @@ function openAssembler(){
   m.innerHTML='<div class="modal" style="max-width:880px;"><h2>Assemble exam</h2><div id="axMsg" class="msg"></div>'+
     '<div class="row2"><div class="field"><label>Title</label><input id="axTitle" placeholder="Midterm Exam"></div>'+
     '<div class="field"><label>Kind</label><select id="axKind"><option value="midterm">Midterm</option><option value="final">Final</option></select></div></div>'+
+    '<div class="field"><label>Weight (% of final grade)</label><input id="axWeight" type="number" min="0" max="100" step="1" placeholder="blank = use course Midterm/Final weight"><span style="color:var(--text-subtle);font-size:11px;">Each exam counts on its own weight, so you can have several midterms. Leave blank to fall back to the course-level weight.</span></div>'+
     // ---- options row 1 ----
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'+
       '<div class="field"><label>Time limit (min, 0 = none)</label><input id="axTime" type="number" min="0" value="0"></div>'+
@@ -4041,7 +4080,9 @@ function openAssembler(){
       payloadIds=ids;
       recipe=null;
     }
-    var payload={ course_id:State.teachCourseId, kind:$('axKind').value, title:title, item_ids:payloadIds,
+    var payload={ course_id:State.teachCourseId, kind:$('axKind').value, title:title,
+      weight: ($('axWeight') && $('axWeight').value!=='') ? Math.max(0,Math.min(1, parseFloat($('axWeight').value)/100)) : null,
+      item_ids:payloadIds,
       total_points:pts, time_limit_minutes:tl, instructions:$('axInstr').value.trim(), is_published:false,
       max_attempts:att, shuffle_questions:$('axShuffle').checked, attempt_scoring:$('axScoring').value,
       opens_at:opensV, closes_at:closesV, random_per_student:perStudent, random_recipe:recipe,
@@ -5487,7 +5528,7 @@ function computeWeightedGrade(callback){
     sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
-    sb.from('im_exam').select('id,kind,total_points,attempt_scoring').eq('course_id', courseId).eq('is_published', true)
+    sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring').eq('course_id', courseId).eq('is_published', true)
   ]).then(function(r){
     var course = r[0].data; if (!course) { callback(null); return; }
     var prog = r[1].data ? r[1].data : [];
@@ -5499,22 +5540,27 @@ function computeWeightedGrade(callback){
     var reading = chaptersRead/14;
     var quizzes = quizN>0 ? (quizSum/14) : (quizzesPassed/14);
     var arenaScore = computeArenaScore(arenas);
-    var midterm = exams.filter(function(e){return e.kind==='midterm';})[0];
-    var fin = exams.filter(function(e){return e.kind==='final';})[0];
-    var examIds=[]; if(midterm){examIds.push(midterm.id);} if(fin){examIds.push(fin.id);}
-    function finish(midScore, finScore){
+    // one component per published exam, each on its own weight (multiple midterms OK)
+    function examPts(e){ if(!e){ return 0; } if(e.total_points && Number(e.total_points)>0){ return Number(e.total_points); } return (e.item_ids && e.item_ids.length) ? e.item_ids.length : 0; }
+    function examWeight(e){ if(e.weight!==null && e.weight!==undefined && e.weight!==''){ return Number(e.weight); } return (e.kind==='final')?(W.final||0):(W.midterm||0); }
+    var gradedExams=exams.slice().sort(function(a,b){ var af=(a.kind==='final')?1:0, bf=(b.kind==='final')?1:0; return af-bf; });
+    var examIds=gradedExams.map(function(e){ return e.id; });
+    function finish(scoreById){
       var comps=[['Reading',reading,W.reading],['Quizzes',quizzes,W.quizzes],['Arenas',arenaScore,W.arenas]];
-      if(W.midterm>0){ comps.push(['Midterm', midScore!==null?midScore:0, W.midterm, midScore===null]); }
-      if(W.final>0){ comps.push(['Final', finScore!==null?finScore:0, W.final, finScore===null]); }
+      gradedExams.forEach(function(e){
+        var w=examWeight(e); if(!(w>0)){ return; }
+        var sc=(scoreById && scoreById[e.id]!==undefined)?scoreById[e.id]:null;
+        comps.push([ (e.title||(e.kind==='final'?'Final':'Midterm')), sc!==null?sc:0, w, sc===null ]);
+      });
       var wsum=comps.reduce(function(s,x){return s+x[2];},0);
       var total=wsum>0?comps.reduce(function(s,x){return s+x[1]*x[2];},0)/wsum:0;
       callback({ course:course, comps:comps, total:total });
     }
-    if (examIds.length===0){ finish(null,null); return; }
+    if (examIds.length===0){ finish({}); return; }
     sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,created_at').eq('student_id',uid).in('exam_id',examIds).not('graded_at','is',null).then(function(ea){
       var att = ea.data ? ea.data : [];
       function scoreFor(exam){
-        if(!exam || !exam.total_points){ return null; }
+        var pts=examPts(exam); if(!pts){ return null; }
         var policy = exam.attempt_scoring || 'highest';
         var perItem={};
         att.filter(function(a){return a.exam_id===exam.id;})
@@ -5523,9 +5569,11 @@ function computeWeightedGrade(callback){
         var keys=Object.keys(perItem); if(keys.length===0){ return null; }
         var tot=0;
         keys.forEach(function(iid){ var arr=perItem[iid]; var v; if(policy==='latest'){v=arr[arr.length-1];} else if(policy==='average'){var s=0;for(var i=0;i<arr.length;i++){s+=arr[i];}v=s/arr.length;} else {v=Math.max.apply(null,arr);} tot+=v; });
-        return tot/exam.total_points;
+        return tot/pts;
       }
-      finish(scoreFor(midterm), scoreFor(fin));
+      var scoreById={};
+      gradedExams.forEach(function(e){ scoreById[e.id]=scoreFor(e); });
+      finish(scoreById);
     });
   });
 }
@@ -6374,7 +6422,7 @@ function loadCompletion() {
     sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
-    sb.from('im_exam').select('id,kind,total_points,attempt_scoring').eq('course_id', courseId).eq('is_published', true)
+    sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring').eq('course_id', courseId).eq('is_published', true)
   ]).then(function(r) {
     var course = r[0].data; if (!course) { host.innerHTML=''; return; }
     var prog = r[1].data ? r[1].data : [];
@@ -6392,28 +6440,30 @@ function loadCompletion() {
     var quizzes = quizN>0 ? (quizSum/14) : (quizzesPassed/14);
     var arenaScore = computeArenaScore(arenas);
 
-    var midterm = exams.filter(function(e){return e.kind==='midterm';})[0];
-    var fin = exams.filter(function(e){return e.kind==='final';})[0];
-    var examIds = []; if(midterm){examIds.push(midterm.id);} if(fin){examIds.push(fin.id);}
+    function examPts(e){ if(!e){ return 0; } if(e.total_points && Number(e.total_points)>0){ return Number(e.total_points); } return (e.item_ids && e.item_ids.length) ? e.item_ids.length : 0; }
+    function examWeight(e){ if(e.weight!==null && e.weight!==undefined && e.weight!==''){ return Number(e.weight); } return (e.kind==='final')?(W.final||0):(W.midterm||0); }
+    var gradedExams = exams.slice().sort(function(a,b){ var af=(a.kind==='final')?1:0, bf=(b.kind==='final')?1:0; return af-bf; });
+    var examIds = gradedExams.map(function(e){ return e.id; });
 
-    function finish(midScore, finScore) {
-      // Exams ALWAYS count toward completion: an untaken (or unpublished) exam
-      // scores 0, so a student must take the midterm and final to reach 100% /
-      // earn the certificate. The denominator is the full configured course
-      // weight (not renormalized over only-available components).
+    function finish(scoreById) {
+      // Exams ALWAYS count toward completion: an untaken exam scores 0, so a
+      // student must take all exams to reach 100% / earn the certificate.
       var comps=[['Reading',reading,W.reading],['Quizzes',quizzes,W.quizzes],['Arenas',arenaScore,W.arenas]];
-      if(W.midterm>0){ comps.push(['Midterm', midScore!==null?midScore:0, W.midterm, midScore===null]); }
-      if(W.final>0){ comps.push(['Final', finScore!==null?finScore:0, W.final, finScore===null]); }
+      gradedExams.forEach(function(e){
+        var w=examWeight(e); if(!(w>0)){ return; }
+        var sc=(scoreById && scoreById[e.id]!==undefined)?scoreById[e.id]:null;
+        comps.push([ (e.title||(e.kind==='final'?'Final':'Midterm')), sc!==null?sc:0, w, sc===null ]);
+      });
       var wsum=comps.reduce(function(s,x){return s+x[2];},0);
       var total=wsum>0?comps.reduce(function(s,x){return s+x[1]*x[2];},0)/wsum:0;
       renderCompletion(host, course, comps, total);
     }
 
-    if (examIds.length === 0) { finish(null, null); return; }
+    if (examIds.length === 0) { finish({}); return; }
     sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,created_at').eq('student_id',uid).in('exam_id',examIds).not('graded_at','is',null).then(function(ea){
       var att = ea.data ? ea.data : [];
       function scoreFor(exam){
-        if(!exam || !exam.total_points){ return null; }
+        var pts=examPts(exam); if(!pts){ return null; }
         var policy = exam.attempt_scoring || 'highest';
         var perItem = {};
         att.filter(function(a){return a.exam_id===exam.id;})
@@ -6422,9 +6472,11 @@ function loadCompletion() {
         var keys = Object.keys(perItem); if(keys.length===0){ return null; }
         var tot=0;
         keys.forEach(function(iid){ var arr=perItem[iid]; var v; if(policy==='latest'){v=arr[arr.length-1];} else if(policy==='average'){var s=0;for(var i=0;i<arr.length;i++){s+=arr[i];}v=s/arr.length;} else {v=Math.max.apply(null,arr);} tot+=v; });
-        return tot/exam.total_points;
+        return tot/pts;
       }
-      finish(scoreFor(midterm), scoreFor(fin));
+      var scoreById={};
+      gradedExams.forEach(function(e){ scoreById[e.id]=scoreFor(e); });
+      finish(scoreById);
     });
   });
 }
