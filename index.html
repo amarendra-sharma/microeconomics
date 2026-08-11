@@ -432,13 +432,13 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-enroll-fix';
+var SA_BUILD = 'intro-micro-portal-2026-08-exam-camera-fix';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
 // table/bucket so no data migration is needed.
 if(typeof MNProctor!=='undefined'){
-  MNProctor.init({ sb: sb, table: 'im_proctor_events', bucket: 'im-proctor-snapshots' });
+  MNProctor.init({ sb: sb, table: 'im_proctor_events', bucket: 'proctor-snapshots' });
 }
 
 var CHAPTERS = [
@@ -6023,18 +6023,37 @@ function reallyStartExam(exam, accom) {
     var chain = Promise.resolve();
     var issued = [];
     var failed = false;
-    ids.forEach(function(itemId) {
-      chain = chain.then(function() {
-        return sb.functions.invoke('im-grade-attempt', { body: { action:'issue', item_id:itemId, course_id:exam.course_id, exam_id:exam.id } }).then(function(fn) {
-          if (fn.error) { failed = true; return; }
-          if (fn.data && fn.data.error) { failed = true; ExamState.issueError = fn.data.error; return; }
-          if (fn.data && fn.data.attempt_id) {
-            issued.push({ attempt_id:fn.data.attempt_id, item_type:fn.data.item_type, prompt:fn.data.prompt, options:fn.data.options, points:fn.data.points, figure:fn.data.figure });
-          }
-        });
+    var expected = ids.length;
+    // Issue one item with up to 3 attempts, so a single transient network/edge
+    // hiccup doesn't permanently drop a question (which previously could leave a
+    // student with far fewer questions than the exam actually has).
+    function issueOne(itemId, tries) {
+      return sb.functions.invoke('im-grade-attempt', { body: { action:'issue', item_id:itemId, course_id:exam.course_id, exam_id:exam.id } }).then(function(fn) {
+        if (fn.error) { throw new Error(fn.error.message || 'issue failed'); }
+        if (fn.data && fn.data.error) { ExamState.issueError = fn.data.error; throw new Error(fn.data.error); }
+        if (fn.data && fn.data.attempt_id) {
+          issued.push({ attempt_id:fn.data.attempt_id, item_type:fn.data.item_type, prompt:fn.data.prompt, options:fn.data.options, points:fn.data.points, figure:fn.data.figure });
+        }
+      }).catch(function(err){
+        if (tries > 1) {
+          return new Promise(function(res){ setTimeout(res, 400); }).then(function(){ return issueOne(itemId, tries - 1); });
+        }
+        failed = true;
+        if (!ExamState.issueError) { ExamState.issueError = (err && err.message) ? err.message : 'network error'; }
       });
+    }
+    ids.forEach(function(itemId) {
+      chain = chain.then(function() { return issueOne(itemId, 3); });
     });
     chain.then(function() {
+      // SAFETY: never start a PARTIAL exam. If we couldn't issue every question,
+      // abort with a clear message rather than dropping the student into a
+      // 1-of-60 exam that then force-submits.
+      if (issued.length < expected) {
+        var detail = ExamState.issueError ? (' (' + ExamState.issueError + ')') : '';
+        host.innerHTML = errCard('Only ' + issued.length + ' of ' + expected + ' questions could be loaded' + detail + '. The exam was NOT started so your attempt isn\u2019t used up. Please hard-refresh and try again; if it keeps happening, tell your instructor — the question service may be unavailable.');
+        return;
+      }
       if (issued.length === 0) {
         var msg = ExamState.issueError ? ('Could not start exam: ' + ExamState.issueError + '.') : 'Could not load exam questions. The grading service may be unavailable — please tell your instructor.';
         host.innerHTML = errCard(msg);
