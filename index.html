@@ -432,7 +432,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-exam-camera-fix';
+var SA_BUILD = 'intro-micro-portal-2026-08-exam-graph-fix';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -6114,6 +6114,7 @@ function renderExamQuestion() {
   html += '<div class="q-card" style="border:none;background:none;padding:0;">';
   html += '<div class="q-meta">' + esc(item.item_type) + ' · ' + (item.points||1) + ' pt</div>';
   html += '<div class="q-prompt">' + esc(item.prompt) + '</div>';
+  if (item.figure) { html += renderFigure(item.figure); }
   if (item.item_type === 'multiple_choice' && item.options) {
     html += '<div class="q-options" id="examOpt">';
     item.options.forEach(function(opt, k) {
