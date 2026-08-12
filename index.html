@@ -432,7 +432,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-grade-denominator-fix';
+var SA_BUILD = 'intro-micro-portal-2026-08-ai-grade-wired';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3483,7 +3483,7 @@ function loadPendingWritten(){
             if($('finAll')){ $('finAll').addEventListener('click', function(){
               if(!confirm('Finalize all answers that have an AI suggestion, accepting the AI score? You can still re-grade individuals afterward.')){ return; }
               $('finAll').disabled=true; $('finAll').textContent='Finalizing\u2026';
-              sb.functions.invoke('ai-grade',{ body:{ action:'finalize_all', course_id:State.teachCourseId } }).then(function(fn){
+              sb.functions.invoke('im-ai-grade',{ body:{ action:'finalize_all', course_id:State.teachCourseId } }).then(function(fn){
                 if(fn.error || (fn.data && fn.data.error)){ $('finAll').disabled=false; $('finAll').textContent='Finalize all reviewed'; alert((fn.data&&fn.data.error)?fn.data.error:(fn.error?fn.error.message:'Failed')); return; }
                 loadPendingWritten();
               });
@@ -3515,7 +3515,7 @@ function runAIGrade(attemptId){
   body.insertBefore(note, body.firstChild);
   var payload={ action:'propose', course_id:State.teachCourseId };
   if(attemptId){ payload.attempt_id=attemptId; }
-  sb.functions.invoke('ai-grade',{ body:payload }).then(function(fn){
+  sb.functions.invoke('im-ai-grade',{ body:payload }).then(function(fn){
     if(fn.error || (fn.data && fn.data.error)){
       var msg=(fn.data&&fn.data.message)?fn.data.message:((fn.data&&fn.data.error)?fn.data.error:(fn.error?fn.error.message:'AI grading failed'));
       note.innerHTML='<div class="feedback wrong" style="display:block;">'+esc(msg)+'</div>';
@@ -3533,7 +3533,7 @@ function finalizeGrade(attemptId){
   if(!sc || sc.value===''){ alert('Enter a score before finalizing.'); return; }
   var card=$('gradingBody').querySelector('[data-attempt="'+attemptId+'"]');
   if(card){ card.style.opacity='0.5'; }
-  sb.functions.invoke('ai-grade',{ body:{ action:'finalize', attempt_id:attemptId, points:parseFloat(sc.value), feedback:(fb?fb.value:'') } }).then(function(fn){
+  sb.functions.invoke('im-ai-grade',{ body:{ action:'finalize', attempt_id:attemptId, points:parseFloat(sc.value), feedback:(fb?fb.value:'') } }).then(function(fn){
     if(fn.error || (fn.data && fn.data.error)){
       if(card){ card.style.opacity='1'; }
       alert((fn.data&&fn.data.error)?fn.data.error:(fn.error?fn.error.message:'Finalize failed'));
