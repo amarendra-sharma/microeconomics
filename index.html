@@ -432,7 +432,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-grade-denominator-all-views';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-course-scope';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -817,6 +817,7 @@ var VIEW_META = {
   exams:['Exams','Assemble and publish midterms and finals.',true],
   assignments:['Assignments','Create assignments, then grade submissions with feedback.',true],
   grading:['Grading & Student Work','Review any student\u2019s exams, quizzes, arenas, and assignments; grade written answers with optional AI help.',true],
+  attendance:["Attendance","Take attendance in class: anti-proxy rotating QR + code, with an optional pop quiz.",true],
   subscriptions:['Subscriptions','Manage paid access for this course.',true],
   platform:['Platform & Pricing','Global price, Stripe link, and author bio.',false],
   people:['Instructors','Grant or revoke instructor access.',false]
@@ -867,7 +868,12 @@ function switchView(view){
   if(typeof MNProctor!=='undefined' && MNProctor.isActive() && view!=='myexams'){ MNProctor.finish(); }
   currentView=view;
   var meta=VIEW_META[view];
-  if(meta){ $('pageTitle').textContent=meta[0]; $('pageSub').textContent=meta[1]; if(meta[2]){ show($('coursePickWrap')); } else { hide($('coursePickWrap')); } }
+  if(meta){ $('pageTitle').textContent=meta[0]; $('pageSub').textContent=meta[1]; }
+  // The course picker governs every instructor menu item, so keep it visible on
+  // ALL instructor views (not just ones flagged in VIEW_META). This makes the
+  // active course explicit everywhere — roster, exams, attendance, gradebook, etc.
+  var showPick = (INSTRUCTOR_VIEWS.indexOf(view) >= 0) || (meta && meta[2]);
+  if(showPick){ show($('coursePickWrap')); } else { hide($('coursePickWrap')); }
   var stu=isStudentView(view);
   // toggle the two content regions
   if(stu){ show($('studentViews')); hide($('viewHost')); } else { hide($('studentViews')); show($('viewHost')); }
@@ -3207,7 +3213,7 @@ function questionWorkHtml(items, t, sid){
       (it.rationale?('<div style="font-size:12.5px;color:var(--text-muted);margin-top:6px;">'+esc(it.rationale)+'</div>'):'')+
       (it.regraded_at?('<div style="font-size:12px;color:var(--amber);margin-top:6px;">Regraded \u2014 originally '+esc(String(it.original_points))+' pt'+(Number(it.original_points)===1?'':'s')+(it.regrade_note?(' \u2014 '+esc(it.regrade_note)):'')+'</div>'):'')+
       '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">'+
-        '<div class="field" style="margin:0;width:110px;"><label>Points</label><input id="wp_'+esc(it.attempt_id)+'" type="number" step="0.5" min="0" max="'+esc(String(it.max_points))+'" value="'+esc(String(it.points_earned===null?0:it.points_earned))+'"></div>'+
+        '<div class="field" style="margin:0;width:110px;"><label>Points (/ '+esc(String(it.max_points))+')</label><input id="wp_'+esc(it.attempt_id)+'" type="number" step="0.5" min="0" max="'+esc(String(it.max_points))+'" value="'+esc(String(it.points_earned===null?0:it.points_earned))+'"></div>'+
         '<div class="field" style="margin:0;flex:1;min-width:160px;"><label>Reason (optional)</label><input id="wn_'+esc(it.attempt_id)+'" placeholder="e.g. alternative valid method"></div>'+
         '<button class="btn btn-ghost btn-sm" data-regrade="'+esc(it.attempt_id)+'" data-max="'+esc(String(it.max_points))+'"'+(it.chapter?(' data-chapter="'+esc(String(it.chapter))+'"'):'')+'>Save score</button>'+
       '</div></div>';
@@ -3545,6 +3551,9 @@ function runAIGrade(attemptId){
       return;
     }
     var rem = (fn.data && fn.data.remaining) ? Number(fn.data.remaining) : 0;
+    var failed = (fn.data && fn.data.failed) ? Number(fn.data.failed) : 0;
+    var graded = (fn.data && fn.data.graded) ? Number(fn.data.graded) : 0;
+    if(failed>0){ var fe = (fn.data && fn.data.firstError) ? (' First error: '+fn.data.firstError) : ''; alert('AI graded '+graded+' answer'+(graded===1?'':'s')+', but '+failed+' failed.'+fe); loadPendingWritten(); return; }
     if(rem>0){ alert('Graded a batch. '+rem+' more answer'+(rem===1?'':'s')+' still need AI grading \u2014 click \u201CRun AI grading on all\u201D again to continue (this keeps within free-tier rate limits).'); }
     loadPendingWritten();
   });
