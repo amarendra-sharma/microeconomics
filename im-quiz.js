@@ -63,6 +63,29 @@
   /* ---- render a single question into a container -------------------------
      q = generated instance from IMGenerators.generate.
      onAnswer(value) called when the student commits an answer (practice). */
+  /* Deterministic per-question permutation of MC option positions, so the
+     correct answer isn't always in the same slot. Stable across re-renders
+     (derived from the question content), and the radio VALUE stays the original
+     index so server grading is unaffected. */
+  function imqHash(str) {
+    var h = 2166136261, i;
+    for (i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 16777619) >>> 0; }
+    return h >>> 0;
+  }
+  function imqOptionOrder(q) {
+    var n = q.options.length, a = [], i;
+    for (i = 0; i < n; i++) { a.push(i); }
+    var base = (typeof q.seed === "number" && isFinite(q.seed)) ? (q.seed >>> 0) : 0;
+    var s = (base ^ imqHash(String(q.id || "") + "|" + String(q.prompt || "") + "|" + q.options.join("~"))) >>> 0;
+    if (s === 0) { s = 1; }
+    for (var k = n - 1; k > 0; k--) {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      var j = s % (k + 1);
+      var t = a[k]; a[k] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
   function renderQuestion(q, container, opts) {
     opts = opts || {};
     container.innerHTML = "";
@@ -100,10 +123,12 @@
 
     if (q.kind === "mc") {
       var name = "imq_" + Math.random().toString(36).slice(2);
-      q.options.forEach(function (optText, i) {
+      var order = imqOptionOrder(q);
+      order.forEach(function (origIdx) {
+        var optText = q.options[origIdx];
         var row = el("label", { "style":
           "display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:14px;color:#0f172a;background:#ffffff;" });
-        var radio = el("input", { "type": "radio", "name": name, "value": String(i), "style": "margin-top:2px;flex-shrink:0;" });
+        var radio = el("input", { "type": "radio", "name": name, "value": String(origIdx), "style": "margin-top:2px;flex-shrink:0;" });
         var txt = el("span", { "style": "color:#0f172a;line-height:1.5;" }, esc(optText));
         row.appendChild(radio);
         row.appendChild(txt);
@@ -320,23 +345,42 @@
     var list = el("div"); mountEl.appendChild(list);
 
     var inputs = [];
+    var qboxes = [];
     instances.forEach(function (q, i) {
       var qbox = el("div"); list.appendChild(qbox);
-      /* show a question number + points for exams */
-      if (isExam) {
-        var meta = el("div", { "style": "font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:2px;" },
-          "Question " + (i + 1) + " of " + instances.length + (q.points ? "  \u00b7  " + q.points + " pt" + (q.points > 1 ? "s" : "") : ""));
-        qbox.appendChild(meta);
-      }
+      /* question number + points on every graded item (quiz and exam) */
+      var meta = el("div", { "style": "font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:2px;" },
+        "Question " + (i + 1) + " of " + instances.length + (q.points ? "  \u00b7  " + q.points + " pt" + (q.points > 1 ? "s" : "") : ""));
+      qbox.appendChild(meta);
       var ctrl = renderQuestion(q, qbox, { buttonLabel: null, onAnswer: null });
       if (ctrl.button) { ctrl.button.style.display = "none"; }
+      if (i !== 0) { qbox.style.display = "none"; }
+      qboxes.push(qbox);
       inputs.push({ q: q, ctrl: ctrl });
     });
 
+    /* One question at a time, like practice: Back / Next, Submit on the last. */
+    var navBtnStyle = "padding:9px 18px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;font-weight:600;font-size:14px;cursor:pointer;";
+    var cur = 0;
+    var nav = el("div", { "style": "display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap;" });
+    var prevBtn = el("button", { "style": navBtnStyle }, "\u2190 Back");
+    var progress = el("div", { "style": "font-size:13px;color:#64748b;font-weight:600;" }, "");
+    var nextBtn = el("button", { "style": navBtnStyle }, "Next \u2192");
     var submit = el("button", { "style":
-      "margin-top:8px;padding:11px 26px;border:none;border-radius:8px;background:#166534;color:#fff;font-weight:700;font-size:15px;cursor:pointer;" },
+      "padding:11px 26px;border:none;border-radius:8px;background:#166534;color:#fff;font-weight:700;font-size:15px;cursor:pointer;" },
       isExam ? "Submit exam" : "Submit quiz");
     var out = el("div", { "style": "margin-top:16px;" });
+    function showCur() {
+      var k;
+      for (k = 0; k < qboxes.length; k++) { qboxes[k].style.display = (k === cur ? "" : "none"); }
+      progress.textContent = "Question " + (cur + 1) + " of " + instances.length;
+      prevBtn.style.visibility = (cur === 0 ? "hidden" : "visible");
+      nextBtn.style.display = (cur >= instances.length - 1 ? "none" : "");
+      submit.style.display = (cur >= instances.length - 1 ? "" : "none");
+    }
+    prevBtn.addEventListener("click", function () { if (cur > 0) { cur--; showCur(); if (global.scrollTo) { global.scrollTo(0, 0); } } });
+    nextBtn.addEventListener("click", function () { if (cur < instances.length - 1) { cur++; showCur(); if (global.scrollTo) { global.scrollTo(0, 0); } } });
+    nav.appendChild(prevBtn); nav.appendChild(progress); nav.appendChild(nextBtn);
 
     function doSubmit() {
       if (submit.disabled) { return; }
@@ -372,8 +416,10 @@
         if (left <= 0) { clearInterval(timerId); timerBox.textContent = "\u23f1 Time's up \u2014 submitting\u2026"; doSubmit(); }
       }, 1000);
     }
+    mountEl.appendChild(nav);
     mountEl.appendChild(submit);
     mountEl.appendChild(out);
+    showCur();
   }
 
   /* submit graded answers to the Edge Function (server regenerates + grades) */
