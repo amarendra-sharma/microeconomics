@@ -37,7 +37,7 @@
   }
 
   var sb = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  try { console.log('%cim-progress build: micro-2026-08-reading-checkpoints | project: ' + SUPABASE_URL, 'color:#0f3d9e;font-weight:bold'); } catch (e) {}
+  try { console.log('%cim-progress build: micro-2026-08-reading-robust | project: ' + SUPABASE_URL, 'color:#0f3d9e;font-weight:bold'); } catch (e) {}
 
   // Cached identity, resolved once.
   var ready = null;          // a Promise resolving to { user, courseId } or null
@@ -396,83 +396,162 @@
 
   var _activeTracker = null;
 
+  // Tuning knobs for the reading gate.
+  var RC_WPM = 320;            // assumed FAST reader; real students are slower
+  var RC_FRAC = 0.85;          // must spend this fraction of a fast read, per section
+  var RC_SEC_MIN_MS = 12000;   // floor per non-trivial section
+  var RC_SEC_MAX_MS = 240000;  // cap per section (4 min)
+  var RC_TRIVIAL_WORDS = 25;   // below this a section is trivial (no check, tiny dwell)
+  var RC_IDLE_MS = 120000;     // time only accrues if a real interaction happened this recently
+
+  // Gather a section's own text (siblings after its heading, up to the next
+  // heading) and its emphasised terms, so we can word-count it and build a check.
+  function rcSectionContent(headingEl) {
+    var words = 0; var text = ""; var terms = [];
+    var n = headingEl.nextElementSibling;
+    while (n && n.tagName && !/^H[23]$/.test(n.tagName)) {
+      var tc = rcClean(n.textContent || "");
+      if (tc) { text += " " + tc; }
+      var em = [].slice.call(n.querySelectorAll ? n.querySelectorAll("b, strong, dfn, mark") : []);
+      if (n.tagName && /^(B|STRONG|DFN|MARK)$/.test(n.tagName)) { em.push(n); }
+      for (var e = 0; e < em.length; e++) {
+        var t = rcClean(em[e].textContent || "");
+        var inKey = false; try { inKey = !!(em[e].closest && em[e].closest(".tb-keyterm")); } catch (e1) {}
+        terms.push({ term: t, node: em[e], inKeyterm: inKey });
+      }
+      n = n.nextElementSibling;
+    }
+    text = rcClean(text);
+    words = text ? text.split(" ").length : 0;
+    return { text: text, words: words, terms: terms };
+  }
+
+  // Prose fallback: blank a salient (long, non-stopword) word from the section's
+  // longest sentence, so EVERY prose section gets a real question even when it has
+  // no emphasised key term. Distractors are other salient words from the chapter.
+  function rcProseCheck(sectionText, wordPool) {
+    var sents = rcSentences(sectionText);
+    var best = "";
+    for (var i = 0; i < sents.length; i++) {
+      if (sents[i].length >= 40 && sents[i].length <= 220 && sents[i].length > best.length) { best = sents[i]; }
+    }
+    if (!best) { return null; }
+    var toks = best.split(/\s+/);
+    var cand = "";
+    for (var t = 0; t < toks.length; t++) {
+      var raw = toks[t].replace(/[^A-Za-z-]/g, "");
+      if (raw.length >= 5 && !RC_STOP[raw.toLowerCase()] && raw.length > cand.length) { cand = raw; }
+    }
+    if (!cand) { return null; }
+    return rcBuildCheck({ term: cand, sentence: best }, wordPool);
+  }
+
+  function rcSalientWords(text) {
+    var out = []; var seen = {};
+    var toks = rcClean(text).split(/\s+/);
+    for (var i = 0; i < toks.length; i++) {
+      var w = toks[i].replace(/[^A-Za-z-]/g, "");
+      if (w.length >= 5 && !RC_STOP[w.toLowerCase()]) { var k = w.toLowerCase(); if (!seen[k]) { seen[k] = 1; out.push(w); } }
+    }
+    return out;
+  }
+
   function trackReading(chapterEl, chapterNum, estMinutes) {
     if (!chapterEl || !chapterNum) { return; }
     if (_activeTracker && _activeTracker.teardown) { _activeTracker.teardown(); }
 
-    var sections = [].slice.call(chapterEl.querySelectorAll("h2, h3"));
-    if (sections.length < 2) {
-      sections = [].slice.call(chapterEl.querySelectorAll("p, .cnl-section, .chapter-quiz")).filter(function (el, i) { return i % 3 === 0; });
-    }
-    var totalSections = sections.length > 0 ? sections.length : 1;
+    var heads = [].slice.call(chapterEl.querySelectorAll("h2, h3"));
+    if (heads.length === 0) { heads = [chapterEl]; }
 
-    var mins = (typeof estMinutes === "number" && estMinutes > 0) ? estMinutes : 6;
-    var floorMs = Math.max(45000, Math.min(12 * 60000, Math.round(mins * 60000 * 0.35)));
-    // Per-section minimum dwell before its checkpoint is offered (so a reader
-    // cannot blitz section->answer->section). Scales with length, floored/capped.
-    var sectionMinMs = Math.max(8000, Math.min(60000, Math.round(floorMs / totalSections)));
-
-    // Comprehension material, per section (may be empty for some sections).
-    var termBuckets = [];
-    var pool = [];
-    try {
-      termBuckets = rcSectionTerms(chapterEl, sections);
-      var seenP = {};
-      for (var b = 0; b < termBuckets.length; b++) {
-        for (var t = 0; t < termBuckets[b].length; t++) {
-          var trm = termBuckets[b][t].term; var lk = trm.toLowerCase();
-          if (!seenP[lk]) { seenP[lk] = 1; pool.push(trm); }
+    // Build per-section info: word count, required dwell, and a comprehension check.
+    var termPool = [];   // chapter-wide emphasised terms (for distractors)
+    var wordPool = [];   // chapter-wide salient words (fallback distractors)
+    var secs = [];
+    var seenPool = {};
+    var s;
+    for (s = 0; s < heads.length; s++) {
+      var info = rcSectionContent(heads[s]);
+      secs.push({ el: heads[s], words: info.words, text: info.text, terms: info.terms });
+      for (var ti = 0; ti < info.terms.length; ti++) {
+        var tt = info.terms[ti].term;
+        if (tt && tt.length >= 3 && tt.length <= 42 && !/[0-9=$%]/.test(tt)) {
+          var lk = tt.toLowerCase();
+          if (!seenPool[lk]) { seenPool[lk] = 1; termPool.push(tt); }
         }
       }
-    } catch (e) { termBuckets = []; pool = []; }
+      var sw = rcSalientWords(info.text);
+      for (var wi = 0; wi < sw.length; wi++) { wordPool.push(sw[wi]); }
+    }
 
-    var seen = {};                 // sectionIdx -> viewed
-    var seenAt = {};               // sectionIdx -> first-seen timestamp
-    var passed = {};               // sectionIdx -> checkpoint satisfied
-    var attempt = {};              // sectionIdx -> which candidate we're on
-    var seenCount = 0, passCount = 0;
-    var activeMs = 0;
+    // Required dwell per section from its own word count (fast-reader model).
+    var totalReq = 0;
+    for (s = 0; s < secs.length; s++) {
+      var w = secs[s].words;
+      if (w < RC_TRIVIAL_WORDS) { secs[s].reqMs = 4000; secs[s].trivial = true; }
+      else {
+        var ms = Math.round(w / RC_WPM * 60000 * RC_FRAC);
+        secs[s].reqMs = Math.max(RC_SEC_MIN_MS, Math.min(RC_SEC_MAX_MS, ms));
+        secs[s].trivial = false;
+      }
+      secs[s].dwell = 0; secs[s].seen = false; secs[s].passed = false; secs[s].attempt = 0; secs[s].shown = false;
+      totalReq += secs[s].reqMs;
+    }
+
+    // Build a check for each non-trivial section (term cloze preferred, prose fallback).
+    var distractPool = termPool.length >= 4 ? termPool : termPool.concat(wordPool);
+    for (s = 0; s < secs.length; s++) {
+      if (secs[s].trivial) { secs[s].check = null; continue; }
+      var built = null;
+      // term-based candidates first (glossary terms already sorted to front by proximity)
+      var cands = [];
+      for (var c = 0; c < secs[s].terms.length; c++) {
+        var trm = secs[s].terms[c].term;
+        if (!trm || trm.length < 3 || trm.length > 42 || /[0-9=$%]/.test(trm)) { continue; }
+        var re = new RegExp("\\b" + rcEsc(trm) + "\\b", "i");
+        var sents = rcSentences(secs[s].text); var sent = "";
+        for (var q = 0; q < sents.length; q++) { if (re.test(sents[q])) { sent = sents[q]; break; } }
+        if (sent && sent.length >= 25 && sent.length <= 320) {
+          if (secs[s].terms[c].inKeyterm) { cands.unshift({ term: trm, sentence: sent }); }
+          else { cands.push({ term: trm, sentence: sent }); }
+        }
+      }
+      secs[s].cands = cands;
+      for (var ci = 0; ci < cands.length && !built; ci++) { built = rcBuildCheck(cands[ci], distractPool); }
+      if (!built) { built = rcProseCheck(secs[s].text, distractPool); }
+      secs[s].check = built;                 // may still be null -> time-gated confirm
+    }
+
+    var floorMs = Math.max(45000, totalReq);
     var lastTick = Date.now();
-    var humanHits = 0;             // count of TRUSTED user interactions
+    var lastHuman = Date.now();
+    var humanHits = 0;
     var automated = rcAutomated();
     var done = false, recorded = false;
-    var current = -1;              // section whose checkpoint is being shown
-
-    // A section with no generatable checkpoint auto-satisfies its check (we don't
-    // punish a reader for a markup gap) but STILL requires coverage + dwell.
-    function sectionHasCheck(idx) {
-      return termBuckets[idx] && termBuckets[idx].length > 0 && pool.length >= 4;
-    }
+    var cur = 0;                              // sequential: first incomplete section
+    var totalActive = 0;
 
     var ind = document.createElement("div");
     ind.setAttribute("data-sa-reading-indicator", "1");
-    ind.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:99999;background:#1b1340;color:#F0EEFA;border:1px solid rgba(155,123,255,.4);border-radius:12px;padding:12px 14px;font:12.5px/1.45 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:300px;";
+    ind.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:99999;background:#1b1340;color:#F0EEFA;border:1px solid rgba(155,123,255,.4);border-radius:12px;padding:12px 14px;font:12.5px/1.45 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:320px;";
     document.body.appendChild(ind);
+
+    function nDone() { var k = 0; for (var i = 0; i < secs.length; i++) { if (secs[i].passed) { k++; } } return k; }
     function pctv(x) { return Math.max(0, Math.min(100, Math.round(x * 100))); }
 
-    function nextPending() {
-      // a section that's been seen long enough, has a check, and isn't passed yet
-      for (var i = 0; i < totalSections; i++) {
-        if (seen[i] && !passed[i] && sectionHasCheck(i)) {
-          if (Date.now() - (seenAt[i] || 0) >= sectionMinMs) { return i; }
-        }
-      }
-      return -1;
-    }
-
-    function paintProgress() {
-      var cov = seenCount / totalSections;
-      var chk = passCount / totalSections;
-      var dwell = activeMs / floorMs;
-      var autoNote = automated ? '<div style="color:#fca5a5;margin-top:6px;">Automated browser detected \u2014 reading credit is disabled. Please read in a normal browser window.</div>' : "";
+    function paint(msg) {
+      var i = Math.min(cur, secs.length - 1);
+      var secProg = secs[i] ? (secs[i].dwell / secs[i].reqMs) : 1;
+      var overall = nDone() / secs.length;
+      var head = secs[i] && secs[i].el ? rcClean(secs[i].el.textContent || ("Section " + (i + 1))) : ("Section " + (i + 1));
+      var autoNote = automated ? '<div style="color:#fca5a5;margin-top:6px;">Automated browser detected \u2014 reading credit is disabled.</div>' : "";
       ind.innerHTML =
         '<b>Reading Chapter ' + chapterNum + '</b>' +
-        '<div style="margin-top:6px;">Sections viewed: ' + seenCount + " / " + totalSections + "</div>" +
-        '<div style="height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 6px;overflow:hidden;"><div style="height:100%;width:' + pctv(cov) + '%;background:#9B7BFF;"></div></div>' +
-        '<div>Checks answered: ' + passCount + " / " + totalSections + "</div>" +
-        '<div style="height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 6px;overflow:hidden;"><div style="height:100%;width:' + pctv(chk) + '%;background:#34d399;"></div></div>' +
-        '<div>Time on chapter: ' + pctv(dwell) + "%</div>" +
-        '<div style="height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 0;overflow:hidden;"><div style="height:100%;width:' + pctv(dwell) + '%;background:#FBBF24;"></div></div>' +
+        '<div style="margin-top:5px;opacity:.85;">Section ' + (i + 1) + ' of ' + secs.length + ": " + rcEscHtml(head.slice(0, 46)) + "</div>" +
+        '<div style="margin-top:6px;">Time on this section</div>' +
+        '<div style="height:6px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 6px;overflow:hidden;"><div style="height:100%;width:' + pctv(secProg) + '%;background:#FBBF24;"></div></div>' +
+        '<div>Sections completed: ' + nDone() + " / " + secs.length + "</div>" +
+        '<div style="height:6px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 0;overflow:hidden;"><div style="height:100%;width:' + pctv(overall) + '%;background:#34d399;"></div></div>' +
+        (msg ? '<div style="margin-top:7px;color:#c4b5fd;">' + msg + "</div>" : "") +
         autoNote;
     }
 
@@ -480,100 +559,102 @@
       ind.innerHTML = '<b style="color:#34d399;">\u2713 Chapter ' + chapterNum + ' read</b><div style="opacity:.85;margin-top:2px;">Reading credit saved.</div>';
     }
 
-    function renderCheckpoint(idx) {
-      current = idx;
-      var cand = termBuckets[idx][(attempt[idx] || 0) % termBuckets[idx].length];
-      var built = rcBuildCheck(cand, pool);
+    function showCheck(i) {
+      var sc = secs[i];
+      sc.shown = true;
+      var built = sc.check;
       if (!built) {
-        // couldn't build a fair item from this candidate; try the next, else pass
-        attempt[idx] = (attempt[idx] || 0) + 1;
-        if ((attempt[idx]) >= termBuckets[idx].length) { passed[idx] = true; passCount++; current = -1; pump(); return; }
-        renderCheckpoint(idx); return;
+        // No generatable question: fall back to a time-gated confirm (dwell already met).
+        var head2 = rcClean(sc.el.textContent || ("Section " + (i + 1)));
+        ind.innerHTML = '<b>Reading check</b><div style="margin:6px 0;">You\u2019ve spent enough time on \u201C' + rcEscHtml(head2.slice(0, 40)) + '\u201D.</div>';
+        var okb = document.createElement("button");
+        okb.textContent = "I\u2019ve read this section \u2014 continue";
+        okb.style.cssText = "display:block;width:100%;margin-top:6px;padding:9px 10px;border:1px solid rgba(155,123,255,.5);border-radius:8px;background:#241a54;color:#F0EEFA;font:13px system-ui,sans-serif;cursor:pointer;";
+        okb.addEventListener("click", function () { sc.passed = true; cur = i + 1; pump(); });
+        ind.appendChild(okb);
+        return;
       }
-      var html =
-        '<div style="font-weight:700;color:#c4b5fd;margin-bottom:4px;">Reading check</div>' +
-        '<div style="margin-bottom:8px;color:#F0EEFA;">Fill in the blank from the section you just read:</div>' +
+      var html = '<div style="font-weight:700;color:#c4b5fd;margin-bottom:4px;">Reading check \u2014 Section ' + (i + 1) + '</div>' +
+        '<div style="margin-bottom:8px;">Fill in the blank from what you just read:</div>' +
         '<div style="background:rgba(255,255,255,.06);border-radius:8px;padding:9px 11px;margin-bottom:10px;color:#e9e6fb;">' + rcEscHtml(built.blanked) + "</div>";
-      var wrap = document.createElement("div");
       ind.innerHTML = html;
-      ind.appendChild(wrap);
-      var fb = document.createElement("div");
-      fb.style.cssText = "margin-top:8px;min-height:1em;font-size:12px;";
+      var fb = document.createElement("div"); fb.style.cssText = "margin-top:8px;min-height:1em;font-size:12px;";
       built.options.forEach(function (opt, oi) {
         var btn = document.createElement("button");
         btn.textContent = opt;
         btn.style.cssText = "display:block;width:100%;text-align:left;margin:5px 0;padding:8px 10px;border:1px solid rgba(155,123,255,.4);border-radius:8px;background:#241a54;color:#F0EEFA;font:13px system-ui,sans-serif;cursor:pointer;";
         btn.addEventListener("click", function () {
-          if (oi === built.answerIdx) {
-            passed[idx] = true; passCount++; current = -1;
-            fb.textContent = "";
-            pump();
-          } else {
-            attempt[idx] = (attempt[idx] || 0) + 1;   // swap in a different term
+          if (oi === built.answerIdx) { sc.passed = true; cur = i + 1; pump(); }
+          else {
+            sc.attempt++;
+            // swap in a different question (next term candidate, else a fresh prose cloze)
+            var nb = null;
+            if (sc.cands && sc.cands.length > sc.attempt) { nb = rcBuildCheck(sc.cands[sc.attempt], distractPool); }
+            if (!nb) { nb = rcProseCheck(sc.text, distractPool); }
+            if (nb) { sc.check = nb; }
             fb.innerHTML = '<span style="color:#fca5a5;">Not quite \u2014 re-read this section and try again.</span>';
-            setTimeout(function () { if (current === idx) { renderCheckpoint(idx); } }, 900);
+            setTimeout(function () { if (cur === i && !sc.passed) { sc.shown = true; showCheck(i); } }, 1000);
           }
         });
-        wrap.appendChild(btn);
+        ind.appendChild(btn);
       });
-      wrap.appendChild(fb);
+      ind.appendChild(fb);
     }
 
-    // Show the next due checkpoint, or fall back to the progress meter.
     function pump() {
       if (done) { return; }
-      if (current >= 0 && !passed[current]) { return; } // a checkpoint is on screen
-      var idx = nextPending();
-      if (idx >= 0) { renderCheckpoint(idx); }
-      else { paintProgress(); }
-      maybeComplete();
+      if (automated) { paint(""); return; }
+      if (cur >= secs.length) { maybeComplete(); return; }
+      var sc = secs[cur];
+      if (!sc.seen) { paint("Scroll down to section " + (cur + 1) + " to continue."); return; }
+      if (sc.dwell < sc.reqMs) { paint("Keep reading this section\u2026"); return; }
+      if (sc.trivial) { sc.passed = true; cur = cur + 1; pump(); return; }
+      if (sc.passed) { cur = cur + 1; pump(); return; }
+      if (!sc.shown) { showCheck(cur); return; }
+      // else: a checkpoint is on screen awaiting a correct answer
     }
 
     function maybeComplete() {
-      if (done) { return; }
-      if (automated) { return; }                 // never grant credit to automation
-      if (humanHits < Math.max(3, Math.min(totalSections, 6))) { return; } // require real interaction
-      if (seenCount < totalSections) { return; }
-      if (activeMs < floorMs) { return; }
-      // every section either passed its check or has no generatable check
-      for (var i = 0; i < totalSections; i++) { if (!passed[i] && sectionHasCheck(i)) { return; } }
+      if (done || automated) { return; }
+      if (humanHits < Math.max(3, Math.min(secs.length, 6))) { paint("Interact with the page to continue."); return; }
+      for (var i = 0; i < secs.length; i++) { if (!secs[i].passed) { return; } }
+      if (totalActive < floorMs) { return; }
       done = true; showDone();
       if (!recorded) { recorded = true; markReadingDone(chapterNum); }
       setTimeout(function () { if (ind && ind.parentNode) { ind.style.transition = "opacity .6s"; ind.style.opacity = "0"; setTimeout(function () { if (ind.parentNode) { ind.parentNode.removeChild(ind); } }, 700); } }, 4500);
     }
 
-    // ---- coverage via IntersectionObserver ----
+    // coverage
     var io = null;
     if (typeof IntersectionObserver !== "undefined") {
       io = new IntersectionObserver(function (entries) {
         entries.forEach(function (e) {
           if (e.isIntersecting) {
-            var idx = sections.indexOf(e.target);
-            if (idx >= 0 && !seen[idx]) {
-              seen[idx] = true; seenAt[idx] = Date.now(); seenCount++;
-              if (!sectionHasCheck(idx)) { passed[idx] = true; passCount++; } // auto-pass ungeneratable
-              pump();
-            }
+            for (var i = 0; i < secs.length; i++) { if (secs[i].el === e.target) { secs[i].seen = true; } }
+            pump();
           }
         });
-      }, { threshold: 0.6 });
-      sections.forEach(function (el) { io.observe(el); });
+      }, { threshold: 0.4 });
+      for (s = 0; s < secs.length; s++) { io.observe(secs[s].el); }
     } else {
-      seenCount = totalSections;
-      for (var z = 0; z < totalSections; z++) { seen[z] = true; seenAt[z] = Date.now(); if (!sectionHasCheck(z)) { passed[z] = true; passCount++; } }
+      for (s = 0; s < secs.length; s++) { secs[s].seen = true; }
     }
 
-    // ---- trusted-interaction + dwell timer ----
-    function onHuman(ev) { if (ev && ev.isTrusted) { humanHits++; } }
+    function onHuman(ev) { if (ev && ev.isTrusted) { humanHits++; lastHuman = Date.now(); } }
     document.addEventListener("pointerdown", onHuman, true);
     document.addEventListener("keydown", onHuman, true);
     document.addEventListener("wheel", onHuman, { capture: true, passive: true });
     document.addEventListener("touchstart", onHuman, { capture: true, passive: true });
+    document.addEventListener("mousemove", onHuman, { capture: true, passive: true });
 
     var timer = setInterval(function () {
       var now = Date.now();
-      if (document.visibilityState === "visible") { activeMs += (now - lastTick); }
-      lastTick = now;
+      var elapsed = now - lastTick; lastTick = now;
+      var active = (document.visibilityState === "visible") && ((now - lastHuman) <= RC_IDLE_MS);
+      if (active) {
+        totalActive += elapsed;
+        if (cur < secs.length && secs[cur].seen && !secs[cur].passed) { secs[cur].dwell += elapsed; }
+      }
       pump();
     }, 1000);
     function onVis() { lastTick = Date.now(); }
@@ -590,6 +671,7 @@
         document.removeEventListener("keydown", onHuman, true);
         document.removeEventListener("wheel", onHuman, true);
         document.removeEventListener("touchstart", onHuman, true);
+        document.removeEventListener("mousemove", onHuman, true);
         if (ind && ind.parentNode) { ind.parentNode.removeChild(ind); }
         _activeTracker = null;
       }
