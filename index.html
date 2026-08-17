@@ -432,7 +432,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attendance-grade';
+var SA_BUILD = 'intro-micro-portal-2026-08-attendance-grade2';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1087,7 +1087,7 @@ function openCourseModal(courseId){
   $('cmSave').addEventListener('click', function(){
     var title=$('cmTitle').value.trim();
     if(!title){ cmErr('Title is required.'); return; }
-    var sumv=num('cmWr')+num('cmWq')+num('cmWa')+num('cmWm')+num('cmWf');
+    var sumv=num('cmWr')+num('cmWq')+num('cmWa')+num('cmWm')+num('cmWf')+num('cmWatt');
     if(Math.abs(sumv-1)>0.001){ cmErr('Weights must sum to 100%.'); return; }
     var payload={ title:title, term:$('cmTerm').value.trim(), description:$('cmDesc').value.trim(),
       join_code:$('cmCode').value.trim(),
