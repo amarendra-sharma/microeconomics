@@ -432,7 +432,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-quiz-shuffle-oneatatime';
+var SA_BUILD = 'intro-micro-portal-2026-08-reading-rigor';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -5161,7 +5161,7 @@ function submitGradedQuiz() {
     var uid = State.user.id;
     var row = {
       student_id: uid, course_id: QuizState.courseId, chapter: QuizState.chapter,
-      quiz_score: keepFrac, quiz_passed: (keepFrac >= QUIZ_PASS), quiz_attempts: attemptsUsed, reading_done: true
+      quiz_score: keepFrac, quiz_passed: (keepFrac >= QUIZ_PASS), quiz_attempts: attemptsUsed
     };
     function showResult(saveErr){
       var kept = Math.round(keepFrac * 100);
@@ -5187,7 +5187,7 @@ function submitGradedQuiz() {
       if (res.error) {
         var msg = String(res.error.message || res.error);
         if (msg.toLowerCase().indexOf('quiz_attempts') !== -1 || msg.toLowerCase().indexOf('column') !== -1) {
-          var row2 = { student_id: uid, course_id: QuizState.courseId, chapter: QuizState.chapter, quiz_score: keepFrac, quiz_passed: (keepFrac >= QUIZ_PASS), reading_done: true };
+          var row2 = { student_id: uid, course_id: QuizState.courseId, chapter: QuizState.chapter, quiz_score: keepFrac, quiz_passed: (keepFrac >= QUIZ_PASS) };
           sb.from('im_chapter_progress').upsert(row2, { onConflict: 'student_id,course_id,chapter' }).select().then(function(res2){
             showResult(res2.error ? String(res2.error.message || res2.error) : null);
           });

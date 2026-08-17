@@ -37,7 +37,7 @@
   }
 
   var sb = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  try { console.log('%cim-progress build: micro-2026-08 | project: ' + SUPABASE_URL, 'color:#0f3d9e;font-weight:bold'); } catch (e) {}
+  try { console.log('%cim-progress build: micro-2026-08-reading-checkpoints | project: ' + SUPABASE_URL, 'color:#0f3d9e;font-weight:bold'); } catch (e) {}
 
   // Cached identity, resolved once.
   var ready = null;          // a Promise resolving to { user, courseId } or null
@@ -116,8 +116,10 @@
         course_id: c.courseId,
         chapter: chapter,
         quiz_score: frac,
-        quiz_passed: passed === true,
-        reading_done: true            // passing the chapter quiz implies it was read
+        quiz_passed: passed === true
+        // NOTE: reading_done is intentionally NOT set here. Reading credit must be
+        // earned in the reader (coverage + dwell + comprehension checkpoints), so
+        // taking a quiz can no longer shortcut the reading grade.
       }, { onConflict: 'student_id,course_id,chapter' });
     }).catch(function () { return null; });
   }
@@ -128,7 +130,7 @@
   // Columns match the live im_attempt: user_id, arena_slug, case_index,
   // is_correct, course_id, created_at (server default). Writes fail-soft and
   // report to the console instead of throwing.
-  function recordArenaCase(slug, caseIndex, isCorrect) {
+  function recordArenaCase(slug, caseIndex, isCorrect, attemptNo, review) {
     return resolveContext().then(function (c) {
       if (!c) {
         try { console.warn('im-progress: arena case NOT saved (' + slug + ') -- no logged-in student.'); } catch (e) {}
@@ -141,6 +143,12 @@
         is_correct: !!isCorrect,
         course_id: c.courseId   // may be null; column is nullable
       };
+      if (typeof attemptNo === 'number' && attemptNo >= 1) { row.attempt_no = Math.floor(attemptNo); }
+      if (review && typeof review === 'object') {
+        if (review.prompt_text) { row.prompt_text = String(review.prompt_text).slice(0, 2000); }
+        if (review.chosen_label) { row.chosen_label = String(review.chosen_label).slice(0, 500); }
+        if (review.correct_label) { row.correct_label = String(review.correct_label).slice(0, 500); }
+      }
       return sb.from('im_attempt').insert(row).then(function (r) {
         if (r && r.error) { try { console.warn('im-progress: arena case save FAILED (' + slug + '): ' + r.error.message); } catch (e) {} }
         else { try { console.log('im-progress: arena case saved (' + slug + ', correct=' + (!!isCorrect) + ')'); } catch (e) {} }
@@ -160,6 +168,27 @@
     var ok = (typeof score === 'number') ? (score >= 0.5)
            : (outcome === 'win' || outcome === 'correct' || outcome === true);
     return recordArenaCase(slug, null, ok);
+  }
+
+  // Record a completed ATTEMPT summary (attempt number, that attempt's fraction,
+  // and the running average). The gradebook computes the arena grade from the
+  // per-case rows, so this is a best-effort summary for display/telemetry; it
+  // never throws. If a summary table isn't present it simply no-ops after
+  // logging, keeping the arena working.
+  function recordArenaAttempt(slug, attemptNo, attemptFrac, averageFrac) {
+    return resolveContext().then(function (c) {
+      if (!c) { return null; }
+      try {
+        console.log('im-progress: arena attempt ' + attemptNo + ' for ' + slug +
+          ' = ' + Math.round((attemptFrac || 0) * 100) + '% (avg ' +
+          Math.round((averageFrac || 0) * 100) + '%)');
+      } catch (e) {}
+      // The authoritative grade comes from the per-case im_attempt rows already
+      // written during play, which the gradebook averages. No separate write is
+      // required here; kept as a hook so a summary table can be added later
+      // without touching the arenas.
+      return null;
+    }).catch(function () { return null; });
   }
 
   // Lightweight telemetry (optional). No telemetry table in this project, so this
@@ -217,7 +246,7 @@
   function makeNoop(reason) {
     function noop() { return Promise.resolve(null); }
     return {
-      markReadingDone: noop, recordQuiz: noop, recordArena: noop, recordArenaCase: noop,
+      markReadingDone: noop, recordQuiz: noop, recordArena: noop, recordArenaCase: noop, recordArenaAttempt: noop,
       logEvent: noop, isSignedIn: function () { return Promise.resolve(false); },
       initArena: function () {}, reportArenaNow: function () {},
       trackReading: function () {}, _disabled: reason
@@ -241,109 +270,334 @@
      ==================================================================== */
   var _activeTracker = null;
 
+  // ---- Auto-generated comprehension checkpoints ------------------------
+  // Reading credit now also requires answering a short check on each section,
+  // generated from that section's own text (fill-in-the-blank on a key term).
+  // The student must answer CORRECTLY (retries allowed; a wrong answer swaps in a
+  // different term from the same section, so it can't be brute-forced blindly).
+  var RC_STOP = {};
+  (function () {
+    var w = ("the a an of to in on at for and or but is are was were be been being this that these those " +
+      "it its as by with from into than then so such not no can will would should could may might must " +
+      "we you they he she i our your their his her them us also more most very much many few some any all " +
+      "which who whom whose what when where why how if because while about over under between each other").split(" ");
+    for (var k = 0; k < w.length; k++) { RC_STOP[w[k]] = 1; }
+  })();
+
+  function rcClean(t) { return (t || "").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, ""); }
+
+  function rcSentences(text) {
+    var m = rcClean(text).match(/[^.!?]+[.!?]+/g);
+    if (!m) { var t = rcClean(text); return t ? [t] : []; }
+    return m.map(function (x) { return rcClean(x); }).filter(function (x) { return x.length > 0; });
+  }
+
+  // Escape a term for a case-insensitive whole-phrase regex.
+  function rcEsc(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+  // Collect, per section index, a list of { term, sentence } candidates. Terms
+  // are the emphasised key phrases the textbook already marks up (<b>,<strong>,
+  // <dfn>,<mark>). Each emphasised node is bucketed under the nearest preceding
+  // section heading, so the check for a section is drawn from that section only.
+  function rcSectionTerms(chapterEl, sections) {
+    var buckets = [];
+    var si;
+    for (si = 0; si < sections.length; si++) { buckets.push([]); }
+    var emph = [].slice.call(chapterEl.querySelectorAll("b, strong, dfn, mark"));
+    // DOM order of all headings so we can map an emphasised node to its section.
+    var order = [].slice.call(chapterEl.querySelectorAll("h2, h3, b, strong, dfn, mark"));
+    var curSection = -1;
+    var seenTerm = {};
+    for (var i = 0; i < order.length; i++) {
+      var node = order[i];
+      var tag = node.tagName ? node.tagName.toLowerCase() : "";
+      if (tag === "h2" || tag === "h3") {
+        var idx = sections.indexOf(node);
+        if (idx >= 0) { curSection = idx; }
+        continue;
+      }
+      if (curSection < 0) { continue; }
+      var term = rcClean(node.textContent || "");
+      if (term.length < 3 || term.length > 42) { continue; }
+      if (/[0-9]/.test(term)) { continue; }              // drop quantities/results/years
+      if (/[=$%\u2588]/.test(term)) { continue; }        // drop formula-ish emphasis
+      // Real key terms are short; glossary (tb-keyterm) terms may be a touch longer.
+      var inKeyterm = false;
+      try { inKeyterm = !!(node.closest && node.closest(".tb-keyterm")); } catch (e0) { inKeyterm = false; }
+      var words = term.split(" ");
+      if (!inKeyterm && words.length > 4) { continue; }
+      // reject phrases that are ALL common/stop words (e.g. "any other")
+      var contentful = false;
+      for (var wi = 0; wi < words.length; wi++) {
+        var wl = words[wi].toLowerCase().replace(/[^a-z]/g, "");
+        if (wl && wl.length > 2 && !RC_STOP[wl]) { contentful = true; break; }
+      }
+      if (!contentful) { continue; }
+      var key = term.toLowerCase();
+      if (seenTerm[key]) { continue; }         // one checkpoint per distinct term
+      seenTerm[key] = 1;
+      // find a sentence in the surrounding paragraph that contains the term
+      var host = node.parentNode;
+      var paraText = host ? (host.textContent || "") : term;
+      var sents = rcSentences(paraText);
+      var sentence = "";
+      var re = new RegExp("\\b" + rcEsc(term) + "\\b", "i");
+      for (var q = 0; q < sents.length; q++) { if (re.test(sents[q])) { sentence = sents[q]; break; } }
+      if (!sentence) { continue; }             // need a usable sentence
+      if (sentence.length < 25 || sentence.length > 320) { continue; }
+      var entry = { term: term, sentence: sentence };
+      // Prefer authoritative glossary terms: put them first in the section bucket.
+      if (inKeyterm) { buckets[curSection].unshift(entry); } else { buckets[curSection].push(entry); }
+    }
+    return buckets;
+  }
+
+  function rcShuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+
+  // Build one MC fill-in-the-blank from a { term, sentence } plus a chapter-wide
+  // pool of other terms for distractors. Returns null if it can't build a fair one.
+  function rcBuildCheck(cand, pool) {
+    if (!cand) { return null; }
+    var re = new RegExp("\\b" + rcEsc(cand.term) + "\\b", "gi");
+    var blanked = cand.sentence.replace(re, "\u2588\u2588\u2588\u2588\u2588");
+    if (blanked === cand.sentence) { return null; }
+    var lower = cand.term.toLowerCase();
+    var distract = [];
+    var seen = {}; seen[lower] = 1;
+    var shuffled = rcShuffle(pool.slice());
+    for (var i = 0; i < shuffled.length && distract.length < 3; i++) {
+      var d = shuffled[i]; var dl = d.toLowerCase();
+      if (seen[dl]) { continue; }
+      // avoid near-duplicates / substrings of the answer
+      if (dl.indexOf(lower) >= 0 || lower.indexOf(dl) >= 0) { continue; }
+      seen[dl] = 1; distract.push(d);
+    }
+    if (distract.length < 3) { return null; }   // not enough plausible distractors
+    var opts = distract.concat([cand.term]);
+    rcShuffle(opts);
+    var ansIdx = -1;
+    for (var o = 0; o < opts.length; o++) { if (opts[o].toLowerCase() === lower) { ansIdx = o; } }
+    return { blanked: blanked, options: opts, answerIdx: ansIdx };
+  }
+
+  // True when the page is being driven by browser automation. Not foolproof, but
+  // it catches the common headless/WebDriver agents and lets us withhold credit.
+  function rcAutomated() {
+    try {
+      if (navigator && navigator.webdriver === true) { return true; }
+      if (window.__nightmare || window._phantom || window.callPhantom) { return true; }
+      if (navigator && /HeadlessChrome/.test(navigator.userAgent || "")) { return true; }
+    } catch (e) {}
+    return false;
+  }
+
+  var _activeTracker = null;
+
   function trackReading(chapterEl, chapterNum, estMinutes) {
     if (!chapterEl || !chapterNum) { return; }
-    // Tear down any tracker from a previously-viewed chapter.
     if (_activeTracker && _activeTracker.teardown) { _activeTracker.teardown(); }
 
-    // Sections to cover: every chapter uses <h2 class="section-title"> for its
-    // sections (verified uniform across all 14 chapters), with <h3> subsections in
-    // the richer chapters. h2+h3 gives accurate per-section coverage; we fall back
-    // to sampled content blocks only if a chapter somehow has too few headings.
-    var sections = [].slice.call(chapterEl.querySelectorAll('h2, h3'));
+    var sections = [].slice.call(chapterEl.querySelectorAll("h2, h3"));
     if (sections.length < 2) {
-      sections = [].slice.call(chapterEl.querySelectorAll('p, .cnl-section, .chapter-quiz')).filter(function (el, i) {
-        return i % 3 === 0; // sample blocks as checkpoints when no headings
-      });
+      sections = [].slice.call(chapterEl.querySelectorAll("p, .cnl-section, .chapter-quiz")).filter(function (el, i) { return i % 3 === 0; });
     }
     var totalSections = sections.length > 0 ? sections.length : 1;
 
-    // Dwell floor: at least 35% of the stated read time, min 45s, capped at 12min,
-    // so it is meaningful but never punitive for fast readers.
-    var mins = (typeof estMinutes === 'number' && estMinutes > 0) ? estMinutes : 6;
+    var mins = (typeof estMinutes === "number" && estMinutes > 0) ? estMinutes : 6;
     var floorMs = Math.max(45000, Math.min(12 * 60000, Math.round(mins * 60000 * 0.35)));
+    // Per-section minimum dwell before its checkpoint is offered (so a reader
+    // cannot blitz section->answer->section). Scales with length, floored/capped.
+    var sectionMinMs = Math.max(8000, Math.min(60000, Math.round(floorMs / totalSections)));
 
-    var seen = {};              // index -> true once the section has been viewed
-    var seenCount = 0;
+    // Comprehension material, per section (may be empty for some sections).
+    var termBuckets = [];
+    var pool = [];
+    try {
+      termBuckets = rcSectionTerms(chapterEl, sections);
+      var seenP = {};
+      for (var b = 0; b < termBuckets.length; b++) {
+        for (var t = 0; t < termBuckets[b].length; t++) {
+          var trm = termBuckets[b][t].term; var lk = trm.toLowerCase();
+          if (!seenP[lk]) { seenP[lk] = 1; pool.push(trm); }
+        }
+      }
+    } catch (e) { termBuckets = []; pool = []; }
+
+    var seen = {};                 // sectionIdx -> viewed
+    var seenAt = {};               // sectionIdx -> first-seen timestamp
+    var passed = {};               // sectionIdx -> checkpoint satisfied
+    var attempt = {};              // sectionIdx -> which candidate we're on
+    var seenCount = 0, passCount = 0;
     var activeMs = 0;
     var lastTick = Date.now();
-    var done = false;
-    var recorded = false;
+    var humanHits = 0;             // count of TRUSTED user interactions
+    var automated = rcAutomated();
+    var done = false, recorded = false;
+    var current = -1;              // section whose checkpoint is being shown
 
-    // ---- live indicator ----
-    var ind = document.createElement('div');
-    ind.setAttribute('data-sa-reading-indicator', '1');
-    ind.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99999;background:#1b1340;color:#F0EEFA;border:1px solid rgba(155,123,255,.4);border-radius:12px;padding:10px 13px;font:12.5px/1.4 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:230px;';
+    // A section with no generatable checkpoint auto-satisfies its check (we don't
+    // punish a reader for a markup gap) but STILL requires coverage + dwell.
+    function sectionHasCheck(idx) {
+      return termBuckets[idx] && termBuckets[idx].length > 0 && pool.length >= 4;
+    }
+
+    var ind = document.createElement("div");
+    ind.setAttribute("data-sa-reading-indicator", "1");
+    ind.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:99999;background:#1b1340;color:#F0EEFA;border:1px solid rgba(155,123,255,.4);border-radius:12px;padding:12px 14px;font:12.5px/1.45 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:300px;";
     document.body.appendChild(ind);
-    function pct(x) { return Math.max(0, Math.min(100, Math.round(x * 100))); }
-    function paint() {
-      if (done) {
-        ind.innerHTML = '<b style="color:#34d399;">\u2713 Chapter ' + chapterNum + ' read</b><div style="opacity:.8;margin-top:2px;">Progress saved.</div>';
-        return;
+    function pctv(x) { return Math.max(0, Math.min(100, Math.round(x * 100))); }
+
+    function nextPending() {
+      // a section that's been seen long enough, has a check, and isn't passed yet
+      for (var i = 0; i < totalSections; i++) {
+        if (seen[i] && !passed[i] && sectionHasCheck(i)) {
+          if (Date.now() - (seenAt[i] || 0) >= sectionMinMs) { return i; }
+        }
       }
+      return -1;
+    }
+
+    function paintProgress() {
       var cov = seenCount / totalSections;
+      var chk = passCount / totalSections;
       var dwell = activeMs / floorMs;
+      var autoNote = automated ? '<div style="color:#fca5a5;margin-top:6px;">Automated browser detected \u2014 reading credit is disabled. Please read in a normal browser window.</div>' : "";
       ind.innerHTML =
         '<b>Reading Chapter ' + chapterNum + '</b>' +
-        '<div style="margin-top:6px;">Sections viewed: ' + seenCount + ' / ' + totalSections + '</div>' +
-        '<div style="height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 6px;overflow:hidden;"><div style="height:100%;width:' + pct(cov) + '%;background:#9B7BFF;"></div></div>' +
-        '<div>Time on chapter: ' + pct(dwell) + '%</div>' +
-        '<div style="height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 0;overflow:hidden;"><div style="height:100%;width:' + pct(dwell) + '%;background:#FBBF24;"></div></div>';
+        '<div style="margin-top:6px;">Sections viewed: ' + seenCount + " / " + totalSections + "</div>" +
+        '<div style="height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 6px;overflow:hidden;"><div style="height:100%;width:' + pctv(cov) + '%;background:#9B7BFF;"></div></div>' +
+        '<div>Checks answered: ' + passCount + " / " + totalSections + "</div>" +
+        '<div style="height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 6px;overflow:hidden;"><div style="height:100%;width:' + pctv(chk) + '%;background:#34d399;"></div></div>' +
+        '<div>Time on chapter: ' + pctv(dwell) + "%</div>" +
+        '<div style="height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 0;overflow:hidden;"><div style="height:100%;width:' + pctv(dwell) + '%;background:#FBBF24;"></div></div>' +
+        autoNote;
+    }
+
+    function showDone() {
+      ind.innerHTML = '<b style="color:#34d399;">\u2713 Chapter ' + chapterNum + ' read</b><div style="opacity:.85;margin-top:2px;">Reading credit saved.</div>';
+    }
+
+    function renderCheckpoint(idx) {
+      current = idx;
+      var cand = termBuckets[idx][(attempt[idx] || 0) % termBuckets[idx].length];
+      var built = rcBuildCheck(cand, pool);
+      if (!built) {
+        // couldn't build a fair item from this candidate; try the next, else pass
+        attempt[idx] = (attempt[idx] || 0) + 1;
+        if ((attempt[idx]) >= termBuckets[idx].length) { passed[idx] = true; passCount++; current = -1; pump(); return; }
+        renderCheckpoint(idx); return;
+      }
+      var html =
+        '<div style="font-weight:700;color:#c4b5fd;margin-bottom:4px;">Reading check</div>' +
+        '<div style="margin-bottom:8px;color:#F0EEFA;">Fill in the blank from the section you just read:</div>' +
+        '<div style="background:rgba(255,255,255,.06);border-radius:8px;padding:9px 11px;margin-bottom:10px;color:#e9e6fb;">' + rcEscHtml(built.blanked) + "</div>";
+      var wrap = document.createElement("div");
+      ind.innerHTML = html;
+      ind.appendChild(wrap);
+      var fb = document.createElement("div");
+      fb.style.cssText = "margin-top:8px;min-height:1em;font-size:12px;";
+      built.options.forEach(function (opt, oi) {
+        var btn = document.createElement("button");
+        btn.textContent = opt;
+        btn.style.cssText = "display:block;width:100%;text-align:left;margin:5px 0;padding:8px 10px;border:1px solid rgba(155,123,255,.4);border-radius:8px;background:#241a54;color:#F0EEFA;font:13px system-ui,sans-serif;cursor:pointer;";
+        btn.addEventListener("click", function () {
+          if (oi === built.answerIdx) {
+            passed[idx] = true; passCount++; current = -1;
+            fb.textContent = "";
+            pump();
+          } else {
+            attempt[idx] = (attempt[idx] || 0) + 1;   // swap in a different term
+            fb.innerHTML = '<span style="color:#fca5a5;">Not quite \u2014 re-read this section and try again.</span>';
+            setTimeout(function () { if (current === idx) { renderCheckpoint(idx); } }, 900);
+          }
+        });
+        wrap.appendChild(btn);
+      });
+      wrap.appendChild(fb);
+    }
+
+    // Show the next due checkpoint, or fall back to the progress meter.
+    function pump() {
+      if (done) { return; }
+      if (current >= 0 && !passed[current]) { return; } // a checkpoint is on screen
+      var idx = nextPending();
+      if (idx >= 0) { renderCheckpoint(idx); }
+      else { paintProgress(); }
+      maybeComplete();
     }
 
     function maybeComplete() {
       if (done) { return; }
-      if (seenCount >= totalSections && activeMs >= floorMs) {
-        done = true;
-        paint();
-        if (!recorded) {
-          recorded = true;
-          markReadingDone(chapterNum);   // the enforced write
-        }
-        // keep the checkmark visible briefly, then fade
-        setTimeout(function () { if (ind && ind.parentNode) { ind.style.transition = 'opacity .6s'; ind.style.opacity = '0'; setTimeout(function(){ if(ind.parentNode){ ind.parentNode.removeChild(ind); } }, 700); } }, 4000);
-      }
+      if (automated) { return; }                 // never grant credit to automation
+      if (humanHits < Math.max(3, Math.min(totalSections, 6))) { return; } // require real interaction
+      if (seenCount < totalSections) { return; }
+      if (activeMs < floorMs) { return; }
+      // every section either passed its check or has no generatable check
+      for (var i = 0; i < totalSections; i++) { if (!passed[i] && sectionHasCheck(i)) { return; } }
+      done = true; showDone();
+      if (!recorded) { recorded = true; markReadingDone(chapterNum); }
+      setTimeout(function () { if (ind && ind.parentNode) { ind.style.transition = "opacity .6s"; ind.style.opacity = "0"; setTimeout(function () { if (ind.parentNode) { ind.parentNode.removeChild(ind); } }, 700); } }, 4500);
     }
 
     // ---- coverage via IntersectionObserver ----
     var io = null;
-    if (typeof IntersectionObserver !== 'undefined') {
+    if (typeof IntersectionObserver !== "undefined") {
       io = new IntersectionObserver(function (entries) {
         entries.forEach(function (e) {
           if (e.isIntersecting) {
             var idx = sections.indexOf(e.target);
-            if (idx >= 0 && !seen[idx]) { seen[idx] = true; seenCount++; paint(); maybeComplete(); }
+            if (idx >= 0 && !seen[idx]) {
+              seen[idx] = true; seenAt[idx] = Date.now(); seenCount++;
+              if (!sectionHasCheck(idx)) { passed[idx] = true; passCount++; } // auto-pass ungeneratable
+              pump();
+            }
           }
         });
-      }, { threshold: 0.6 });   // 60% of the section must be visible to count
+      }, { threshold: 0.6 });
       sections.forEach(function (el) { io.observe(el); });
     } else {
-      // No IO support: fall back to a scroll-bottom + dwell check.
-      seenCount = totalSections; // can't track per-section; rely on dwell only
+      seenCount = totalSections;
+      for (var z = 0; z < totalSections; z++) { seen[z] = true; seenAt[z] = Date.now(); if (!sectionHasCheck(z)) { passed[z] = true; passCount++; } }
     }
 
-    // ---- dwell timer (only counts while tab visible) ----
+    // ---- trusted-interaction + dwell timer ----
+    function onHuman(ev) { if (ev && ev.isTrusted) { humanHits++; } }
+    document.addEventListener("pointerdown", onHuman, true);
+    document.addEventListener("keydown", onHuman, true);
+    document.addEventListener("wheel", onHuman, { capture: true, passive: true });
+    document.addEventListener("touchstart", onHuman, { capture: true, passive: true });
+
     var timer = setInterval(function () {
       var now = Date.now();
-      if (document.visibilityState === 'visible') { activeMs += (now - lastTick); }
+      if (document.visibilityState === "visible") { activeMs += (now - lastTick); }
       lastTick = now;
-      paint();
-      maybeComplete();
+      pump();
     }, 1000);
     function onVis() { lastTick = Date.now(); }
-    document.addEventListener('visibilitychange', onVis);
+    document.addEventListener("visibilitychange", onVis);
 
-    paint();
+    pump();
 
     _activeTracker = {
       teardown: function () {
         if (io) { io.disconnect(); }
         clearInterval(timer);
-        document.removeEventListener('visibilitychange', onVis);
+        document.removeEventListener("visibilitychange", onVis);
+        document.removeEventListener("pointerdown", onHuman, true);
+        document.removeEventListener("keydown", onHuman, true);
+        document.removeEventListener("wheel", onHuman, true);
+        document.removeEventListener("touchstart", onHuman, true);
         if (ind && ind.parentNode) { ind.parentNode.removeChild(ind); }
         _activeTracker = null;
       }
     };
+  }
+
+  function rcEscHtml(t) {
+    return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   global.IMProgress = {
@@ -351,6 +605,7 @@
     recordQuiz: recordQuiz,
     recordArena: recordArena,
     recordArenaCase: recordArenaCase,
+    recordArenaAttempt: recordArenaAttempt,
     logEvent: logEvent,
     isSignedIn: isSignedIn,
     initArena: initArena,
