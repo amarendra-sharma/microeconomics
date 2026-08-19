@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-student-names';
+var SA_BUILD = 'intro-micro-portal-2026-08-roster-names';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1391,7 +1391,9 @@ function loadRoster(){
       if(ac && (Number(ac.time_multiplier)!==1 || Number(ac.extra_attempts)!==0)){
         acLabel='<span class="tag violet">'+(Number(ac.time_multiplier)!==1?(ac.time_multiplier+'\u00d7 time'):'')+(Number(ac.extra_attempts)!==0?((Number(ac.time_multiplier)!==1?' · ':'')+'+'+ac.extra_attempts+' att'):'')+'</span>';
       }
-      html+='<tr><td>'+esc(p.email||r.student_id)+'</td><td>'+esc(p.full_name||'-')+'</td><td>'+st+'</td>'+
+      html+='<tr><td>'+esc(p.email||r.student_id)+'</td>'+
+        '<td>'+(r.user_id ? '<input class="rosterName" data-uid="'+esc(r.user_id)+'" data-orig="'+esc(p.full_name||'')+'" value="'+esc(p.full_name||'')+'" placeholder="Add name\\u2026" style="width:150px;padding:5px 7px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--surface,#fff);color:inherit;">' : esc(p.full_name||'-'))+'</td>'+
+        '<td>'+st+'</td>'+
         '<td>'+acLabel+'</td>'+
         '<td>'+esc(r.enrolled_at?new Date(r.enrolled_at).toLocaleDateString():'-')+'</td>'+
         '<td class="inline-actions"><button class="btn btn-ghost btn-sm" data-accom="'+r.student_id+'" data-email="'+esc(p.email||'')+'">Accommodate</button>'+
@@ -1399,6 +1401,22 @@ function loadRoster(){
     });
     html+='</tbody></table></div>';
     $('rosterBody').innerHTML=html;
+    Array.prototype.forEach.call($('rosterBody').querySelectorAll('.rosterName'), function(inp){
+      function saveName(){
+        var v=inp.value.trim(); var orig=inp.getAttribute('data-orig')||'';
+        if(v===orig){ return; }
+        var uid=inp.getAttribute('data-uid'); if(!uid){ return; }
+        inp.disabled=true;
+        sb.rpc('im_set_student_name',{ p_course:State.teachCourseId, p_student:uid, p_name:v }).then(function(res){
+          inp.disabled=false;
+          if(res && res.error){ inp.style.borderColor='var(--rose)'; inp.title=res.error.message||'Could not save'; return; }
+          inp.setAttribute('data-orig', v); inp.style.borderColor='var(--green)'; inp.title='Saved';
+          setTimeout(function(){ inp.style.borderColor='var(--border)'; }, 1200);
+        }, function(){ inp.disabled=false; inp.style.borderColor='var(--rose)'; inp.title='Could not save \u2014 run im_59 and try again.'; });
+      }
+      inp.addEventListener('change', saveName);
+      inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ inp.blur(); } });
+    });
     Array.prototype.forEach.call($('rosterBody').querySelectorAll('[data-accom]'), function(b){
       b.addEventListener('click', function(){ openAccommodation(b.getAttribute('data-accom'), b.getAttribute('data-email'), accomBy[b.getAttribute('data-accom')]); });
     });
