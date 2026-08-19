@@ -228,6 +228,7 @@
     <div class="field"><label>Password</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="********"></div>
     <div id="forgotRow" style="text-align:right;margin-top:-6px;margin-bottom:8px;"><a href="#" id="forgotLink" style="font-size:12.5px;color:var(--violet);text-decoration:none;">Forgot password?</a></div>
     <div id="signupRole" class="hidden">
+      <div class="field"><label>Full name</label><input id="authName" autocomplete="name" placeholder="Jane Q. Student"></div>
       <div class="field"><label>I am signing up as</label>
         <div style="display:flex;gap:8px;">
           <button type="button" class="btn btn-ghost role-opt active" data-role="student" style="flex:1;">Student</button>
@@ -318,6 +319,7 @@
     <section id="view-home">
       <h1 class="page-title" id="welcomeTitle">Welcome back</h1>
       <div class="page-sub">Your strategic-thinking workspace. Pick up where you left off.</div>
+      <div id="homeNameCard"></div>
       <div class="stat-row" id="homeStats"></div>
       <div class="grid grid-3" id="homeQuick"></div>
       <div id="homeDeadlines"></div>
@@ -433,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-deadlines';
+var SA_BUILD = 'intro-micro-portal-2026-08-student-names';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -663,6 +665,8 @@ function doAuth(){
       var jc = $('authJoinCode') ? $('authJoinCode').value.trim() : '';
       if(jc){ meta = { join_code: jc }; }
     }
+    var fullName = $('authName') ? $('authName').value.trim() : '';
+    if(fullName){ meta.full_name = fullName; }
     sb.auth.signUp({email:email,password:pw,options:{data:meta}}).then(function(res){
       if(res.error){
         // One MacroNations account per email (shared across Micro/Macro/Econometrics).
@@ -724,7 +728,9 @@ function onSignedIn(user){
   State.user=user;
   hide($('authScreen'));
   // upsert a profile so the row exists, then read role.
-  sb.from('im_person').upsert({user_id:user.id, email:user.email},{onConflict:'user_id'}).then(function(){
+  var _pup={user_id:user.id, email:user.email};
+  try{ var _md=user.user_metadata||{}; if(_md.full_name){ _pup.full_name=_md.full_name; } }catch(e){}
+  sb.from('im_person').upsert(_pup,{onConflict:'user_id'}).then(function(){
     return sb.from('im_person').select('user_id,email,full_name,role,display_title').eq('user_id', user.id).maybeSingle();
   }).then(function(res){
     var prof = res.data ? res.data : { role:'student' };
@@ -4809,6 +4815,7 @@ function loadHome() {
   }
   if (!State.user) { return; }
   var uid = State.user.id;
+  renderHomeNameCard();
   // counts: graded attempts, correct, arenas played
   Promise.all([
     sb.from('im_exam_attempt').select('is_correct', { count: 'exact' }).eq('student_id', uid).not('graded_at','is',null),
@@ -4944,6 +4951,34 @@ function relDue(ms){
   else if(abs<day){ var h=Math.round(abs/hr); s=h+' hr'+(h===1?'':'s'); }
   else { var dd=Math.round(abs/day); s=dd+' day'+(dd===1?'':'s'); }
   return d>=0 ? ('in '+s) : (s+' ago');
+}
+
+// Lets a student add/edit the name their instructor sees in the roster and
+// gradebook. Signup never asked for a name, so existing students need this to
+// appear as anything but their email. Writes only the student’s OWN im_person row.
+function renderHomeNameCard(){
+  var host=$('homeNameCard'); if(!host){ return; }
+  if(State.guest || !State.user){ host.innerHTML=''; return; }
+  var have=(State.profile && State.profile.full_name) ? State.profile.full_name : '';
+  if(have){ if($('welcomeTitle')){ $('welcomeTitle').textContent='Welcome back, '+have.split(' ')[0]; } host.innerHTML=''; return; }
+  host.innerHTML='<div class="card" style="border-left:3px solid var(--amber,#d97706);margin-bottom:16px;">'+
+    '<div style="font-weight:600;margin-bottom:4px;">Add your name</div>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Your instructor identifies you by name in the roster and gradebook. Please add yours so you\u2019re not just an email address.</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="homeNameInput" autocomplete="name" placeholder="Jane Q. Student" style="flex:1;min-width:200px;"><button class="btn btn-primary" id="homeNameSave">Save name</button></div>'+
+    '<div id="homeNameMsg" style="font-size:12px;margin-top:6px;"></div></div>';
+  var btn=$('homeNameSave');
+  if(btn){ btn.addEventListener('click', function(){
+    var v=$('homeNameInput').value.trim();
+    var msg=$('homeNameMsg');
+    if(!v){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Please type your name first.'; } return; }
+    btn.disabled=true;
+    if(!State.profile){ State.profile={}; }
+    sb.from('im_person').update({ full_name: v }).eq('user_id', State.user.id).then(function(res){
+      btn.disabled=false;
+      if(res && res.error){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save: '+res.error.message; } return; }
+      State.profile.full_name=v; renderHomeNameCard();
+    }, function(e){ btn.disabled=false; if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save your name. Please try again.'; } });
+  }); }
 }
 
 // Consolidated student deadlines across exams, assignments, quizzes, arenas and
