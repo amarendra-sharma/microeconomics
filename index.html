@@ -320,6 +320,7 @@
       <div class="page-sub">Your strategic-thinking workspace. Pick up where you left off.</div>
       <div class="stat-row" id="homeStats"></div>
       <div class="grid grid-3" id="homeQuick"></div>
+      <div id="homeDeadlines"></div>
       <div id="homeCourses"></div>
     </section>
     <section id="view-myannounce" class="hidden" aria-labelledby="myAnnTitle">
@@ -432,7 +433,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attendance-grade2';
+var SA_BUILD = 'intro-micro-portal-2026-08-deadlines';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -4826,6 +4827,7 @@ function loadHome() {
       statCard(acc + '%', 'accuracy') +
       statCard(nArena, 'arena sessions');
   });
+  loadHomeDeadlines();
   $('homeQuick').innerHTML =
     quickCard('📖','Read a chapter','Jump into the textbook','chapters') +
     quickCard('✍️','Practice','Server-graded questions','practice') +
@@ -4930,6 +4932,90 @@ function loadMyCourses() {
       $('homeCourses').innerHTML = html;
     });
   });
+}
+
+function prettySlug(slug){ if(!slug){ return 'Arena'; } var w=String(slug).replace(/[-_]+/g,' ').split(' '); for(var i=0;i<w.length;i++){ if(w[i]){ w[i]=w[i].charAt(0).toUpperCase()+w[i].slice(1); } } return w.join(' '); }
+
+function relDue(ms){
+  var now=Date.now(); var d=ms-now; var abs=Math.abs(d);
+  var day=86400000, hr=3600000, mn=60000;
+  var s;
+  if(abs<hr){ var m=Math.max(1,Math.round(abs/mn)); s=m+' min'; }
+  else if(abs<day){ var h=Math.round(abs/hr); s=h+' hr'+(h===1?'':'s'); }
+  else { var dd=Math.round(abs/day); s=dd+' day'+(dd===1?'':'s'); }
+  return d>=0 ? ('in '+s) : (s+' ago');
+}
+
+// Consolidated student deadlines across exams, assignments, quizzes, arenas and
+// reading, honoring any per-student reschedule (im_assessment_accommodation).
+function loadHomeDeadlines(){
+  var host=$('homeDeadlines'); if(!host){ return; }
+  if(State.guest || !State.user){ host.innerHTML=''; return; }
+  var uid=State.user.id;
+  sb.from('im_enrollment').select('course_id').eq('user_id',uid).eq('status','active').then(function(er){
+    var courseIds=((er&&er.data)?er.data:[]).map(function(x){ return x.course_id; });
+    if(courseIds.length===0){ host.innerHTML=''; return; }
+    Promise.all([
+      sb.from('im_course').select('id,title').in('id',courseIds),
+      sb.from('im_exam').select('id,course_id,title,kind,closes_at').in('course_id',courseIds).eq('is_published',true),
+      sb.from('im_assignment').select('id,course_id,title,due_at').in('course_id',courseIds).eq('is_published',true),
+      sb.from('im_quiz_deadline').select('course_id,chapter,closes_at').in('course_id',courseIds),
+      sb.from('im_arena_deadline').select('course_id,arena_slug,closes_at').in('course_id',courseIds),
+      sb.from('im_assessment_accommodation').select('course_id,kind,ref_id,due_override').eq('student_id',uid)
+    ]).then(function(r){
+      var courses={}; ((r[0]&&r[0].data)?r[0].data:[]).forEach(function(c){ courses[c.id]=c; });
+      var multi=Object.keys(courses).length>1;
+      function ctitle(cid){ return (courses[cid]&&courses[cid].title)?courses[cid].title:''; }
+      // per-student override: kind|course|ref -> ms
+      var ov={}; ((r[5]&&r[5].data)?r[5].data:[]).forEach(function(o){ if(o.due_override){ ov[o.kind+'|'+o.course_id+'|'+String(o.ref_id)]=new Date(o.due_override).getTime(); } });
+      function eff(kind,cid,ref,baseMs){ var k=kind+'|'+cid+'|'+String(ref); return (ov[k]!==undefined)?ov[k]:baseMs; }
+      var items=[];
+      ((r[1]&&r[1].data)?r[1].data:[]).forEach(function(e){ if(!e.closes_at){ return; } items.push({ type:'Exam', icon:'\uD83D\uDCDD', label:(e.title||(e.kind==='final'?'Final exam':'Midterm')), due:eff('exam',e.course_id,e.id,new Date(e.closes_at).getTime()), course:ctitle(e.course_id) }); });
+      ((r[2]&&r[2].data)?r[2].data:[]).forEach(function(a){ if(!a.due_at){ return; } items.push({ type:'Assignment', icon:'\uD83D\uDCCE', label:(a.title||'Assignment'), due:eff('assignment',a.course_id,a.id,new Date(a.due_at).getTime()), course:ctitle(a.course_id) }); });
+      // A chapter's quiz deadline is also the read-by date, so surface both.
+      ((r[3]&&r[3].data)?r[3].data:[]).forEach(function(q){ if(!q.closes_at){ return; } var base=new Date(q.closes_at).getTime(); var dueQ=eff('quiz',q.course_id,q.chapter,base);
+        items.push({ type:'Quiz', icon:'\u270D\uFE0F', label:'Chapter '+q.chapter+' quiz', due:dueQ, course:ctitle(q.course_id) });
+        items.push({ type:'Reading', icon:'\uD83D\uDCD6', label:'Chapter '+q.chapter+' reading', due:dueQ, course:ctitle(q.course_id) });
+      });
+      ((r[4]&&r[4].data)?r[4].data:[]).forEach(function(a){ if(!a.closes_at){ return; } items.push({ type:'Arena', icon:'\uD83C\uDFAE', label:prettySlug(a.arena_slug), due:eff('arena',a.course_id,a.arena_slug,new Date(a.closes_at).getTime()), course:ctitle(a.course_id) }); });
+      renderHomeDeadlines(host, items, multi);
+    }, function(){ host.innerHTML=''; });
+  }, function(){ host.innerHTML=''; });
+}
+
+function renderHomeDeadlines(host, items, multi){
+  if(!items || items.length===0){ host.innerHTML=''; return; }
+  items.sort(function(a,b){ return a.due-b.due; });
+  var now=Date.now();
+  var upcoming=items.filter(function(x){ return x.due>=now; });
+  var overdue=items.filter(function(x){ return x.due<now; });
+  function row(x){
+    var soon=(x.due-now)>=0 && (x.due-now)<48*3600000;
+    var over=x.due<now;
+    var color=over?'var(--rose)':(soon?'var(--amber, #d97706)':'var(--text-muted)');
+    var when=new Date(x.due).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">'+
+      '<div style="font-size:18px;width:22px;text-align:center;">'+x.icon+'</div>'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div style="font-weight:600;font-size:13.5px;">'+esc(x.label)+' <span class="tag dim" style="font-weight:500;">'+esc(x.type)+'</span></div>'+
+        (multi&&x.course?'<div style="font-size:11.5px;color:var(--text-subtle);">'+esc(x.course)+'</div>':'')+
+      '</div>'+
+      '<div style="text-align:right;white-space:nowrap;"><div style="font-size:12.5px;color:'+color+';font-weight:600;">'+esc(relDue(x.due))+'</div>'+
+        '<div style="font-size:11px;color:var(--text-subtle);">'+esc(when)+'</div></div>'+
+    '</div>';
+  }
+  var html='<div class="card" style="margin-top:18px;"><h3 style="font-size:15px;margin:0 0 4px;">Upcoming deadlines</h3>';
+  if(upcoming.length===0){ html+='<div style="font-size:12.5px;color:var(--text-subtle);padding:6px 0;">Nothing due right now.</div>'; }
+  else { upcoming.slice(0,12).forEach(function(x){ html+=row(x); }); }
+  if(upcoming.length>12){ html+='<div style="font-size:11.5px;color:var(--text-subtle);margin-top:8px;">+ '+(upcoming.length-12)+' more later.</div>'; }
+  if(overdue.length>0){
+    html+='<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--rose);font-weight:600;">Past due ('+overdue.length+')</summary><div style="margin-top:4px;">';
+    overdue.slice(-15).reverse().forEach(function(x){ html+=row(x); });
+    html+='</div></details>';
+  }
+  html+='<div style="font-size:11px;color:var(--text-subtle);margin-top:8px;">A chapter\u2019s reading is due by that chapter\u2019s quiz deadline. Personal extensions are already reflected here.</div>';
+  html+='</div>';
+  host.innerHTML=html;
 }
 
 function statCard(num, label) {
