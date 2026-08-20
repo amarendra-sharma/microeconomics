@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-roster-names';
+var SA_BUILD = 'intro-micro-portal-2026-08-roster-names-sort';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1374,7 +1374,7 @@ function removeStaff(userId, btn){
 }
 function loadRoster(){
   Promise.all([
-    sb.from('im_enrollment').select('user_id,student_id,status,enrolled_at,im_person(email,full_name)').eq('course_id',State.teachCourseId),
+    sb.from('im_enrollment').select('id,user_id,student_id,status,enrolled_at,im_person(user_id,email,full_name)').eq('course_id',State.teachCourseId),
     sb.from('im_accommodation').select('student_id,time_multiplier,extra_attempts,note').eq('course_id',State.teachCourseId)
   ]).then(function(rr){
     var res={data:rr[0].data}; 
@@ -1385,6 +1385,7 @@ function loadRoster(){
     var html='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Accommodation</th><th>Enrolled</th><th></th></tr></thead><tbody>';
     rows.forEach(function(r){
       var p=r.im_person?r.im_person:{};
+      var nameKey=(p&&p.user_id)?p.user_id:(r.student_id||r.user_id||'');
       var st=r.status==='active'?'<span class="tag green">active</span>':(r.status==='dropped'?'<span class="tag rose">dropped</span>':'<span class="tag dim">'+esc(r.status)+'</span>');
       var ac=accomBy[r.student_id];
       var acLabel='—';
@@ -1392,7 +1393,7 @@ function loadRoster(){
         acLabel='<span class="tag violet">'+(Number(ac.time_multiplier)!==1?(ac.time_multiplier+'\u00d7 time'):'')+(Number(ac.extra_attempts)!==0?((Number(ac.time_multiplier)!==1?' · ':'')+'+'+ac.extra_attempts+' att'):'')+'</span>';
       }
       html+='<tr><td>'+esc(p.email||r.student_id)+'</td>'+
-        '<td>'+(r.user_id ? '<input class="rosterName" data-uid="'+esc(r.user_id)+'" data-orig="'+esc(p.full_name||'')+'" value="'+esc(p.full_name||'')+'" placeholder="Add name\\u2026" style="width:150px;padding:5px 7px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--surface,#fff);color:inherit;">' : esc(p.full_name||'-'))+'</td>'+
+        '<td>'+(nameKey ? '<input class="rosterName" data-uid="'+esc(nameKey)+'" data-orig="'+esc(p.full_name||'')+'" value="'+esc(p.full_name||'')+'" placeholder="Add name\\u2026" style="width:150px;padding:5px 7px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--surface,#fff);color:inherit;">' : esc(p.full_name||'-'))+'</td>'+
         '<td>'+st+'</td>'+
         '<td>'+acLabel+'</td>'+
         '<td>'+esc(r.enrolled_at?new Date(r.enrolled_at).toLocaleDateString():'-')+'</td>'+
@@ -1854,8 +1855,19 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
     var label=esc(e.title||(e.kind==='final'?'Final':'Midterm'));
     return { id:e.id, label:label+wpc };
   });
+  if(!State.gbSort){ State.gbSort={key:'name',dir:1}; }
+  var sortK=State.gbSort.key, sortD=State.gbSort.dir;
+  function sTh(label,key){ var a=(sortK===key); var car=a?(sortD>0?' \u25B2':' \u25BC'):''; return '<th scope="col" data-sortkey="'+key+'" title="Sort by '+label+'" style="cursor:pointer;user-select:none;white-space:nowrap;">'+label+car+'</th>'; }
+  computed.sort(function(a,b){
+    var k=sortK, dir=sortD, av, bv;
+    if(k==='name'){ av=(a.name||a.email||'').toLowerCase(); bv=(b.name||b.email||'').toLowerCase(); return av<bv?-dir:(av>bv?dir:0); }
+    av=a[k]; bv=b[k];
+    if(av===null||av===undefined){ return 1; }
+    if(bv===null||bv===undefined){ return -1; }
+    return (Number(av)-Number(bv))*dir;
+  });
   var examHeadHtml=examCols.map(function(col){ return '<th scope="col">'+col.label+'</th>'; }).join('');
-  html+='<div class="tbl-wrap"><table class="tbl"><thead><tr><th scope="col">Student</th><th scope="col">Sub</th><th scope="col">Reading</th><th scope="col">Quizzes</th><th scope="col">Arenas</th><th scope="col">Attend</th><th scope="col">Assign</th>'+examHeadHtml+'<th scope="col">Weighted</th><th scope="col">Override %</th><th scope="col">Final</th><th scope="col"></th></tr></thead><tbody>';
+  html+='<div class="tbl-wrap"><table class="tbl"><thead><tr>'+sTh('Student','name')+'<th scope="col">Sub</th>'+sTh('Reading','reading')+sTh('Quizzes','quizzes')+sTh('Arenas','arenas')+sTh('Attend','attendance')+sTh('Assign','assignments')+examHeadHtml+sTh('Weighted','computed')+'<th scope="col">Override %</th>'+sTh('Final','finalPct')+'<th scope="col"></th></tr></thead><tbody>';
   computed.forEach(function(g){
     var examCells=examCols.map(function(col){
       var f=g.examScores[col.id];
@@ -1873,6 +1885,13 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
   });
   html+='</tbody></table></div>';
   host.innerHTML=html;
+  Array.prototype.forEach.call(host.querySelectorAll('[data-sortkey]'), function(th){
+    th.addEventListener('click', function(){
+      var k=th.getAttribute('data-sortkey');
+      if(State.gbSort && State.gbSort.key===k){ State.gbSort.dir = -State.gbSort.dir; } else { State.gbSort={key:k, dir:1}; }
+      renderGradebook(host);
+    });
+  });
   $('csvBtn').addEventListener('click', function(){ exportCSV(c,computed,examCols); });
   Array.prototype.forEach.call(host.querySelectorAll('[data-saveovr]'), function(b){ b.addEventListener('click', function(){
     var sid=b.getAttribute('data-saveovr');
