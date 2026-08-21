@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-roster-names-sort';
+var SA_BUILD = 'intro-micro-portal-2026-08-roster-sort-diag';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1382,7 +1382,19 @@ function loadRoster(){
     var accomBy={}; accoms.forEach(function(a){ accomBy[a.student_id]=a; });
     var rows=res.data?res.data:[];
     if(rows.length===0){ $('rosterBody').innerHTML='<div class="card empty">No students enrolled yet.</div>'; return; }
-    var html='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Accommodation</th><th>Enrolled</th><th></th></tr></thead><tbody>';
+    if(!State.rosterSort){ State.rosterSort={key:'name',dir:1}; }
+    var rsK=State.rosterSort.key, rsD=State.rosterSort.dir;
+    function rNameLF(r){ var pp=r.im_person?r.im_person:{}; var n=((pp.full_name)||'').trim(); if(!n){ return '~~'+((pp.email)||'').toLowerCase(); } var parts=n.split(/\s+/); var last=parts.length>1?parts[parts.length-1]:parts[0]; var first=parts[0]; return (last+' '+first+' '+n).toLowerCase(); }
+    function rEmail(r){ var pp=r.im_person?r.im_person:{}; return ((pp.email)||r.student_id||'').toLowerCase(); }
+    rows.sort(function(a,b){
+      var av,bv;
+      if(rsK==='email'){ av=rEmail(a); bv=rEmail(b); }
+      else if(rsK==='status'){ av=(a.status||''); bv=(b.status||''); }
+      else { av=rNameLF(a); bv=rNameLF(b); }
+      return av<bv?-rsD:(av>bv?rsD:0);
+    });
+    function rTh(label,key){ var a=(rsK===key); var car=a?(rsD>0?' \u25B2':' \u25BC'):''; return '<th data-rsort="'+key+'" title="Sort by '+label+'" style="cursor:pointer;user-select:none;white-space:nowrap;">'+label+car+'</th>'; }
+    var html='<div class="tbl-wrap"><table class="tbl"><thead><tr>'+rTh('Email','email')+rTh('Name (last, first)','name')+rTh('Status','status')+'<th>Accommodation</th><th>Enrolled</th><th></th></tr></thead><tbody>';
     rows.forEach(function(r){
       var p=r.im_person?r.im_person:{};
       var nameKey=(p&&p.user_id)?p.user_id:(r.student_id||r.user_id||'');
@@ -1402,6 +1414,13 @@ function loadRoster(){
     });
     html+='</tbody></table></div>';
     $('rosterBody').innerHTML=html;
+    Array.prototype.forEach.call($('rosterBody').querySelectorAll('[data-rsort]'), function(th){
+      th.addEventListener('click', function(){
+        var k=th.getAttribute('data-rsort');
+        if(State.rosterSort && State.rosterSort.key===k){ State.rosterSort.dir=-State.rosterSort.dir; } else { State.rosterSort={key:k, dir:1}; }
+        loadRoster();
+      });
+    });
     Array.prototype.forEach.call($('rosterBody').querySelectorAll('.rosterName'), function(inp){
       function saveName(){
         var v=inp.value.trim(); var orig=inp.getAttribute('data-orig')||'';
@@ -1410,7 +1429,16 @@ function loadRoster(){
         inp.disabled=true;
         sb.rpc('im_set_student_name',{ p_course:State.teachCourseId, p_student:uid, p_name:v }).then(function(res){
           inp.disabled=false;
-          if(res && res.error){ inp.style.borderColor='var(--rose)'; inp.title=res.error.message||'Could not save'; return; }
+          if(res && res.error){
+            inp.style.borderColor='var(--rose)';
+            var m=res.error.message||String(res.error); var ml=m.toLowerCase();
+            if(ml.indexOf('function')>=0 && (ml.indexOf('does not exist')>=0 || ml.indexOf('not find')>=0 || ml.indexOf('schema cache')>=0)){
+              alert('The database function is not installed yet. Run im_59_set_student_name.sql in the Supabase SQL editor, then reload and try again.');
+            } else if(ml.indexOf('not authorized')>=0){
+              alert('Not authorized to edit names in this course. Sign in as the course owner or a platform admin. Current account: '+((State.profile&&State.profile.email)?State.profile.email:'unknown')+'.');
+            } else { alert('Could not save the name: '+m); }
+            return;
+          }
           inp.setAttribute('data-orig', v); inp.style.borderColor='var(--green)'; inp.title='Saved';
           setTimeout(function(){ inp.style.borderColor='var(--border)'; }, 1200);
         }, function(){ inp.disabled=false; inp.style.borderColor='var(--rose)'; inp.title='Could not save \u2014 run im_59 and try again.'; });
