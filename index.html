@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-roster-sort-diag';
+var SA_BUILD = 'intro-micro-portal-2026-08-attend-enroll-scope';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -516,20 +516,35 @@ function arenaBreakdown(rows){
 // sessions: [{ id, quiz_points, base_points }]  checkins: [{ session_id, present, quiz_score }]
 // presenceShare (0..1): how much of the attendance grade is presence vs the pop quiz.
 // Returns { score, presenceRate, quizRate, nSessions, presentN } or null if no sessions.
-function computeAttendanceScore(sessions, checkins, presenceShare){
+function computeAttendanceScore(sessions, checkins, presenceShare, enrolledAtMs){
   sessions = sessions || []; checkins = checkins || [];
-  var n = sessions.length;
+  // Only count sessions from when the student joined onward, so a late enrollee
+  // isn't penalized for pop quizzes given before they were in the course.
+  // FAIL-SAFE: if we can't determine a session's time OR the join time, we KEEP
+  // the session (never drop on missing data). This can only shrink a late
+  // joiner's denominator — it never lowers anyone's attendance grade.
+  var cutoff = (typeof enrolledAtMs==='number' && !isNaN(enrolledAtMs)) ? enrolledAtMs : null;
+  var elig = [];
+  sessions.forEach(function(s){
+    if(cutoff!==null){
+      var t = s.open_at || s.created_at || null;
+      if(t){ var d=new Date(t).getTime(); if(!isNaN(d) && d < cutoff){ return; } }
+    }
+    elig.push(s);
+  });
+  var n = elig.length;
   if(n===0){ return null; }
   var ck={}; checkins.forEach(function(c){ ck[c.session_id]=c; });
   var presentN=0, qEarned=0, qMax=0;
-  sessions.forEach(function(s){
+  elig.forEach(function(s){
     var c = ck[s.id];
     var present = !!(c && c.present);
     if(present){ presentN++; }
     var qp = Number(s.quiz_points)||0;
-    // quiz rate is measured only on sessions the student attended that had a quiz,
-    // so being absent is penalized once (via presence), not twice.
-    if(present && qp>0){ qMax += qp; qEarned += (c && c.quiz_score!=null) ? Number(c.quiz_score) : 0; }
+    // Pop-quiz attendance: a quiz counts on EVERY eligible session that had one.
+    // If the student was absent (or present but didn't answer), they earn 0 on
+    // that quiz. So N random pop quizzes average together, and missing one hurts.
+    if(qp>0){ qMax += qp; qEarned += (c && c.quiz_score!=null) ? Number(c.quiz_score) : 0; }
   });
   var presenceRate = presentN/n;
   var quizRate = qMax>0 ? (qEarned/qMax) : null;
@@ -750,6 +765,7 @@ function enterApp(user){
   $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : 'Student');
   if(role==='professor' || role==='admin'){ show($('teachGroup')); } else { hide($('teachGroup')); }
   if(role==='admin'){ show($('adminGroup')); } else { hide($('adminGroup')); }
+  if(role!=='professor' && role!=='admin'){ setTimeout(maybePromptName, 700); }
   // student self-study provisioning (own course for practice/progress)
   // platform settings (needed by the subscribe prompt for everyone) + access
   loadPlatformSettings();
@@ -1075,7 +1091,7 @@ function openCourseModal(courseId){
     '</div><div id="cmWsum" style="font-size:11.5px;color:var(--text-subtle);margin-top:6px;"></div><div style="font-size:11px;color:var(--text-subtle);margin-top:4px;">The <b>Midterm</b> and <b>Final</b> weights here are defaults. If you set a weight on an individual exam (in Exams &rarr; edit), that exam uses its own weight instead \u2014 which is how you run several midterms, each weighted separately.</div></div>'+
     '<div class="field"><label>Attendance split — presence vs pop quiz</label>'+
     '<div style="display:flex;align-items:center;gap:10px;"><input id="cmAttSplit" type="number" min="0" max="100" step="5" value="'+Math.round((v.attShare!=null?v.attShare:0.7)*100)+'" style="width:80px;"><span style="font-size:12.5px;color:var(--text-muted);">% of the Attendance grade comes from <b>being present</b>; the rest comes from the in-class <b>pop quiz</b>.</span></div>'+
-    '<div style="font-size:11px;color:var(--text-subtle);margin-top:4px;">Presence rate = sessions attended ÷ total. Quiz rate = your quiz points ÷ possible, on the sessions you attended. If a class had no quiz, only presence counts.</div></div>'+
+    '<div style="font-size:11px;color:var(--text-subtle);margin-top:4px;">All attendance sessions you hold this term share the single <b>Attendance</b> weight above (e.g. give 10 random pop quizzes and together they are that %). Each student\\u2019s attendance grade = presence share \\u00d7 (sessions attended \\u00f7 total) + quiz share \\u00d7 (pop-quiz points earned \\u00f7 possible across ALL quizzes given \\u2014 a missed quiz counts as 0). Set presence share to 0% if the pop quiz alone is the attendance grade.</div></div>'+
     '<div class="inline-actions" style="margin-top:18px;justify-content:flex-end;">'+
       (isNew?'':'<button class="btn btn-danger btn-sm" id="cmArchive">Archive</button>')+
       '<button class="btn btn-ghost" id="cmCancel">Cancel</button>'+
@@ -1749,8 +1765,9 @@ function renderGradebook(host){
         sb.from('im_grade_override').select('student_id,override_pct,note').eq('course_id',State.teachCourseId),
         sb.from('im_attempt').select('user_id,arena_slug,is_correct,created_at').eq('course_id',State.teachCourseId),
         sb.from('im_bank_items').select('id,points').in('id', Object.keys(gbIdset)),
-        sb.from('im_attendance_session').select('id,quiz_points,base_points').eq('course_id',State.teachCourseId),
-        sb.from('im_attendance_checkin').select('session_id,user_id,present,quiz_score')
+        sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id',State.teachCourseId),
+        sb.from('im_attendance_checkin').select('session_id,user_id,present,quiz_score'),
+        sb.from('im_enrollment').select('user_id,student_id,created_at').eq('course_id',State.teachCourseId)
       ]), 'assignments and arenas', 20000).then(function(ar){
         var aRows=ar[0].data?ar[0].data:[];
         var subs=ar[1].data?ar[1].data:[];
@@ -1814,8 +1831,9 @@ function renderGradebook(host){
         var attSessions=ar[5]&&ar[5].data?ar[5].data:[];
         var attAll=ar[6]&&ar[6].data?ar[6].data:[];
         var ckByStu={}; attAll.forEach(function(x){ if(!ckByStu[x.user_id]){ ckByStu[x.user_id]=[]; } ckByStu[x.user_id].push(x); });
+        var enrAt={}; var enrRows=ar[7]&&ar[7].data?ar[7].data:[]; enrRows.forEach(function(e){ var t=e.created_at?new Date(e.created_at).getTime():NaN; if(!isNaN(t)){ if(e.user_id){ enrAt[e.user_id]=t; } if(e.student_id){ enrAt[e.student_id]=t; } } });
         var attScoreOf={};
-        rows.forEach(function(rw){ var info=computeAttendanceScore(attSessions, ckByStu[rw.student_id]||[], c.att_presence_share); attScoreOf[rw.student_id]= info?info.score:null; });
+        rows.forEach(function(rw){ var info=computeAttendanceScore(attSessions, ckByStu[rw.student_id]||[], c.att_presence_share, enrAt[rw.student_id]); attScoreOf[rw.student_id]= info?info.score:null; });
         buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf,examPossible,attScoreOf);
       }, function(err){
         host.innerHTML='<div class="card empty">Could not load parts of the gradebook ('+esc(String(err&&err.message?err.message:err))+'). Exam and quiz scores may still be shown \u2014 try reloading.</div>';
@@ -5021,6 +5039,37 @@ function relDue(ms){
 // Lets a student add/edit the name their instructor sees in the roster and
 // gradebook. Signup never asked for a name, so existing students need this to
 // appear as anything but their email. Writes only the student’s OWN im_person row.
+function maybePromptName(){
+  if(State.guest || !State.user){ return; }
+  if(State.role==='professor' || State.role==='admin'){ return; }
+  if(State.profile && State.profile.full_name){ return; }
+  if(document.getElementById('pnModal')){ return; }
+  var m=document.createElement('div'); m.className='modal-bg'; m.id='pnModal';
+  m.innerHTML='<div class="modal" style="max-width:440px;"><h2 style="margin-bottom:6px;">Welcome! What\u2019s your name?</h2>'+
+    '<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Your instructor sees you by name in the roster and gradebook. Please enter your full name (first and last).</div>'+
+    '<input id="pnInput" autocomplete="name" placeholder="Jane Q. Student" style="width:100%;margin-bottom:6px;">'+
+    '<div id="pnMsg" style="font-size:12px;min-height:1em;margin-bottom:10px;"></div>'+
+    '<div class="inline-actions" style="justify-content:flex-end;gap:8px;"><button class="btn btn-ghost btn-sm" id="pnLater">Later</button><button class="btn btn-primary" id="pnSave">Save</button></div></div>';
+  document.body.appendChild(m);
+  var input=document.getElementById('pnInput'); if(input){ input.focus(); }
+  function close(){ if(m&&m.parentNode){ m.parentNode.removeChild(m); } }
+  document.getElementById('pnLater').addEventListener('click', close);
+  function doSave(){
+    var v=input.value.trim(); var msg=document.getElementById('pnMsg');
+    if(!v){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Please type your name.'; } return; }
+    var btn=document.getElementById('pnSave'); btn.disabled=true;
+    if(!State.profile){ State.profile={}; }
+    sb.from('im_person').update({ full_name: v }).eq('user_id', State.user.id).then(function(res){
+      btn.disabled=false;
+      if(res && res.error){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save: '+res.error.message; } return; }
+      State.profile.full_name=v; close();
+      if(typeof renderHomeNameCard==='function'){ renderHomeNameCard(); }
+    }, function(err){ btn.disabled=false; if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save your name. Please try again.'; } });
+  }
+  document.getElementById('pnSave').addEventListener('click', doSave);
+  if(input){ input.addEventListener('keydown', function(e){ if(e.key==='Enter'){ doSave(); } }); }
+}
+
 function renderHomeNameCard(){
   var host=$('homeNameCard'); if(!host){ return; }
   if(State.guest || !State.user){ host.innerHTML=''; return; }
@@ -5808,8 +5857,9 @@ function computeWeightedGrade(callback){
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring').eq('course_id', courseId).eq('is_published', true),
-    sb.from('im_attendance_session').select('id,quiz_points,base_points').eq('course_id', courseId),
-    sb.from('im_attendance_checkin').select('session_id,present,quiz_score').eq('user_id', uid)
+    sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id', courseId),
+    sb.from('im_attendance_checkin').select('session_id,present,quiz_score').eq('user_id', uid),
+    sb.from('im_enrollment').select('created_at').eq('course_id', courseId).eq('user_id', uid).maybeSingle()
   ]).then(function(r){
     var course = r[0].data; if (!course) { callback(null); return; }
     var prog = r[1].data ? r[1].data : [];
@@ -5818,7 +5868,8 @@ function computeWeightedGrade(callback){
     var attSessions = r[4].data ? r[4].data : [];
     var attCheckins = r[5].data ? r[5].data : [];
     var W = { reading:Number(course.weight_reading), quizzes:Number(course.weight_quizzes), arenas:Number(course.weight_arenas), midterm:Number(course.weight_midterm), final:Number(course.weight_final), attendance:Number(course.weight_attendance)||0 };
-    var attInfo = computeAttendanceScore(attSessions, attCheckins, course.att_presence_share);
+    var enrAtMs = (r[6] && r[6].data && r[6].data.created_at) ? new Date(r[6].data.created_at).getTime() : null;
+    var attInfo = computeAttendanceScore(attSessions, attCheckins, course.att_presence_share, enrAtMs);
     var chaptersRead=0, quizSum=0, quizN=0, quizzesPassed=0;
     prog.forEach(function(p){ if(p.reading_done){ chaptersRead++; } if(p.quiz_passed){ quizzesPassed++; } if(p.quiz_score!==null&&p.quiz_score!==undefined){ quizSum+=Number(p.quiz_score); quizN++; } });
     var reading = chaptersRead/14;
@@ -6762,14 +6813,16 @@ function loadCompletion() {
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring').eq('course_id', courseId).eq('is_published', true),
-    sb.from('im_attendance_session').select('id,quiz_points,base_points').eq('course_id', courseId),
-    sb.from('im_attendance_checkin').select('session_id,present,quiz_score').eq('user_id', uid)
+    sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id', courseId),
+    sb.from('im_attendance_checkin').select('session_id,present,quiz_score').eq('user_id', uid),
+    sb.from('im_enrollment').select('created_at').eq('course_id', courseId).eq('user_id', uid).maybeSingle()
   ]).then(function(r) {
     var course = r[0].data; if (!course) { host.innerHTML=''; return; }
     var prog = r[1].data ? r[1].data : [];
     var arenas = r[2].data ? r[2].data : [];
     var exams = r[3].data ? r[3].data : [];
-    var attInfo = computeAttendanceScore(r[4].data||[], r[5].data||[], course.att_presence_share);
+    var lpEnrMs = (r[6] && r[6].data && r[6].data.created_at) ? new Date(r[6].data.created_at).getTime() : null;
+    var attInfo = computeAttendanceScore(r[4].data||[], r[5].data||[], course.att_presence_share, lpEnrMs);
     var W = { reading:Number(course.weight_reading), quizzes:Number(course.weight_quizzes), arenas:Number(course.weight_arenas), midterm:Number(course.weight_midterm), final:Number(course.weight_final), attendance:Number(course.weight_attendance)||0 };
 
     // components (same definitions as the gradebook)
