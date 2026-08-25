@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-drop-revoked';
+var SA_BUILD = 'intro-micro-portal-2026-08-ta-btn-namesave';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1277,10 +1277,14 @@ function renderRoster(host){
   var c=findCourse(State.teachCourseId);
   host.innerHTML='<div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">'+
     '<div>Students join with code <span class="pill-code">'+esc(c.join_code)+'</span> in the student app.</div>'+
-    '<button class="btn btn-ghost btn-sm" id="addStudentBtn">+ Add student by email</button></div>'+
+    '<div class="inline-actions"><button class="btn btn-ghost btn-sm" id="addTaBtn">+ Add TA / co-instructor</button><button class="btn btn-ghost btn-sm" id="addStudentBtn">+ Add student by email</button></div></div>'+
     '<div id="rosterBody">'+loadingCard()+'</div>'+
     '<div id="staffPanel" style="margin-top:26px;"></div>';
   $('addStudentBtn').addEventListener('click', openAddStudent);
+  $('addTaBtn').addEventListener('click', function(){
+    var sp=$('staffPanel'); if(sp && sp.scrollIntoView){ sp.scrollIntoView({behavior:'smooth', block:'start'}); }
+    setTimeout(function(){ var e=$('stEmail'); if(e){ e.focus(); } }, 350);
+  });
   loadRoster();
   renderStaffPanel();
 }
@@ -5059,7 +5063,7 @@ function maybePromptName(){
     if(!v){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Please type your name.'; } return; }
     var btn=document.getElementById('pnSave'); btn.disabled=true;
     if(!State.profile){ State.profile={}; }
-    sb.from('im_person').update({ full_name: v }).eq('user_id', State.user.id).then(function(res){
+    sb.rpc('im_set_my_name',{ p_name: v }).then(function(res){
       btn.disabled=false;
       if(res && res.error){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save: '+res.error.message; } return; }
       State.profile.full_name=v; close();
@@ -5087,7 +5091,7 @@ function renderHomeNameCard(){
     if(!v){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Please type your name first.'; } return; }
     btn.disabled=true;
     if(!State.profile){ State.profile={}; }
-    sb.from('im_person').update({ full_name: v }).eq('user_id', State.user.id).then(function(res){
+    sb.rpc('im_set_my_name',{ p_name: v }).then(function(res){
       btn.disabled=false;
       if(res && res.error){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save: '+res.error.message; } return; }
       State.profile.full_name=v; renderHomeNameCard();
@@ -6935,7 +6939,7 @@ function getStudentName(cb) {
     var v = $('cnName').value.trim(); if (!v) { return; }
     if (!State.profile) { State.profile = {}; }
     State.profile.full_name = v;
-    sb.from('im_person').update({ full_name: v }).eq('user_id', State.user.id).then(function(){}, function(){});
+    sb.rpc('im_set_my_name',{ p_name: v }).then(function(){}, function(){});
     close(); cb(v);
   });
 }
