@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-attend-enroll-scope';
+var SA_BUILD = 'intro-micro-portal-2026-08-drop-revoked';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1414,7 +1414,7 @@ function loadRoster(){
     rows.forEach(function(r){
       var p=r.im_person?r.im_person:{};
       var nameKey=(p&&p.user_id)?p.user_id:(r.student_id||r.user_id||'');
-      var st=r.status==='active'?'<span class="tag green">active</span>':(r.status==='dropped'?'<span class="tag rose">dropped</span>':'<span class="tag dim">'+esc(r.status)+'</span>');
+      var st=r.status==='active'?'<span class="tag green">active</span>':((r.status==='revoked'||r.status==='dropped')?'<span class="tag rose">dropped</span>':'<span class="tag dim">'+esc(r.status)+'</span>');
       var ac=accomBy[r.student_id];
       var acLabel='—';
       if(ac && (Number(ac.time_multiplier)!==1 || Number(ac.extra_attempts)!==0)){
@@ -1467,8 +1467,8 @@ function loadRoster(){
     });
     Array.prototype.forEach.call($('rosterBody').querySelectorAll('[data-drop]'), function(b){
       b.addEventListener('click', function(){
-        var ns=b.getAttribute('data-st')==='active'?'dropped':'active';
-        var verb=ns==='dropped'?'Drop':'Reactivate';
+        var ns=b.getAttribute('data-st')==='active'?'revoked':'active';
+        var verb=ns==='revoked'?'Drop':'Reactivate';
         b.disabled=true;
         sb.from('im_enrollment').update({status:ns}).eq('id',b.getAttribute('data-drop')).select().then(function(res){
           b.disabled=false;
