@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-namesave-emailfix';
+var SA_BUILD = 'intro-micro-portal-2026-08-quiz-review-direct';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3119,12 +3119,14 @@ function renderGrading(host){
     '<div class="card" id="graderKeyCard" style="margin-bottom:16px;"></div>' +
     '<div class="card" id="workBrowser" style="margin-bottom:16px;"></div>' +
     '<div class="card" id="arenaAttemptsCard" style="margin-bottom:16px;"></div>' +
+    '<div class="card" id="quizWrittenCard" style="margin-bottom:16px;"></div>' +
     '<div id="gradingBody">' + loadingCard() + '</div>';
   if($('itemStatsBtn')){ $('itemStatsBtn').addEventListener('click', function(){ openItemStats(State.teachCourseId); }); }
   renderGraderKeyCard();
   renderWorkBrowser();
   renderArenaAttempts();
   loadPendingWritten();
+  loadPendingQuizWritten();
 }
 
 
@@ -3324,6 +3326,7 @@ function loadStudentWork(){
     }, function(){ $('wbBody').innerHTML='<div class="card empty">Could not load that submission.</div>'; });
     return;
   }
+  if(t==='quiz'){ loadQuizWorkDirect(sid, which); return; }
   var body;
   if(t==='exam'){ body={ action:'student_work', exam_id:which, student_id:sid }; }
   else if(t==='quiz'){ body={ action:'quiz_work', course_id:State.teachCourseId, student_id:sid }; if(which){ body.chapter=parseInt(which,10); } }
@@ -3338,6 +3341,194 @@ function loadStudentWork(){
   }, function(){ $('wbBody').innerHTML='<div class="card empty">Could not reach the grading service.</div>'; });
 }
 /* Exam + quiz share a layout: full question, both answers, points editor. */
+/* ============================================================================
+   DIRECT (no-edge-function) instructor review of graded CHAPTER-QUIZ work.
+   Chapter-quiz rows live in im_exam_attempt with exam_id NULL and store
+   generator_id + seed + submitted_value. We read them directly (RLS scopes to
+   the instructor's own course; requires the course_id backfill, im_61) and
+   regenerate each question locally with IMGenerators so we can show the prompt,
+   the student's answer, and the correct answer -- exactly how the arena
+   reviewer reads its tables directly, and how practice/attendance already
+   regenerate from a seed. Any score can be adjusted (written answers too); the
+   write goes straight to im_exam_attempt and the chapter quiz total is
+   recomputed so the gradebook stays in sync.
+   ============================================================================ */
+function loadQuizWorkDirect(sid, which){
+  var box=$('wbBody'); if(!box){ return; }
+  box.innerHTML=loadingCard();
+  if(typeof IMGenerators==='undefined' || !IMGenerators.generate){
+    box.innerHTML='<div class="card empty">The question engine isn’t loaded on this page — hard-refresh and try again.</div>'; return;
+  }
+  var chapWanted = which ? parseInt(which,10) : null;
+  sb.from('im_exam_attempt')
+    .select('id,generator_id,seed,submitted_value,is_correct,points_earned,graded_at,created_at,regrade_note,regraded_at')
+    .eq('student_id',sid).is('exam_id',null).not('generator_id','is',null)
+    .order('created_at',{ascending:true})
+    .then(function(res){
+      var b=$('wbBody'); if(!b){ return; }
+      if(res.error){ b.innerHTML='<div class="card empty">Could not load quiz work: '+esc(res.error.message)+'</div>'; return; }
+      var rows=res.data?res.data:[];
+      var items=[];
+      rows.forEach(function(r){
+        var gen=null; try{ gen=IMGenerators.generate(r.generator_id, Number(r.seed)); }catch(e){ gen=null; }
+        if(!gen){ return; }
+        if(chapWanted!==null && Number(gen.chapter)!==chapWanted){ return; }
+        var fig=null;
+        if(gen.figure && gen.figure.type){ fig=gen.figure; }
+        else if(gen.diagramSpec && typeof IMDiagrams!=='undefined'){ try{ var _svg=IMDiagrams.render(gen.diagramSpec); if(_svg && _svg.indexOf('<svg')>=0){ fig={ type:'svg', svg:_svg }; } }catch(e2){} }
+        items.push({ attempt_id:r.id, generator_id:r.generator_id, chapter:gen.chapter,
+          kind:gen.kind, prompt:gen.prompt, options:gen.options||[], answer:gen.answer,
+          rationale:gen.rationale, figure:fig, points:gen.points||1,
+          submitted:r.submitted_value, is_correct:r.is_correct, points_earned:r.points_earned,
+          graded_at:r.graded_at, regraded_at:r.regraded_at, regrade_note:r.regrade_note });
+      });
+      if(items.length===0){
+        b.innerHTML='<div class="card empty">No graded-quiz questions found for this student'+(chapWanted!==null?(' in Chapter '+chapWanted):'')+'. If you just ran the course-id backfill (im_61), confirm it matched this student’s enrollment.</div>'; return;
+      }
+      items.sort(function(a,bb){ return (a.chapter||0)-(bb.chapter||0); });
+      b.innerHTML=quizWorkDirectHtml(items);
+      wireQuizWorkDirect(b, sid);
+    }, function(){ var b=$('wbBody'); if(b){ b.innerHTML='<div class="card empty">Could not load quiz work.</div>'; } });
+}
+function quizWorkDirectHtml(items){
+  var html='<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Every graded-quiz question this student answered, regenerated from the stored seed — the prompt, their answer, and the correct answer. You can adjust any score (written answers can be scored here too); saving updates the chapter quiz total.</div>';
+  var i, it, yours, correct, mark, yi, ci;
+  for(i=0;i<items.length;i++){
+    it=items[i];
+    if(it.kind==='mc'){
+      yi=parseInt(it.submitted,10); ci=parseInt(it.answer,10);
+      yours=(!isNaN(yi) && it.options[yi]!==undefined)?it.options[yi]:((it.submitted===null||it.submitted==='')?'(no answer)':String(it.submitted));
+      correct=(!isNaN(ci) && it.options[ci]!==undefined)?it.options[ci]:String(it.answer);
+    } else if(it.kind==='short'){
+      yours=(it.submitted===null||it.submitted==='')?'(left blank)':String(it.submitted);
+      correct=(it.answer!==undefined&&it.answer!==null&&String(it.answer)!=='')?String(it.answer):'— written answer (grade by hand)';
+    } else {
+      yours=(it.submitted===null||it.submitted==='')?'(no answer)':String(it.submitted);
+      correct=(it.answer!==undefined&&it.answer!==null)?String(it.answer):'—';
+    }
+    mark = it.is_correct===true?'<span class="tag green">correct</span>':(it.is_correct===false?'<span class="tag rose">incorrect</span>':'<span class="tag dim">ungraded</span>');
+    html+='<div class="card" style="margin-bottom:12px;padding:14px;">'+
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">'+
+        '<div style="font-weight:500;">Q'+(i+1)+' · Ch '+esc(String(it.chapter))+' <span class="tag dim">'+esc(it.kind==='short'?'written':(it.kind==='mc'?'MC':'numeric'))+'</span></div><div>'+mark+'</div></div>'+
+      '<div style="margin-bottom:8px;">'+esc(it.prompt||'')+'</div>'+
+      (it.figure?renderFigure(it.figure):'')+
+      '<div style="font-size:13px;margin-top:6px;"><b>Student answered:</b> '+esc(yours)+'</div>'+
+      '<div style="font-size:13px;"><b>Correct answer:</b> '+esc(correct)+'</div>'+
+      (it.rationale?('<div style="font-size:12.5px;color:var(--text-muted);margin-top:6px;">'+esc(it.rationale)+'</div>'):'')+
+      (it.regraded_at?('<div style="font-size:12px;color:var(--amber);margin-top:6px;">Score adjusted'+(it.regrade_note?(' — '+esc(it.regrade_note)):'')+'</div>'):'')+
+      '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">'+
+        '<div class="field" style="margin:0;width:120px;"><label>Points (/ '+esc(String(it.points))+')</label><input id="qw_'+esc(String(it.attempt_id))+'" type="number" step="0.5" min="0" max="'+esc(String(it.points))+'" value="'+esc(String(it.points_earned===null||it.points_earned===undefined?'':it.points_earned))+'"></div>'+
+        '<div class="field" style="margin:0;flex:1;min-width:160px;"><label>Reason (optional)</label><input id="qn_'+esc(String(it.attempt_id))+'" placeholder="e.g. partial credit"></div>'+
+        '<button class="btn btn-ghost btn-sm" data-qwsave="'+esc(String(it.attempt_id))+'" data-max="'+esc(String(it.points))+'" data-chapter="'+esc(String(it.chapter))+'">Save score</button>'+
+      '</div></div>';
+  }
+  return html;
+}
+function wireQuizWorkDirect(box, sid){
+  Array.prototype.forEach.call(box.querySelectorAll('[data-qwsave]'), function(b){
+    b.addEventListener('click', function(){
+      var attemptId=b.getAttribute('data-qwsave');
+      var maxPts=parseFloat(b.getAttribute('data-max'));
+      var chapter=parseInt(b.getAttribute('data-chapter'),10);
+      var e=$('wbMsg');
+      var pts=parseFloat($('qw_'+attemptId).value);
+      if(isNaN(pts) || pts<0){ if(e){ e.textContent='Enter a valid point value.'; e.className='msg err'; } return; }
+      if(!isNaN(maxPts) && pts>maxPts){ if(e){ e.textContent='Points cannot exceed '+maxPts+'.'; e.className='msg err'; } return; }
+      var note=$('qn_'+attemptId).value.replace(/^\s+|\s+$/g,'');
+      b.disabled=true; b.textContent='Saving…';
+      var patch={ points_earned:pts, is_correct:(!isNaN(maxPts)&&maxPts>0&&pts>=maxPts), graded_at:new Date().toISOString(), regraded_at:new Date().toISOString(), regraded_by:State.user.id };
+      if(note){ patch.regrade_note=note; }
+      sb.from('im_exam_attempt').update(patch).eq('id',attemptId).then(function(res){
+        if(res.error){ b.disabled=false; b.textContent='Save score'; if(e){ e.textContent='Could not save: '+res.error.message; e.className='msg err'; } return; }
+        sb.rpc('im_recompute_quiz_score',{ p_student:sid, p_course:State.teachCourseId, p_chapter:chapter }).then(function(){
+          if(e){ e.textContent='Saved and chapter quiz total recalculated.'; e.className='msg ok'; }
+          loadQuizWorkDirect(sid, $('wbWhich')?$('wbWhich').value:'');
+        }, function(){
+          if(e){ e.textContent='Score saved (chapter total not recalculated).'; e.className='msg ok'; }
+          loadQuizWorkDirect(sid, $('wbWhich')?$('wbWhich').value:'');
+        });
+      }, function(){ b.disabled=false; b.textContent='Save score'; if(e){ e.textContent='Could not save the score.'; e.className='msg err'; } });
+    });
+  });
+}
+
+/* ---- Course-wide queue: WRITTEN answers from graded chapter quizzes ---------
+   Chapter-quiz written (short-answer) items are stored in im_exam_attempt with
+   exam_id NULL and NO im_assessment_item row, so they never appeared in the
+   exam "Grade Written" panel. Here we read the course's ungraded quiz rows,
+   regenerate each to find the written ones, and let staff score them by hand
+   (a direct im_exam_attempt write; no edge function). */
+function loadPendingQuizWritten(){
+  var card=$('quizWrittenCard'); if(!card){ return; }
+  card.innerHTML='<h3 style="font-size:15px;margin-bottom:6px;">Written quiz answers to grade</h3>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Short-answer questions students wrote on graded chapter quizzes. These are scored by hand — read the answer, enter points, and save (the chapter quiz total updates). Auto-graded quiz questions are not listed here.</div>'+
+    '<div id="quizWrittenBody">'+loadingCard()+'</div>';
+  if(typeof IMGenerators==='undefined' || !IMGenerators.generate){ $('quizWrittenBody').innerHTML='<div class="card empty">Question engine not loaded — hard-refresh.</div>'; return; }
+  if(!State.teachCourseId){ $('quizWrittenBody').innerHTML='<div class="card empty">Select a course first.</div>'; return; }
+  sb.from('im_exam_attempt')
+    .select('id,student_id,generator_id,seed,submitted_value,points_earned,graded_at,created_at')
+    .eq('course_id',State.teachCourseId).is('exam_id',null).is('graded_at',null).not('generator_id','is',null)
+    .order('created_at',{ascending:true})
+    .then(function(res){
+      var body=$('quizWrittenBody'); if(!body){ return; }
+      if(res.error){ body.innerHTML='<div class="card empty">Could not load: '+esc(res.error.message)+'</div>'; return; }
+      var rows=res.data?res.data:[];
+      var items=[];
+      rows.forEach(function(r){
+        var gen=null; try{ gen=IMGenerators.generate(r.generator_id, Number(r.seed)); }catch(e){ gen=null; }
+        if(!gen || gen.kind!=='short'){ return; }
+        items.push({ attempt_id:r.id, student_id:r.student_id, chapter:gen.chapter, prompt:gen.prompt, points:gen.points||1, model:gen.answer, rationale:gen.rationale, submitted:r.submitted_value });
+      });
+      if(items.length===0){ body.innerHTML='<div class="card empty">No ungraded written quiz answers right now.</div>'; return; }
+      var sids=[]; items.forEach(function(it){ if(sids.indexOf(it.student_id)<0){ sids.push(it.student_id); } });
+      sb.from('im_person').select('user_id,email,full_name').in('user_id',sids).then(function(pr){
+        var nameById={}; (pr.data||[]).forEach(function(p){ nameById[p.user_id]=p.full_name||p.email||p.user_id; });
+        body.innerHTML=quizWrittenHtml(items, nameById); wireQuizWritten(body);
+      }, function(){ body.innerHTML=quizWrittenHtml(items, {}); wireQuizWritten(body); });
+    }, function(){ var b=$('quizWrittenBody'); if(b){ b.innerHTML='<div class="card empty">Could not load written quiz answers.</div>'; } });
+}
+function quizWrittenHtml(items, nameById){
+  var html='', i, it, who;
+  for(i=0;i<items.length;i++){
+    it=items[i];
+    who=nameById[it.student_id]||it.student_id;
+    html+='<div class="card" style="margin-bottom:12px;padding:14px;">'+
+      '<div style="font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.06em;">Ch '+esc(String(it.chapter))+' · '+esc(who)+' · '+esc(String(it.points))+' pt'+(Number(it.points)===1?'':'s')+'</div>'+
+      '<div style="font-size:14px;color:var(--text-bright);margin:4px 0 8px;">'+esc(it.prompt||'')+'</div>'+
+      '<div style="font-size:13px;background:var(--bg2);border-radius:8px;padding:10px;white-space:pre-wrap;">'+(it.submitted?esc(it.submitted):'<span style="color:var(--text-subtle);">(left blank)</span>')+'</div>'+
+      (it.model?('<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><b>Model / notes:</b> '+esc(String(it.model))+'</div>'):(it.rationale?('<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">'+esc(it.rationale)+'</div>'):''))+
+      '<div style="display:flex;gap:10px;align-items:flex-end;margin-top:12px;flex-wrap:wrap;">'+
+        '<div class="field" style="max-width:120px;margin:0;"><label>Score (/'+esc(String(it.points))+')</label><input class="qwScore" data-id="'+esc(String(it.attempt_id))+'" type="number" min="0" max="'+esc(String(it.points))+'" step="0.5" value=""></div>'+
+        '<div class="field" style="flex:1;min-width:200px;margin:0;"><label>Feedback (optional)</label><input class="qwFb" data-id="'+esc(String(it.attempt_id))+'" placeholder="Optional comment"></div>'+
+        '<button class="btn btn-primary btn-sm" data-qw2save="'+esc(String(it.attempt_id))+'" data-max="'+esc(String(it.points))+'" data-chapter="'+esc(String(it.chapter))+'" data-student="'+esc(String(it.student_id))+'">Save score</button>'+
+      '</div></div>';
+  }
+  return html;
+}
+function wireQuizWritten(box){
+  Array.prototype.forEach.call(box.querySelectorAll('[data-qw2save]'), function(b){
+    b.addEventListener('click', function(){
+      var attemptId=b.getAttribute('data-qw2save');
+      var maxPts=parseFloat(b.getAttribute('data-max'));
+      var chapter=parseInt(b.getAttribute('data-chapter'),10);
+      var sid=b.getAttribute('data-student');
+      var sc=box.querySelector('.qwScore[data-id="'+attemptId+'"]');
+      var fb=box.querySelector('.qwFb[data-id="'+attemptId+'"]');
+      if(!sc || sc.value===''){ alert('Enter a score before saving.'); return; }
+      var pts=parseFloat(sc.value);
+      if(isNaN(pts) || pts<0){ alert('Enter a valid score.'); return; }
+      if(!isNaN(maxPts) && pts>maxPts){ alert('Score cannot exceed '+maxPts+'.'); return; }
+      b.disabled=true; b.textContent='Saving…';
+      var patch={ points_earned:pts, is_correct:(!isNaN(maxPts)&&maxPts>0&&pts>=maxPts), graded_at:new Date().toISOString(), regraded_at:new Date().toISOString(), regraded_by:State.user.id };
+      if(fb && fb.value){ patch.regrade_note=fb.value; }
+      sb.from('im_exam_attempt').update(patch).eq('id',attemptId).then(function(res){
+        if(res.error){ b.disabled=false; b.textContent='Save score'; alert('Could not save: '+res.error.message); return; }
+        sb.rpc('im_recompute_quiz_score',{ p_student:sid, p_course:State.teachCourseId, p_chapter:chapter }).then(function(){ loadPendingQuizWritten(); }, function(){ loadPendingQuizWritten(); });
+      }, function(){ b.disabled=false; b.textContent='Save score'; alert('Could not save the score.'); });
+    });
+  });
+}
+
 function questionWorkHtml(items, t, sid){
   var html='', i, it, yours, correct, mark;
   for(i=0;i<items.length;i++){
