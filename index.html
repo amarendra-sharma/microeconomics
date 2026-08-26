@@ -760,7 +760,7 @@ function enterApp(user){
   // restore any nav items a prior guest session hid
   Array.prototype.forEach.call(document.querySelectorAll('.nav-item'), function(n){ n.style.display=''; });
   Array.prototype.forEach.call(document.querySelectorAll('.nav-group'), function(g){ if(g.id!=='teachGroup' && g.id!=='adminGroup'){ g.style.display=''; } });
-  $('sideUser').textContent=user.email;
+  $('sideUser').textContent=(State.profile&&State.profile.full_name)?State.profile.full_name:user.email;
   var role=State.role;
   $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : 'Student');
   if(role==='professor' || role==='admin'){ show($('teachGroup')); } else { hide($('teachGroup')); }
@@ -5066,7 +5066,7 @@ function maybePromptName(){
     sb.rpc('im_set_my_name',{ p_name: v }).then(function(res){
       btn.disabled=false;
       if(res && res.error){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save: '+res.error.message; } return; }
-      State.profile.full_name=v; close();
+      State.profile.full_name=v; if($('sideUser')){$('sideUser').textContent=v;} close();
       if(typeof renderHomeNameCard==='function'){ renderHomeNameCard(); }
     }, function(err){ btn.disabled=false; if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save your name. Please try again.'; } });
   }
@@ -5094,7 +5094,7 @@ function renderHomeNameCard(){
     sb.rpc('im_set_my_name',{ p_name: v }).then(function(res){
       btn.disabled=false;
       if(res && res.error){ if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save: '+res.error.message; } return; }
-      State.profile.full_name=v; renderHomeNameCard();
+      State.profile.full_name=v; if($('sideUser')){$('sideUser').textContent=v;} renderHomeNameCard();
     }, function(e){ btn.disabled=false; if(msg){ msg.style.color='var(--rose)'; msg.textContent='Could not save your name. Please try again.'; } });
   }); }
 }
@@ -6938,7 +6938,7 @@ function getStudentName(cb) {
   $('cnOk').addEventListener('click', function(){
     var v = $('cnName').value.trim(); if (!v) { return; }
     if (!State.profile) { State.profile = {}; }
-    State.profile.full_name = v;
+    State.profile.full_name = v; if($('sideUser')){$('sideUser').textContent=v;}
     sb.rpc('im_set_my_name',{ p_name: v }).then(function(){}, function(){});
     close(); cb(v);
   });
