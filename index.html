@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-ta-btn-namesave';
+var SA_BUILD = 'intro-micro-portal-2026-08-namesave-emailfix';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -760,7 +760,7 @@ function enterApp(user){
   // restore any nav items a prior guest session hid
   Array.prototype.forEach.call(document.querySelectorAll('.nav-item'), function(n){ n.style.display=''; });
   Array.prototype.forEach.call(document.querySelectorAll('.nav-group'), function(g){ if(g.id!=='teachGroup' && g.id!=='adminGroup'){ g.style.display=''; } });
-  $('sideUser').textContent=(State.profile&&State.profile.full_name)?State.profile.full_name:user.email;
+  $('sideUser').textContent=imRealName()||user.email;
   var role=State.role;
   $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : 'Student');
   if(role==='professor' || role==='admin'){ show($('teachGroup')); } else { hide($('teachGroup')); }
@@ -5043,10 +5043,18 @@ function relDue(ms){
 // Lets a student add/edit the name their instructor sees in the roster and
 // gradebook. Signup never asked for a name, so existing students need this to
 // appear as anything but their email. Writes only the student’s OWN im_person row.
+function imRealName(){
+  var p=State.profile; if(!p||!p.full_name){ return ''; }
+  var n=String(p.full_name).trim(); if(!n){ return ''; }
+  var em=(State.user&&State.user.email)?String(State.user.email).trim().toLowerCase():'';
+  if(em && n.toLowerCase()===em){ return ''; }
+  if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(n)){ return ''; }
+  return n;
+}
 function maybePromptName(){
   if(State.guest || !State.user){ return; }
   if(State.role==='professor' || State.role==='admin'){ return; }
-  if(State.profile && State.profile.full_name){ return; }
+  if(imRealName()){ return; }
   if(document.getElementById('pnModal')){ return; }
   var m=document.createElement('div'); m.className='modal-bg'; m.id='pnModal';
   m.innerHTML='<div class="modal" style="max-width:440px;"><h2 style="margin-bottom:6px;">Welcome! What\u2019s your name?</h2>'+
@@ -5077,7 +5085,7 @@ function maybePromptName(){
 function renderHomeNameCard(){
   var host=$('homeNameCard'); if(!host){ return; }
   if(State.guest || !State.user){ host.innerHTML=''; return; }
-  var have=(State.profile && State.profile.full_name) ? State.profile.full_name : '';
+  var have=imRealName();
   if(have){ if($('welcomeTitle')){ $('welcomeTitle').textContent='Welcome back, '+have.split(' ')[0]; } host.innerHTML=''; return; }
   host.innerHTML='<div class="card" style="border-left:3px solid var(--amber,#d97706);margin-bottom:16px;">'+
     '<div style="font-weight:600;margin-bottom:4px;">Add your name</div>'+
@@ -6924,7 +6932,7 @@ function renderCompletion(host, course, comps, total) {
 
 /* ---- Certificate: matches the MacroNations completion certificate ---- */
 function getStudentName(cb) {
-  var nm = (State.profile && State.profile.full_name) ? State.profile.full_name : '';
+  var nm = imRealName();
   if (nm) { cb(nm); return; }
   // ask once, save to profile
   var m = document.createElement('div'); m.className = 'modal-bg';
