@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-quiz-review-direct';
+var SA_BUILD = 'intro-micro-portal-2026-08-ai-grade-written';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2877,7 +2877,7 @@ function openSubmissions(asgId, title, points){
     var enr=res[1].data?res[1].data:[];
     var subBy={}; subs.forEach(function(s){ subBy[s.student_id]=s; });
     if(enr.length===0){ panel.innerHTML='<div class="card empty">No enrolled students yet.</div>'; return; }
-    var html='<table class="data-table"><caption class="sr-only">Submissions for '+esc(title)+'</caption><thead><tr><th scope="col">Student</th><th scope="col">Submission</th><th scope="col">Score (/'+points+')</th><th scope="col">Feedback</th><th scope="col"></th></tr></thead><tbody>';
+    var html='<div class="inline-actions" style="justify-content:flex-end;margin-bottom:8px;"><button class="btn btn-ghost btn-sm" id="aiAllAsg-'+asgId+'">AI-grade all submitted</button></div><div id="aiMsgAsg-'+asgId+'" class="msg"></div><table class="data-table"><caption class="sr-only">Submissions for '+esc(title)+'</caption><thead><tr><th scope="col">Student</th><th scope="col">Submission</th><th scope="col">Score (/'+points+')</th><th scope="col">Feedback</th><th scope="col"></th></tr></thead><tbody>';
     enr.forEach(function(e){
       var p=e.im_person?e.im_person:{};
       var s=subBy[e.student_id];
@@ -2887,7 +2887,7 @@ function openSubmissions(asgId, title, points){
       html+='<tr><th scope="row" style="font-weight:500;">'+who+'</th><td>'+submitted+'</td>'+
         '<td>'+(s?('<label class="sr-only" for="sc-'+e.student_id+'">Score for '+who+'</label><input id="sc-'+e.student_id+'" type="number" min="0" max="'+points+'" value="'+(s.score!==null&&s.score!==undefined?s.score:'')+'" style="width:70px;" data-sid="'+sid+'">'):'\u2014')+'</td>'+
         '<td>'+(s?('<label class="sr-only" for="fb-'+e.student_id+'">Feedback for '+who+'</label><textarea id="fb-'+e.student_id+'" rows="2" style="width:200px;" data-sid="'+sid+'">'+esc(s.feedback||'')+'</textarea>'):'\u2014')+'</td>'+
-        '<td>'+(s?('<button class="btn btn-primary btn-sm" data-savegrade="'+e.student_id+'">Save</button>'):'')+'</td></tr>';
+        '<td>'+(s?('<button class="btn btn-ghost btn-sm" data-aigrade="'+e.student_id+'" data-subid="'+sid+'">Run AI</button> <button class="btn btn-primary btn-sm" data-savegrade="'+e.student_id+'">Save</button>'):'')+'</td></tr>';
     });
     html+='</tbody></table>';
     panel.innerHTML=html;
@@ -2903,8 +2903,46 @@ function openSubmissions(asgId, title, points){
         if(!rr.error){ setTimeout(function(){ b.textContent='Save'; }, 1500); }
       });
     }); });
+    wireAsgAI(panel, asgId, points);
   });
 }
+
+/* AI grading for assignment submissions: per-row "Run AI" (and "AI-grade all
+   submitted") call im-ai-grade action propose_assignment, which reads the
+   student's text_response + link + uploaded file (PDF/image natively, .docx/.txt
+   as text) and proposes a score + feedback. We fill the score/feedback inputs;
+   the instructor reviews and clicks Save (the existing im_submission write). */
+function wireAsgAI(panel, asgId, points){
+  var msg=$('aiMsgAsg-'+asgId);
+  function runOne(btn, cb){
+    var studentKey=btn.getAttribute('data-aigrade');
+    var subId=btn.getAttribute('data-subid');
+    if(!subId){ if(cb){cb();} return; }
+    btn.disabled=true; var old=btn.textContent; btn.textContent='AI…';
+    sb.functions.invoke('im-ai-grade',{ body:{ action:'propose_assignment', submission_id:subId } }).then(function(fn){
+      btn.disabled=false; btn.textContent=old;
+      var d=fn.data;
+      if(fn.error || !d || d.error){ var m=(d&&d.message)?d.message:((d&&d.error)?d.error:(fn.error?fn.error.message:'AI grading failed')); if(msg){ msg.className='msg err'; msg.textContent=m; } if(cb){cb();} return; }
+      var pr=d.proposal||{};
+      var sc=$('sc-'+studentKey), fb=$('fb-'+studentKey);
+      if(sc){ sc.value=(pr.points!==undefined&&pr.points!==null?pr.points:''); }
+      if(fb){ fb.value=(pr.feedback||''); }
+      if(msg){ msg.className='msg ok'; msg.textContent='AI suggested a score — review and Save.'; }
+      if(cb){ cb(); }
+    }, function(){ btn.disabled=false; btn.textContent=old; if(msg){ msg.className='msg err'; msg.textContent='Could not reach the AI grader.'; } if(cb){cb();} });
+  }
+  Array.prototype.forEach.call(panel.querySelectorAll('[data-aigrade]'), function(b){ b.addEventListener('click', function(){ runOne(b, null); }); });
+  var allBtn=$('aiAllAsg-'+asgId);
+  if(allBtn){ allBtn.addEventListener('click', function(){
+    var btns=Array.prototype.slice.call(panel.querySelectorAll('[data-aigrade]'));
+    if(btns.length===0){ return; }
+    allBtn.disabled=true; allBtn.textContent='Grading…';
+    var i=0;
+    function next(){ if(i>=btns.length){ allBtn.disabled=false; allBtn.textContent='AI-grade all submitted'; if(msg){ msg.className='msg ok'; msg.textContent='AI graded all submissions — review each score and Save (or adjust first).'; } return; } runOne(btns[i++], next); }
+    next();
+  }); }
+}
+
 
 function renderExams(host){
   if(!needCourse(host)){ return; }
@@ -3453,15 +3491,17 @@ function wireQuizWorkDirect(box, sid){
 }
 
 /* ---- Course-wide queue: WRITTEN answers from graded chapter quizzes ---------
-   Chapter-quiz written (short-answer) items are stored in im_exam_attempt with
-   exam_id NULL and NO im_assessment_item row, so they never appeared in the
-   exam "Grade Written" panel. Here we read the course's ungraded quiz rows,
-   regenerate each to find the written ones, and let staff score them by hand
-   (a direct im_exam_attempt write; no edge function). */
+   Chapter-quiz written (short-answer) items live in im_exam_attempt with
+   exam_id NULL and NO im_assessment_item row, so they never reached the exam
+   "Grade Written" panel. We read the course's ungraded quiz rows, regenerate
+   each to find the written ones, and grade them here -- by hand or with the AI
+   grader (im-ai-grade action propose_quiz_item, which takes the regenerated
+   prompt + model answer since these rows have no stored item). */
+var QW_ITEMS = {};
 function loadPendingQuizWritten(){
   var card=$('quizWrittenCard'); if(!card){ return; }
   card.innerHTML='<h3 style="font-size:15px;margin-bottom:6px;">Written quiz answers to grade</h3>'+
-    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Short-answer questions students wrote on graded chapter quizzes. These are scored by hand — read the answer, enter points, and save (the chapter quiz total updates). Auto-graded quiz questions are not listed here.</div>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Short-answer questions students wrote on graded chapter quizzes. Use <b>Run AI</b> for a suggested score you can accept or override, or grade by hand — then Save (the chapter quiz total updates). Auto-graded quiz questions are not listed here.</div>'+
     '<div id="quizWrittenBody">'+loadingCard()+'</div>';
   if(typeof IMGenerators==='undefined' || !IMGenerators.generate){ $('quizWrittenBody').innerHTML='<div class="card empty">Question engine not loaded — hard-refresh.</div>'; return; }
   if(!State.teachCourseId){ $('quizWrittenBody').innerHTML='<div class="card empty">Select a course first.</div>'; return; }
@@ -3473,11 +3513,13 @@ function loadPendingQuizWritten(){
       var body=$('quizWrittenBody'); if(!body){ return; }
       if(res.error){ body.innerHTML='<div class="card empty">Could not load: '+esc(res.error.message)+'</div>'; return; }
       var rows=res.data?res.data:[];
+      QW_ITEMS={};
       var items=[];
       rows.forEach(function(r){
         var gen=null; try{ gen=IMGenerators.generate(r.generator_id, Number(r.seed)); }catch(e){ gen=null; }
         if(!gen || gen.kind!=='short'){ return; }
-        items.push({ attempt_id:r.id, student_id:r.student_id, chapter:gen.chapter, prompt:gen.prompt, points:gen.points||1, model:gen.answer, rationale:gen.rationale, submitted:r.submitted_value });
+        var it={ attempt_id:r.id, student_id:r.student_id, chapter:gen.chapter, prompt:gen.prompt, points:gen.points||1, model:(gen.answer!==undefined&&gen.answer!==null?String(gen.answer):(gen.rationale||'')), submitted:r.submitted_value };
+        QW_ITEMS[r.id]=it; items.push(it);
       });
       if(items.length===0){ body.innerHTML='<div class="card empty">No ungraded written quiz answers right now.</div>'; return; }
       var sids=[]; items.forEach(function(it){ if(sids.indexOf(it.student_id)<0){ sids.push(it.student_id); } });
@@ -3488,7 +3530,8 @@ function loadPendingQuizWritten(){
     }, function(){ var b=$('quizWrittenBody'); if(b){ b.innerHTML='<div class="card empty">Could not load written quiz answers.</div>'; } });
 }
 function quizWrittenHtml(items, nameById){
-  var html='', i, it, who;
+  var html='<div class="inline-actions" style="justify-content:flex-end;margin-bottom:8px;"><button class="btn btn-ghost btn-sm" id="qwAiAll">Run AI on all</button></div>';
+  var i, it, who;
   for(i=0;i<items.length;i++){
     it=items[i];
     who=nameById[it.student_id]||it.student_id;
@@ -3496,16 +3539,41 @@ function quizWrittenHtml(items, nameById){
       '<div style="font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.06em;">Ch '+esc(String(it.chapter))+' · '+esc(who)+' · '+esc(String(it.points))+' pt'+(Number(it.points)===1?'':'s')+'</div>'+
       '<div style="font-size:14px;color:var(--text-bright);margin:4px 0 8px;">'+esc(it.prompt||'')+'</div>'+
       '<div style="font-size:13px;background:var(--bg2);border-radius:8px;padding:10px;white-space:pre-wrap;">'+(it.submitted?esc(it.submitted):'<span style="color:var(--text-subtle);">(left blank)</span>')+'</div>'+
-      (it.model?('<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><b>Model / notes:</b> '+esc(String(it.model))+'</div>'):(it.rationale?('<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">'+esc(it.rationale)+'</div>'):''))+
+      (it.model?('<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><b>Model / notes:</b> '+esc(String(it.model))+'</div>'):'')+
+      '<div id="qwai-'+esc(String(it.attempt_id))+'" style="margin-top:8px;"></div>'+
       '<div style="display:flex;gap:10px;align-items:flex-end;margin-top:12px;flex-wrap:wrap;">'+
         '<div class="field" style="max-width:120px;margin:0;"><label>Score (/'+esc(String(it.points))+')</label><input class="qwScore" data-id="'+esc(String(it.attempt_id))+'" type="number" min="0" max="'+esc(String(it.points))+'" step="0.5" value=""></div>'+
         '<div class="field" style="flex:1;min-width:200px;margin:0;"><label>Feedback (optional)</label><input class="qwFb" data-id="'+esc(String(it.attempt_id))+'" placeholder="Optional comment"></div>'+
+        '<button class="btn btn-ghost btn-sm" data-qwai="'+esc(String(it.attempt_id))+'">Run AI</button>'+
         '<button class="btn btn-primary btn-sm" data-qw2save="'+esc(String(it.attempt_id))+'" data-max="'+esc(String(it.points))+'" data-chapter="'+esc(String(it.chapter))+'" data-student="'+esc(String(it.student_id))+'">Save score</button>'+
       '</div></div>';
   }
   return html;
 }
+function qwRunAI(attemptId, cb){
+  var it=QW_ITEMS[attemptId]; if(!it){ if(cb){cb();} return; }
+  var area=$('qwai-'+attemptId);
+  if(area){ area.innerHTML='<span style="font-size:12px;color:var(--text-muted);"><span class="spinner"></span> AI grading…</span>'; }
+  sb.functions.invoke('im-ai-grade',{ body:{ action:'propose_quiz_item', attempt_id:attemptId, prompt:it.prompt, model_answer:it.model, points:it.points } }).then(function(fn){
+    var d=fn.data;
+    if(fn.error || !d || d.error){ var m=(d&&d.message)?d.message:((d&&d.error)?d.error:(fn.error?fn.error.message:'AI grading failed')); if(area){ area.innerHTML='<span style="font-size:12px;color:var(--rose);">'+esc(m)+'</span>'; } if(cb){cb();} return; }
+    var pr=d.proposal||{};
+    if(area){ area.innerHTML='<div style="padding:8px 10px;border-radius:8px;background:rgba(124,92,255,.08);border:1px solid rgba(124,92,255,.22);"><div style="font-size:11px;color:var(--violet);text-transform:uppercase;letter-spacing:.06em;">AI suggestion</div><div style="font-size:13px;margin-top:2px;">Score: '+esc(String(pr.points))+' / '+esc(String(it.points))+'</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:3px;">'+esc(pr.feedback||'')+'</div></div>'; }
+    var sc=document.querySelector('.qwScore[data-id="'+attemptId+'"]'); var fb=document.querySelector('.qwFb[data-id="'+attemptId+'"]');
+    if(sc && sc.value===''){ sc.value=pr.points; }
+    if(fb && !fb.value){ fb.value=pr.feedback||''; }
+    if(cb){ cb(); }
+  }, function(){ if(area){ area.innerHTML='<span style="font-size:12px;color:var(--rose);">Could not reach the AI grader.</span>'; } if(cb){cb();} });
+}
 function wireQuizWritten(box){
+  Array.prototype.forEach.call(box.querySelectorAll('[data-qwai]'), function(b){ b.addEventListener('click', function(){ qwRunAI(b.getAttribute('data-qwai'), null); }); });
+  var allB=$('qwAiAll');
+  if(allB){ allB.addEventListener('click', function(){
+    var ids=Object.keys(QW_ITEMS); if(ids.length===0){ return; }
+    allB.disabled=true; allB.textContent='Grading…';
+    var i=0; function next(){ if(i>=ids.length){ allB.disabled=false; allB.textContent='Run AI on all'; return; } qwRunAI(ids[i++], next); }
+    next();
+  }); }
   Array.prototype.forEach.call(box.querySelectorAll('[data-qw2save]'), function(b){
     b.addEventListener('click', function(){
       var attemptId=b.getAttribute('data-qw2save');
