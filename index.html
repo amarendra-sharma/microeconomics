@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-ai-grade-written';
+var SA_BUILD = 'intro-micro-portal-2026-08-direct-enroll';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1651,8 +1651,11 @@ function openAccommodation(studentId, email, existing){
 
 function openAddStudent(){
   var m=document.createElement('div'); m.className='modal-bg';
-  m.innerHTML='<div class="modal"><h2>Add student</h2><div id="asMsg" class="msg"></div>'+
-    '<div class="field"><label>Student email (they must already have a Intro Micro account)</label><input id="asEmail" type="email" placeholder="student@university.edu"></div>'+
+  m.innerHTML='<div class="modal"><h2>Add student</h2>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Enrolls the student right away. If they don’t have an account yet, one is created for them — already activated, no confirmation email needed — and you’ll get a temporary password to pass along.</div>'+
+    '<div id="asMsg" class="msg"></div>'+
+    '<div class="field"><label>Student email</label><input id="asEmail" type="email" placeholder="student@binghamton.edu"></div>'+
+    '<div class="field"><label>Full name (optional)</label><input id="asName" placeholder="Student name"></div>'+
     '<div class="inline-actions" style="justify-content:flex-end;"><button class="btn btn-ghost" id="asCancel">Cancel</button><button class="btn btn-primary" id="asAdd">Enroll</button></div></div>';
   $('modalHost').appendChild(m);
   function close(){ $('modalHost').innerHTML=''; }
@@ -1660,19 +1663,32 @@ function openAddStudent(){
   m.addEventListener('click', function(e){ if(e.target===m){ close(); } });
   $('asAdd').addEventListener('click', function(){
     var email=$('asEmail').value.trim().toLowerCase();
-    if(!email){ return; }
-    $('asAdd').disabled=true;
-    sb.from('im_person').select('user_id').eq('email',email).maybeSingle().then(function(res){
-      if(res.error || !res.data){ asErr('No account found with that email. The student must sign up first.'); $('asAdd').disabled=false; return; }
-      var sid=res.data.user_id;
-      sb.from('im_enrollment').insert({course_id:State.teachCourseId, student_id:sid, status:'active'}).then(function(ins){
-        $('asAdd').disabled=false;
-        if(ins.error){ asErr(ins.error.message); return; }
-        close(); loadRoster();
-      });
-    });
+    var name=$('asName')?$('asName').value.trim():'';
+    if(!email || email.indexOf('@')<1){ asErr('Enter a valid email address.'); return; }
+    $('asAdd').disabled=true; asMsgInfo('Enrolling…');
+    sb.functions.invoke('im-enroll-student',{ body:{ action:'enroll', course_id:State.teachCourseId, email:email, full_name:name } }).then(function(res){
+      $('asAdd').disabled=false;
+      var d=res.data;
+      if(res.error || !d || d.error){ asErr((d&&d.error)?d.error:(res.error?res.error.message:'Could not enroll the student.')); return; }
+      loadRoster();
+      if(d.temp_password){ asDone(email, d.temp_password, d.created); }
+      else { asMsgOk('Enrolled '+email+' — they already had an account and can sign in with their existing password.'); setTimeout(close, 2200); }
+    }, function(err){ $('asAdd').disabled=false; asErr('Could not reach the enroll service: '+String(err&&err.message?err.message:err)); });
   });
-  function asErr(t){ var e=$('asMsg'); e.textContent=t; e.className='msg err'; }
+  function asDone(email, pw, created){
+    var box=m.querySelector('.modal');
+    box.innerHTML='<h2>Student enrolled</h2>'+
+      '<div class="msg ok">'+(created?'Account created and enrolled.':'Account activated and enrolled.')+'</div>'+
+      '<div style="font-size:13px;color:var(--text-muted);margin:6px 0;">Give this student their sign-in details. They can change the password later from the sign-in screen.</div>'+
+      '<div class="field"><label>Email</label><input value="'+esc(email)+'" readonly></div>'+
+      '<div class="field"><label>Temporary password</label><input id="asPw" value="'+esc(pw)+'" readonly style="font-family:monospace;font-weight:600;"></div>'+
+      '<div class="inline-actions" style="justify-content:flex-end;"><button class="btn btn-ghost" id="asCopy">Copy password</button><button class="btn btn-primary" id="asDoneBtn">Done</button></div>';
+    var cp=box.querySelector('#asCopy'); if(cp){ cp.addEventListener('click', function(){ var f=box.querySelector('#asPw'); if(f){ f.select(); try{ document.execCommand('copy'); cp.textContent='Copied'; }catch(e){} } }); }
+    var db=box.querySelector('#asDoneBtn'); if(db){ db.addEventListener('click', close); }
+  }
+  function asErr(t){ var e=$('asMsg'); if(e){ e.textContent=t; e.className='msg err'; } }
+  function asMsgInfo(t){ var e=$('asMsg'); if(e){ e.textContent=t; e.className='msg'; } }
+  function asMsgOk(t){ var e=$('asMsg'); if(e){ e.textContent=t; e.className='msg ok'; } }
 }
 
 /* ====================================================================
@@ -3785,7 +3801,7 @@ function renderGraderKeyCard(){
       var pv=$('gkProv')?$('gkProv').value:'anthropic';
       if(pv==='google'){
         if($('gkKey')){ $('gkKey').placeholder='AIza...'; }
-        if($('gkModel')){ $('gkModel').placeholder='gemini-2.5-flash'; }
+        if($('gkModel')){ $('gkModel').placeholder='gemini-3.6-flash'; }
         if($('gkHint')){ $('gkHint').innerHTML='Get a FREE Gemini key at aistudio.google.com (Get API key) \u2014 no credit card. Note: free-tier requests may be used by Google to improve its models, so avoid sending sensitive data.'; }
       } else {
         if($('gkKey')){ $('gkKey').placeholder='sk-ant-...'; }
