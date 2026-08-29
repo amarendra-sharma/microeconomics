@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-direct-enroll';
+var SA_BUILD = 'intro-micro-portal-2026-08-grades-detail';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1991,6 +1991,7 @@ function openGradeBreakdown(courseId, studentId, studentName, g, weights, graded
     '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">The weighted calculation that produces this student\u2019s final grade, then the correct-answer counts behind each component. Practice questions are not counted.</p>'+
     '<div id="bdWeighted"></div>'+
     '<div id="bdBody" style="margin-top:14px;">'+loadingCard()+'</div>'+
+    '<div id="bdItems" style="margin-top:14px;"></div>'+
     '<div class="inline-actions" style="margin-top:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="bdClose">Close</button></div></div>';
   document.body.appendChild(ov);
   function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
@@ -2039,6 +2040,8 @@ function openGradeBreakdown(courseId, studentId, studentName, g, weights, graded
   } else {
     wbox.innerHTML='';
   }
+
+  loadStudentItemDetail(courseId, studentId);
 
   // ---- correct-answer counts per exam / quiz (server-side, matches gradebook) ----
   sb.rpc('im_grade_breakdown',{ p_course_id:courseId, p_student_id:studentId }).then(function(r){
@@ -4866,7 +4869,7 @@ function resolveAccess() {
   // which previously made the waiver query below get skipped, leaving a waived
   // student permanently locked. Fetch enrollments, then check waivers on those
   // exact courses.
-  return sb.from('im_enrollment').select('course_id,status').eq('student_id', uid).eq('status','active').then(function(enrRes){
+  return sb.from('im_enrollment').select('course_id,status').eq('student_id', uid).then(function(enrRes){
     var enrRows = enrRes && enrRes.data ? enrRes.data : [];
     var enrolledCourseIds = enrRows.map(function(r){ return r.course_id; }).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
     var waiverP = enrolledCourseIds.length
@@ -4880,10 +4883,12 @@ function resolveAccess() {
           State.hasAccess = true; return true;
         }
       }
-      // 2) an active enrollment grants access. (Time-based expiry, if ever needed,
-      //    lives on the subscription record, not im_enrollment -- this table has
-      //    no expires_at column, so we do not read one here.)
-      State.hasAccess = enrRows.length > 0;
+      // 2) An enrollment that is active OR comped grants access (paid, comped,
+      //    or instructor-granted). Pending/expired/revoked do not. (Time-based
+      //    expiry, if ever needed, lives on the subscription record.)
+      var granted=false;
+      for(var gi=0; gi<enrRows.length; gi++){ var gst=enrRows[gi].status; if(gst==='active'||gst==='comped'){ granted=true; break; } }
+      State.hasAccess = granted;
       return State.hasAccess;
     });
   }).catch(function(){ State.hasAccess = false; return false; });
@@ -6177,7 +6182,7 @@ function computeWeightedGrade(callback){
       });
       var wsum=comps.reduce(function(s,x){return s+x[2];},0);
       var total=wsum>0?comps.reduce(function(s,x){return s+x[1]*x[2];},0)/wsum:0;
-      callback({ course:course, comps:comps, total:total });
+      callback({ course:course, comps:comps, total:total, perChapter:prog, perArena:arenaBreakdown(arenas) });
     }
     if (examIds.length===0){ finish({}); return; }
     sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,created_at').eq('student_id',uid).in('exam_id',examIds).not('graded_at','is',null).then(function(ea){
@@ -6298,11 +6303,83 @@ function gradeSummaryCard(summary){
   h+='</div>';
   return h;
 }
+// Per-item breakdown cards (Quizzes by chapter, Reading, Arenas) shown on the
+// student's My Grades page and reused in the instructor's per-student Detail.
+// Reads a normalized {perChapter:[{chapter,reading_done,quiz_passed,quiz_score}],
+// perArena:[{title,correct,total,pct}]} object — no extra queries on the student
+// side (My Grades already fetches this data).
+function gradeItemBreakdownCards(summary){
+  if(!summary){ return ''; }
+  var per = summary.perChapter || [];
+  var arenas = summary.perArena || [];
+  var byCh={}; per.forEach(function(p){ byCh[p.chapter]=p; });
+  var html='';
+  // Quizzes by chapter
+  html+='<div class="card" style="margin-bottom:16px;"><h3 style="font-size:15px;margin-bottom:10px;">Quizzes by chapter</h3>';
+  var anyQuiz=false, qrows='';
+  for(var ch=1; ch<=14; ch++){
+    var p=byCh[ch];
+    var hasScore = p && p.quiz_score!==null && p.quiz_score!==undefined;
+    var passed = p && p.quiz_passed;
+    if(hasScore || passed){ anyQuiz=true; }
+    var scoreCell = hasScore ? '<b>'+Math.round(Number(p.quiz_score)*100)+'%</b>' : (passed ? '<b>passed</b>' : '<span style="color:var(--text-subtle);">not taken</span>');
+    qrows+='<tr><th scope="row" style="font-weight:500;">Chapter '+ch+'</th><td>'+scoreCell+'</td></tr>';
+  }
+  if(anyQuiz){ html+='<table class="data-table"><caption class="sr-only">Quiz score by chapter</caption><thead><tr><th scope="col">Chapter</th><th scope="col">Quiz score</th></tr></thead><tbody>'+qrows+'</tbody></table>'; }
+  else { html+='<div style="font-size:13px;color:var(--text-subtle);">No chapter quizzes taken yet.</div>'; }
+  html+='</div>';
+  // Reading progress
+  html+='<div class="card" style="margin-bottom:16px;"><h3 style="font-size:15px;margin-bottom:10px;">Reading progress</h3>';
+  var readN=0; per.forEach(function(p){ if(p.reading_done){ readN++; } });
+  html+='<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">'+readN+' of 14 chapters marked read.</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
+  for(var c2=1;c2<=14;c2++){ var pp=byCh[c2]; var done=pp&&pp.reading_done; html+='<span class="tag '+(done?'green':'dim')+'" title="Chapter '+c2+'">'+c2+(done?' ✓':'')+'</span>'; }
+  html+='</div></div>';
+  // Arenas
+  html+='<div class="card" style="margin-bottom:16px;"><h3 style="font-size:15px;margin-bottom:10px;">Arenas</h3>';
+  if(!arenas || arenas.length===0){ html+='<div style="font-size:13px;color:var(--text-subtle);">No arenas played yet.</div>'; }
+  else {
+    html+='<table class="data-table"><caption class="sr-only">Arena scores</caption><thead><tr><th scope="col">Arena</th><th scope="col">Score</th><th scope="col">Cases</th></tr></thead><tbody>';
+    arenas.forEach(function(a){ html+='<tr><th scope="row" style="font-weight:500;">'+esc(a.title)+'</th><td><b>'+Math.round(a.pct*100)+'%</b></td><td style="color:var(--text-subtle);">'+a.correct+' / '+a.total+'</td></tr>'; });
+    html+='</tbody></table>';
+  }
+  html+='</div>';
+  return html;
+}
+// Instructor Detail: load one student's per-chapter quiz/reading + per-arena
+// (via the security-definer im_student_detail RPC) plus their assignment scores.
+function loadStudentItemDetail(courseId, studentId){
+  var box=$('bdItems'); if(!box){ return; }
+  box.innerHTML='';
+  sb.rpc('im_student_detail',{ p_course_id:courseId, p_student_id:studentId }).then(function(r){
+    var b=$('bdItems'); if(!b){ return; }
+    if(r && r.error){ b.innerHTML='<div class="card empty" style="margin-top:0;">Per-item quiz / reading / arena detail isn’t available yet — deploy im_63_student_detail.sql.</div>'; loadStudentAsgDetail(courseId, studentId); return; }
+    var d=r.data||{}; var per=d.chapters||[]; var arenaRows=d.arenas||[];
+    b.innerHTML=gradeItemBreakdownCards({ perChapter:per, perArena:arenaBreakdown(arenaRows) });
+    loadStudentAsgDetail(courseId, studentId);
+  }, function(){ var b=$('bdItems'); if(b){ b.innerHTML='<div class="card empty" style="margin-top:0;">Could not load per-item detail.</div>'; } loadStudentAsgDetail(courseId, studentId); });
+}
+function loadStudentAsgDetail(courseId, studentId){
+  Promise.all([
+    sb.from('im_assignment').select('id,title,points').eq('course_id',courseId).eq('is_published',true),
+    sb.from('im_submission').select('assignment_id,score,feedback,submitted_at,graded_at').eq('student_id',studentId)
+  ]).then(function(res){
+    var box=$('bdItems'); if(!box){ return; }
+    var asgs=res[0].data?res[0].data:[]; var subs=res[1].data?res[1].data:[];
+    if(asgs.length===0){ return; }
+    var subBy={}; subs.forEach(function(s){ subBy[s.assignment_id]=s; });
+    var html='<div class="card" style="margin-bottom:4px;"><h3 style="font-size:15px;margin-bottom:10px;">Assignments</h3>';
+    html+='<table class="data-table"><caption class="sr-only">Assignment scores</caption><thead><tr><th scope="col">Assignment</th><th scope="col">Score</th><th scope="col">Status</th></tr></thead><tbody>';
+    asgs.forEach(function(a){ var s=subBy[a.id]; var graded=s&&s.score!==null&&s.score!==undefined; var score=graded?(s.score+' / '+a.points):'—'; var status=!s?'Not submitted':(graded?'Graded':'Submitted · awaiting grade'); html+='<tr><th scope="row" style="font-weight:500;">'+esc(a.title)+'</th><td>'+score+'</td><td>'+status+'</td></tr>'; });
+    html+='</tbody></table></div>';
+    box.insertAdjacentHTML('beforeend', html);
+  }, function(){});
+}
 function fmtPts(n){ if(n===null||n===undefined){ return '\u2014'; } var r=Math.round(n*10)/10; return (r===Math.floor(r))?String(Math.floor(r)):String(r); }
 function renderMyGrades(host, exams, examScore, examPossible, asgs, subBy, summary){
   var html='';
   // Weighted grade summary (reading + quizzes + arenas + exams) at the top.
   html+=gradeSummaryCard(summary);
+  html+=gradeItemBreakdownCards(summary);
   // Exams table
   html+='<div class="card" style="margin-bottom:16px;"><h3 style="font-size:15px;margin-bottom:10px;">Exams</h3>';
   if(exams.length===0){ html+='<div style="font-size:13px;color:var(--text-subtle);">No exams yet.</div>'; }
