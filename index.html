@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-grades-detail';
+var SA_BUILD = 'intro-micro-portal-2026-08-arena-cta';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -5119,7 +5119,7 @@ function renderArenas() {
         '<div class="c-title">' + esc(ARENA_TITLE[slug]) + '</div>' +
         '<div class="c-meta mono">' + esc(slug) + '</div>' + pill;
       if (file && !locked && !capped) {
-        div.addEventListener('click', function() { window.open(file, '_blank'); });
+        div.addEventListener('click', function() { window.open(file + (State.hasAccess ? ((file.indexOf('?')>=0?'&':'?')+'enrolled=1') : ''), '_blank'); });
       } else if (file && locked) {
         div.style.opacity = '.7';
         div.addEventListener('click', function() { openSubscribePrompt(ARENA_TITLE[slug] + ' arena'); });

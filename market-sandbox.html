@@ -836,7 +836,11 @@ function boot() {
     document.body.appendChild(stamp);
   } catch (e) {}
   var sub = document.getElementById("sb-subscribe");
-  if (sub) { sub.setAttribute("href", SUBSCRIBE_URL); }
+  if (sub) { sub.setAttribute("href", "index.html"); }  /* send to the portal; it uses the admin Platform-settings checkout link */
+  /* Enrolled students open this from the portal with ?enrolled=1 -- they have
+     paid or been waived, so hide the subscribe call-to-action to avoid confusion.
+     Guests / public visitors have no flag and still see the funnel. */
+  if (/[?&]enrolled=1/.test(location.search)) { var _cta = document.querySelector(".sb-cta"); if (_cta) { _cta.style.display = "none"; } }
   loadDetective();
   renderStats();
   initLab();
