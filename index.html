@@ -435,7 +435,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-08-arena-cta';
+var SA_BUILD = 'intro-micro-portal-2026-09-quiz-avg';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1884,7 +1884,7 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
   }
   var computed=rows.map(function(r){
     var reading=r.chapters_read/14;
-    var quizzes=(r.avg_quiz_score!==null&&r.avg_quiz_score!==undefined&&r.avg_quiz_score>0)?Number(r.avg_quiz_score):(r.quizzes_passed/14);
+    var quizzes=(r.quizzes_scored&&Number(r.quizzes_scored)>0)?(Number(r.quiz_score_sum)/14):(r.quizzes_passed/14); // avg quiz score /14, matches student My Grades (im_64)
     var arenas=(arenaScoreOf[r.student_id]!==undefined)?arenaScoreOf[r.student_id]:0;
     // renormalize weights over available components
     var attend=(attScoreOf[r.student_id]!==undefined&&attScoreOf[r.student_id]!==null)?attScoreOf[r.student_id]:null;
