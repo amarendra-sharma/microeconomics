@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-quizdone';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -741,6 +741,90 @@ function signOut(){
 /* ====================================================================
    BOOTSTRAP
    ==================================================================== */
+/* ====================================================================
+   COURSE STAFF (TA) SUPPORT  -- build: ta-safe
+   Detects whether the signed-in user is course staff (a TA / co-instructor in
+   im_course_staff) and, if so, grants a SCOPED set of teaching tools for the
+   course(s) they staff. ALL declarations here are top-level (global) so that
+   enterApp can call them. Server-side reads are gated by SECURITY DEFINER RLS
+   (im_66). These functions never block app entry: on any error the user simply
+   enters as their base role, exactly as before this feature existed.
+   ==================================================================== */
+function loadStaffThenEnter(user){
+  // Load this user's own course-staff rows BEFORE entering, so nav is decided
+  // with staff status known. Failure must never block entry.
+  try{
+    sb.from('im_course_staff')
+      .select('course_id,role,can_view_roster,can_grade,can_view_grades')
+      .eq('user_id', user.id)
+      .then(function(res){ State.staff = (res && res.data) ? res.data : []; enterApp(user); },
+            function(){ State.staff = []; enterApp(user); });
+  }catch(e){ State.staff = []; enterApp(user); }
+}
+function computeTA(){
+  // TA only when NOT already professor/admin and holding >=1 course-staff row.
+  var rows = State.staff || [];
+  var isStaff = rows.length > 0;
+  State.isTA = isStaff && State.role !== 'professor' && State.role !== 'admin';
+  var vr=false, gr=false, vg=false;
+  for(var i=0;i<rows.length;i++){
+    if(rows[i].can_view_roster){ vr=true; }
+    if(rows[i].can_grade){ gr=true; }
+    if(rows[i].can_view_grades){ vg=true; }
+  }
+  State.staffCaps = { roster:vr, grade:gr, grades:vg };
+  return State.isTA;
+}
+function taAllowedViews(){
+  // Map granted caps to teaching views. Intentionally small: TAs get the tools
+  // their caps justify and nothing owner-level (no courses/materials/announce).
+  var caps = State.staffCaps || {};
+  var v = [];
+  if(caps.roster){ v.push('roster'); }
+  if(caps.grade){ v.push('grading'); v.push('assignments'); v.push('exams'); }
+  if(caps.grade || caps.grades){ v.push('gradebook'); }
+  return v;
+}
+function taCourseIds(){
+  var rows = State.staff || [], ids=[];
+  for(var i=0;i<rows.length;i++){ var c=rows[i].course_id; if(c && ids.indexOf(c)<0){ ids.push(c); } }
+  return ids;
+}
+function applyTANav(restrict){
+  // In TA mode, hide the teaching nav items the TA's caps do not cover. When
+  // not restricting (professor/admin), ensure every teaching item is visible.
+  var g = $('teachGroup'); if(!g){ return; }
+  var allowed = restrict ? taAllowedViews() : null;
+  Array.prototype.forEach.call(g.querySelectorAll('.nav-item'), function(it){
+    if(!restrict){ it.style.display=''; return; }
+    var v = it.getAttribute('data-view');
+    it.style.display = (allowed.indexOf(v)>=0) ? '' : 'none';
+  });
+}
+function loadCoursesTA(){
+  // Load the course(s) this TA staffs into State.courses + the picker, so the
+  // teaching views (which key off State.teachCourseId) work. Staff can read
+  // im_course via the existing im_course_staff read policy.
+  var ids = taCourseIds();
+  if(!ids.length){ State.courses=[]; return Promise.resolve(); }
+  return sb.from('im_course').select('*').in('id', ids).order('created_at',{ascending:false}).then(function(res){
+    State.courses = (res && res.data) ? res.data : [];
+    var sel=$('coursePick');
+    if(sel){
+      sel.innerHTML='';
+      if(!State.courses.length){
+        var o0=document.createElement('option'); o0.value=''; o0.textContent='(no courses)'; sel.appendChild(o0);
+        State.teachCourseId=null;
+      } else {
+        State.courses.forEach(function(c){
+          var o=document.createElement('option'); o.value=c.id; o.textContent=c.title+(c.term?(' · '+c.term):''); sel.appendChild(o);
+        });
+        if(!State.teachCourseId || !findCourse(State.teachCourseId)){ State.teachCourseId=State.courses[0].id; }
+        sel.value=State.teachCourseId;
+      }
+    }
+  }, function(){ State.courses=[]; });
+}
 function onSignedIn(user){
   State.user=user;
   hide($('authScreen'));
@@ -752,7 +836,7 @@ function onSignedIn(user){
   }).then(function(res){
     var prof = res.data ? res.data : { role:'student' };
     State.profile=prof; State.role = prof.role ? prof.role : 'student';
-    enterApp(user);
+    loadStaffThenEnter(user);
   });
 }
 // Everyone enters as a student. Instructors/admins get extra nav groups.
@@ -764,10 +848,13 @@ function enterApp(user){
   Array.prototype.forEach.call(document.querySelectorAll('.nav-group'), function(g){ if(g.id!=='teachGroup' && g.id!=='adminGroup'){ g.style.display=''; } });
   $('sideUser').textContent=imRealName()||user.email;
   var role=State.role;
-  $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : 'Student');
-  if(role==='professor' || role==='admin'){ show($('teachGroup')); } else { hide($('teachGroup')); }
+  var isTA=false; try{ isTA = computeTA(); }catch(e){ isTA=false; }
+  $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : (isTA ? 'Teaching Assistant' : 'Student'));
+  if(role==='professor' || role==='admin'){ show($('teachGroup')); applyTANav(false); }
+  else if(isTA){ show($('teachGroup')); applyTANav(true); }
+  else { hide($('teachGroup')); }
   if(role==='admin'){ show($('adminGroup')); } else { hide($('adminGroup')); }
-  if(role!=='professor' && role!=='admin'){ setTimeout(maybePromptName, 700); }
+  if(role!=='professor' && role!=='admin' && !isTA){ setTimeout(maybePromptName, 700); }
   // student self-study provisioning (own course for practice/progress)
   // platform settings (needed by the subscribe prompt for everyone) + access
   loadPlatformSettings();
@@ -786,6 +873,8 @@ function enterApp(user){
                  /(#|&)att=[0-9a-f\-]+:[0-9a-f]+/i.test(window.location.hash||'');
   if(role==='professor' || role==='admin'){
     loadCourses().then(function(){ switchView(wantsAtt?'stuattend':'home'); });
+  } else if(isTA){
+    loadCoursesTA().then(function(){ switchView(wantsAtt?'stuattend':'home'); });
   } else {
     switchView(wantsAtt?'stuattend':'home');
   }
@@ -890,7 +979,7 @@ function viewAllowed(view){
   if(State.guest){ return (view==='home' || view==='chapters' || view==='arenas'); }
   if(isStudentView(view)){ return true; }
   if(ADMIN_VIEWS.indexOf(view)>=0){ return State.role==='admin'; }
-  if(INSTRUCTOR_VIEWS.indexOf(view)>=0){ return State.role==='professor' || State.role==='admin'; }
+  if(INSTRUCTOR_VIEWS.indexOf(view)>=0){ if(State.isTA){ return taAllowedViews().indexOf(view)>=0; } return State.role==='professor' || State.role==='admin'; }
   return true;
 }
 function switchView(view){
@@ -1378,10 +1467,32 @@ function addStaff(){
 function saveStaffPerms(userId){
   var e=$('stMsg'), payload=collectCaps('st_'+userId+'_');
   payload.action='set_staff_perms'; payload.course_id=State.teachCourseId; payload.user_id=userId;
+  e.textContent='Saving\u2026'; e.className='msg';
+  // supabase-js hides a non-2xx function error inside res.error.context (the raw
+  // Response). Pull the {error} body out of it so the exact server reason shows
+  // on screen instead of the generic fallback.
+  function showErr(status, msg){ e.textContent = 'Save failed'+(status?(' ('+status+')'):'')+': '+msg; e.className='msg err'; }
   sb.functions.invoke('im-admin-roster',{ body:payload }).then(function(res){
     var d=res.data;
+    if(res && res.error){
+      var status = (res.error.context && res.error.context.status) ? res.error.context.status : '';
+      var basic = res.error.message ? res.error.message : String(res.error);
+      try{ console.error('set_staff_perms error', res.error, res.error.context); }catch(_){}
+      var ctx = res.error.context;
+      if(ctx && typeof ctx.text === 'function'){
+        ctx.text().then(function(t){
+          var srv = t; try{ var j=JSON.parse(t); if(j && j.error){ srv=j.error; } }catch(_){}
+          showErr(status, srv || basic);
+        }, function(){ showErr(status, basic); });
+      } else { showErr(status, basic); }
+      return;
+    }
     if(!d || d.error){ e.textContent=(d&&d.error)?d.error:'Could not save permissions.'; e.className='msg err'; return; }
     e.textContent='Permissions updated.'; e.className='msg ok';
+  }, function(err){
+    e.textContent='Could not reach the roster service: ' + String(err&&err.message?err.message:err);
+    e.className='msg err';
+    try{ console.error('set_staff_perms invoke rejected', err); }catch(_){}
   });
 }
 function removeStaff(userId, btn){
@@ -4863,7 +4974,7 @@ function resolveAccess() {
   // Cache on State.hasAccess. Staff always have access. Otherwise true if the
   // student has an active, non-expired subscription OR a super-admin fee waiver
   // (course-wide or per-student) in any enrolled course.
-  if (State.role === 'admin' || State.role === 'professor') { State.hasAccess = true; return Promise.resolve(true); }
+  if (State.role === 'admin' || State.role === 'professor' || State.isTA) { State.hasAccess = true; return Promise.resolve(true); }
   var uid = State.user.id;
   // Load the student's OWN active enrollments directly. We must NOT rely on
   // State.courses here: that list is only populated for instructors/admins
