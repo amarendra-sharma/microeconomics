@@ -430,7 +430,7 @@
 <script src="im-diagrams.js"></script>
 <script src="im-generators.js?v=allcourses2"></script>
 <script src="im-econ160.js?v=econ160banks1"></script>
-<script src="im-quiz.js?v=submit-guard"></script>
+<script src="im-quiz.js?v=io-trim"></script>
 <script src="im-backend.js?v=attendance2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
@@ -438,7 +438,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-submit-guard';
+var SA_BUILD = 'intro-micro-portal-2026-09-io-trim';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -7531,6 +7531,9 @@ try { console.log('%cIntro Micro build: ' + SA_BUILD + ' | tree renderer present
       sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
       try { sessionStorage.setItem('mn_sid', sid); } catch (e) {}
     }
+    var _pvDone=false; try{ _pvDone=!!sessionStorage.getItem('mn_pv_logged'); }catch(e){}
+    if(_pvDone){ return; }
+    try{ sessionStorage.setItem('mn_pv_logged','1'); }catch(e){}
     fetch(SUPA_URL + '/rest/v1/page_views', {
       method: 'POST',
       headers: {

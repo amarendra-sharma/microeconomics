@@ -271,6 +271,11 @@
   }
 
   function logPractice(chapter, q, wasCorrect) {
+    /* DISABLED 2026-09 to cut disk-IO writes: this ungraded practice-analytics
+       insert was the #2 write source (~4.3k rows) and nothing in the app reads
+       it. Re-enable with sampling (e.g. add: if (Math.random() >= 0.1) return;)
+       if practice analytics are wanted later. */
+    return;
     if (!global.IMBackend || !global.IMBackend.isOnline || !global.IMBackend.isOnline()) { return; }
     try {
       var sb = global.IMBackend._sb ? global.IMBackend._sb() : null;
