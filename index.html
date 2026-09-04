@@ -267,7 +267,7 @@
       <div class="nav-item" data-view="mymaterials"><span class="ico">&#127916;</span> Materials</div>
       <div class="nav-item" data-view="chapters"><span class="ico">&#128214;</span> Textbook</div>
       <div class="nav-item" data-view="arenas"><span class="ico">&#127918;</span> Arenas</div>
-      <div class="nav-item" data-view="practice"><span class="ico">&#9997;</span> Practice</div>
+      <div class="nav-item" data-view="practice"><span class="ico">&#9997;</span> Quizzes</div>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Track</div>
@@ -355,12 +355,11 @@
 
     <!-- PRACTICE -->
     <section id="view-practice" class="hidden">
-      <h1 class="page-title">Practice Questions</h1>
-      <div class="page-sub">Server-graded items. Each question is generated just for you — answers never reach the browser.</div>
+      <h1 class="page-title">Quizzes</h1>
+      <div class="page-sub">Take a graded quiz for each chapter. Questions are generated per student and graded on the server; answers never reach the browser.</div>
       <div class="practice-bar">
         <select class="sel" id="practiceChapter"></select>
-        <button class="btn btn-primary" id="newQuestionBtn" style="width:auto;">New question</button>
-        <button class="btn btn-ghost" id="takeQuizBtn" style="width:auto;" title="A short graded quiz for this chapter. Counts toward your grade. Answers are never shown.">Take graded quiz</button>
+        <button class="btn btn-primary" id="takeQuizBtn" style="width:auto;" title="A short graded quiz for this chapter. Counts toward your grade. Answers are never shown.">Take graded quiz</button>
         <button class="btn btn-ghost" id="reviewQuizBtn" style="width:auto;" title="After the quiz deadline, review the questions you missed on this chapter's graded quiz.">Review missed questions</button>
       </div>
       <div id="practiceArea"></div>
@@ -430,15 +429,15 @@
 <script src="im-diagrams.js"></script>
 <script src="im-generators.js?v=allcourses2"></script>
 <script src="im-econ160.js?v=econ160banks1"></script>
-<script src="im-quiz.js?v=io-trim"></script>
-<script src="im-backend.js?v=attendance2"></script>
+<script src="im-quiz.js?v=quizdone"></script>
+<script src="im-backend.js?v=quizdone"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 /* ====================================================================
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-io-trim';
+var SA_BUILD = 'intro-micro-portal-2026-09-quizdone';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -949,7 +948,7 @@ function switchView(view){
     if(view==='myexams'){ loadMyExams(); }
     if(view==='myassignments'){ loadMyAssignments(); }
     if(view==='mygrades'){ loadMyGrades(); }
-    if(view==='practice'){ var pa=$('practiceArea'); if(pa && pa.innerHTML.trim()===''){ loadNewQuestion(); } }
+    if(view==='practice'){ /* practice drill retired; use Take graded quiz */ }
     return;
   }
   rerenderCurrentView();

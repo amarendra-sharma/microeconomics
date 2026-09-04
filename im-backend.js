@@ -207,7 +207,7 @@
         if (!r.ok) { cb({ offline: true }); return null; }
         return r.json();
       }).then(function (data) {
-        if (data) { cb(data); }
+        cb(data || { ok: true, noBody: true });
       }).catch(function () { cb({ offline: true }); });
     }).catch(function () { cb({ offline: true }); });
   }
@@ -236,7 +236,7 @@
         if (!r.ok) { cb({ ok: false, offline: true }); return null; }
         return r.json();
       }).then(function (data) {
-        if (data) { cb(data); }
+        cb(data || { ok: true, noBody: true });
       }).catch(function () { cb({ ok: false, offline: true }); });
     }).catch(function () { cb({ ok: false, offline: true }); });
   }

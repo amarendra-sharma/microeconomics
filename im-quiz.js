@@ -398,10 +398,13 @@
       gradeFn(isExam ? (spec.examId || spec.title) : chapter, payload, function (result) {
         var label = isExam ? "Exam" : "Quiz";
         if (result && result.ok && !result.offline) {
+          var scoreLine = (typeof result.score !== "undefined" && result.score !== null && typeof result.total !== "undefined" && result.total !== null)
+            ? ("Score: " + result.score + " / " + result.total + (result.pending ? " (" + result.pending + " written answer(s) pending review)" : ""))
+            : "Your answers were recorded \u2014 see My Grades for your score.";
           out.innerHTML = "<div style='background:#f0fdf4;border:1px solid #166534;border-radius:10px;padding:16px;'>" +
-            "<div style='font-weight:700;color:#166534;font-size:16px;'>" + label + " submitted</div>" +
-            "<div style='color:#334155;margin-top:6px;'>Score: " + result.score + " / " + result.total +
-            (result.pending ? " (" + result.pending + " written answer(s) pending review)" : "") + "</div></div>";
+            "<div style='font-weight:700;color:#166534;font-size:16px;'>" + label + " submitted \u2713</div>" +
+            "<div style='color:#334155;margin-top:6px;'>" + scoreLine + "</div></div>";
+          submit.style.display = "none";
         } else if (result && result.offline) {
           out.innerHTML = "<div style='background:#fef2f2;border:1px solid #991b1b;border-radius:10px;padding:16px;'>" +
             "<div style='font-weight:700;color:#991b1b;font-size:16px;'>Not saved \u2014 you appear to be offline</div>" +
