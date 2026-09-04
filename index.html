@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-quizdone';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-access';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -752,8 +752,49 @@ function onSignedIn(user){
   }).then(function(res){
     var prof = res.data ? res.data : { role:'student' };
     State.profile=prof; State.role = prof.role ? prof.role : 'student';
-    enterApp(user);
+    if(State.role==='professor' || State.role==='admin'){ State.staffRows=[]; enterApp(user); return; }
+    sb.from('im_course_staff').select('course_id,staff_role,can_view_roster,can_manage_roster,can_view_grades,can_grade,can_edit_exams,can_view_integrity,can_accommodate').eq('user_id', user.id).then(function(sr){
+      State.staffRows=(sr&&sr.data)?sr.data:[]; enterApp(user);
+    }, function(){ State.staffRows=[]; enterApp(user); });
   });
+/* ---- COURSE STAFF (TA / co-instructor) recognition -----------------------
+   A user who is a student in im_person but a member of im_course_staff gets
+   scoped teaching tools for the course(s) they staff, limited to their caps.
+   Requires im_65_ta_access.sql (RLS) so their teaching screens can read data. */
+function taRoleLabel(){ var r=(State.staffRows&&State.staffRows[0])?State.staffRows[0].staff_role:''; return (r==='co_instructor')?'Co-Instructor':'Teaching Assistant'; }
+function computeTA(){
+  State.isTA=false; State.taCaps={}; State.staffCourseIds=[];
+  if(State.role==='professor'||State.role==='admin'){ return; }
+  var rows=State.staffRows||[]; if(rows.length===0){ return; }
+  State.isTA=true; var caps={};
+  rows.forEach(function(r){
+    if(State.staffCourseIds.indexOf(r.course_id)<0){ State.staffCourseIds.push(r.course_id); }
+    ['can_view_roster','can_manage_roster','can_view_grades','can_grade','can_edit_exams','can_view_integrity','can_accommodate'].forEach(function(k){ if(r[k]){ caps[k]=true; } });
+  });
+  State.taCaps=caps;
+}
+function taAllowedViews(){
+  var c=State.taCaps||{}; var v=[];
+  if(c.can_view_roster){ v.push('roster'); }
+  if(c.can_view_grades){ v.push('gradebook'); v.push('analytics'); }
+  if(c.can_grade){ v.push('grading'); v.push('assignments'); }
+  if(c.can_edit_exams){ v.push('exams'); v.push('materials'); v.push('announce'); }
+  return v;
+}
+function loadCoursesTA(){
+  var ids=State.staffCourseIds||[]; if(ids.length===0){ return Promise.resolve(); }
+  return sb.from('im_course').select('*').in('id', ids).order('created_at',{ascending:false}).then(function(res){
+    State.courses=res.data?res.data:[];
+    var sel=$('coursePick');
+    if(sel){ sel.innerHTML='';
+      if(State.courses.length){
+        State.courses.forEach(function(c){ var o=document.createElement('option'); o.value=c.id; o.textContent=c.title+(c.term?(' · '+c.term):''); sel.appendChild(o); });
+        if(!State.teachCourseId||!findCourse(State.teachCourseId)){ State.teachCourseId=State.courses[0].id; }
+        sel.value=State.teachCourseId;
+      } else { var o=document.createElement('option'); o.value=''; o.textContent='(no course)'; sel.appendChild(o); State.teachCourseId=null; }
+    }
+  }, function(){});
+}
 }
 // Everyone enters as a student. Instructors/admins get extra nav groups.
 function enterApp(user){
@@ -764,8 +805,11 @@ function enterApp(user){
   Array.prototype.forEach.call(document.querySelectorAll('.nav-group'), function(g){ if(g.id!=='teachGroup' && g.id!=='adminGroup'){ g.style.display=''; } });
   $('sideUser').textContent=imRealName()||user.email;
   var role=State.role;
-  $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : 'Student');
-  if(role==='professor' || role==='admin'){ show($('teachGroup')); } else { hide($('teachGroup')); }
+  computeTA();
+  $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : (State.isTA ? taRoleLabel() : 'Student'));
+  if(role==='professor' || role==='admin'){ show($('teachGroup')); }
+  else if(State.isTA){ show($('teachGroup')); var _av=taAllowedViews(); Array.prototype.forEach.call($('teachGroup').querySelectorAll('.nav-item'), function(n){ var v=n.getAttribute('data-view'); n.style.display=(_av.indexOf(v)>=0)?'':'none'; }); }
+  else { hide($('teachGroup')); }
   if(role==='admin'){ show($('adminGroup')); } else { hide($('adminGroup')); }
   if(role!=='professor' && role!=='admin'){ setTimeout(maybePromptName, 700); }
   // student self-study provisioning (own course for practice/progress)
@@ -786,6 +830,8 @@ function enterApp(user){
                  /(#|&)att=[0-9a-f\-]+:[0-9a-f]+/i.test(window.location.hash||'');
   if(role==='professor' || role==='admin'){
     loadCourses().then(function(){ switchView(wantsAtt?'stuattend':'home'); });
+  } else if(State.isTA){
+    loadCoursesTA().then(function(){ var _av=taAllowedViews(); var land=wantsAtt?'stuattend':(_av.indexOf('roster')>=0?'roster':(_av.indexOf('grading')>=0?'grading':'home')); switchView(land); });
   } else {
     switchView(wantsAtt?'stuattend':'home');
   }
@@ -890,7 +936,7 @@ function viewAllowed(view){
   if(State.guest){ return (view==='home' || view==='chapters' || view==='arenas'); }
   if(isStudentView(view)){ return true; }
   if(ADMIN_VIEWS.indexOf(view)>=0){ return State.role==='admin'; }
-  if(INSTRUCTOR_VIEWS.indexOf(view)>=0){ return State.role==='professor' || State.role==='admin'; }
+  if(INSTRUCTOR_VIEWS.indexOf(view)>=0){ if(State.role==='professor' || State.role==='admin'){ return true; } if(State.isTA){ return taAllowedViews().indexOf(view)>=0; } return false; }
   return true;
 }
 function switchView(view){
@@ -4863,7 +4909,7 @@ function resolveAccess() {
   // Cache on State.hasAccess. Staff always have access. Otherwise true if the
   // student has an active, non-expired subscription OR a super-admin fee waiver
   // (course-wide or per-student) in any enrolled course.
-  if (State.role === 'admin' || State.role === 'professor') { State.hasAccess = true; return Promise.resolve(true); }
+  if (State.role === 'admin' || State.role === 'professor' || State.isTA) { State.hasAccess = true; return Promise.resolve(true); }
   var uid = State.user.id;
   // Load the student's OWN active enrollments directly. We must NOT rely on
   // State.courses here: that list is only populated for instructors/admins
