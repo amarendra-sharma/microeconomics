@@ -391,16 +391,23 @@
       if (timerId) { clearInterval(timerId); }
       var gradeFn = cfg.gradeExam || gradeQuiz;
       gradeFn(isExam ? (spec.examId || spec.title) : chapter, payload, function (result) {
-        if (result && result.ok) {
+        var label = isExam ? "Exam" : "Quiz";
+        if (result && result.ok && !result.offline) {
           out.innerHTML = "<div style='background:#f0fdf4;border:1px solid #166534;border-radius:10px;padding:16px;'>" +
-            "<div style='font-weight:700;color:#166534;font-size:16px;'>" + (isExam ? "Exam submitted" : "Quiz submitted") + "</div>" +
+            "<div style='font-weight:700;color:#166534;font-size:16px;'>" + label + " submitted</div>" +
             "<div style='color:#334155;margin-top:6px;'>Score: " + result.score + " / " + result.total +
             (result.pending ? " (" + result.pending + " written answer(s) pending review)" : "") + "</div></div>";
+        } else if (result && result.offline) {
+          out.innerHTML = "<div style='background:#fef2f2;border:1px solid #991b1b;border-radius:10px;padding:16px;'>" +
+            "<div style='font-weight:700;color:#991b1b;font-size:16px;'>Not saved \u2014 you appear to be offline</div>" +
+            "<div style='color:#334155;margin-top:6px;'>Your answers were graded on this device but <b>were not recorded</b>. Check your internet connection and click <b>Submit</b> again. Nothing counts until you see the green \u201C" + label + " submitted\u201D confirmation.</div></div>";
+          submit.disabled = false; submit.style.opacity = "1"; submit.textContent = "Submit " + label.toLowerCase();
         } else {
-          out.innerHTML = "<div style='color:#991b1b;'>" +
-            (result && result.error ? esc(result.error) : "Could not submit. Check your connection and try again.") +
-            "</div>";
-          submit.disabled = false; submit.style.opacity = "1"; submit.textContent = isExam ? "Submit exam" : "Submit quiz";
+          out.innerHTML = "<div style='background:#fef2f2;border:1px solid #991b1b;border-radius:10px;padding:16px;'>" +
+            "<div style='font-weight:700;color:#991b1b;font-size:15px;'>Not submitted</div>" +
+            "<div style='color:#334155;margin-top:6px;'>" + (result && result.error ? esc(result.error) : "Could not submit \u2014 check your connection and try again.") +
+            " Your answers are <b>not saved</b> until you see the green confirmation.</div></div>";
+          submit.disabled = false; submit.style.opacity = "1"; submit.textContent = "Submit " + label.toLowerCase();
         }
         if (cfg.onSubmit) { cfg.onSubmit(result); }
       });
