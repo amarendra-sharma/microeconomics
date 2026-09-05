@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe2';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -755,7 +755,7 @@ function loadStaffThenEnter(user){
   // with staff status known. Failure must never block entry.
   try{
     sb.from('im_course_staff')
-      .select('course_id,role,can_view_roster,can_grade,can_view_grades')
+      .select('course_id,staff_role,can_view_roster,can_grade,can_view_grades')
       .eq('user_id', user.id)
       .then(function(res){ State.staff = (res && res.data) ? res.data : []; enterApp(user); },
             function(){ State.staff = []; enterApp(user); });
