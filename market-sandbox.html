@@ -293,6 +293,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   <div class="sb-readout" id="det-readout">Your verdict, detective?</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
     <div id="aa-panel" style="margin:10px 0;"></div>
+    <div id="aa-rec-status" style="font-size:0.82rem;margin:2px 0 6px;min-height:1.1em;"></div>
     <button class="btn-sb btn-sb-primary" onclick="newCase()">New case</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetScore()">Clear practice tally (this device)</button>
   </div>
@@ -755,14 +756,27 @@ function diagnose(choice) {
   try {
     var __P = (typeof SAProgress !== "undefined") ? SAProgress
             : ((typeof IMProgress !== "undefined") ? IMProgress : null);
+    var __st = document.getElementById("aa-rec-status");
     if (__P && __P.recordArenaCase) {
-      __P.recordArenaCase("market-sandbox", currentCaseIndex, correct, (window.ArenaAttempts && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), {
+      if (__st) { __st.textContent = "Saving\u2026"; __st.style.color = "#64748b"; }
+      var __pr = __P.recordArenaCase("market-sandbox", currentCaseIndex, correct, (window.ArenaAttempts && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), {
         prompt_text: currentCase.story,
         chosen_label: DIAG_NAMES[choice],
         correct_label: DIAG_NAMES[currentCase.key]
       });
-    } else {
-      try { console.warn("market-sandbox: progress module not loaded \u2014 case NOT recorded."); } catch (e) {}
+      if (__pr && __pr.then) {
+        __pr.then(function (r) {
+          if (!__st) { return; }
+          if (r && r.error) { __st.textContent = "\u26a0 Not recorded: " + r.error.message; __st.style.color = "#b91c1c"; }
+          else if (r === null || r === undefined) { __st.textContent = "\u26a0 Not recorded \u2014 sign in as an enrolled student to save your grade."; __st.style.color = "#b91c1c"; }
+          else { __st.textContent = "\u2713 Recorded to your grade."; __st.style.color = "#166534"; }
+        }, function () {
+          if (__st) { __st.textContent = "\u26a0 Not recorded (network error)."; __st.style.color = "#b91c1c"; }
+        });
+      }
+    } else if (__st) {
+      __st.textContent = "\u26a0 Not recorded \u2014 progress module not loaded.";
+      __st.style.color = "#b91c1c";
     }
   } catch (e) {}
 
@@ -856,7 +870,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var MARKET_ARENA_BUILD = "market-sandbox-2026-09-graded-attempts-v3";
+var MARKET_ARENA_BUILD = "market-sandbox-2026-09-graded-attempts-v4-recstatus";
 function boot() {
   try { console.log("%cmarket-sandbox build: " + MARKET_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {
