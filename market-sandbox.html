@@ -753,29 +753,24 @@ function diagnose(choice) {
   // arena count toward the Arenas grade. Review labels let wrong cases be
   // reviewed later. (This file loads sa-progress.js, not im-backend.js, which is
   // why the previous IMBackend.gradeCase call never ran and nothing recorded.)
+  // Record + grade this case through the tamper-proof server path (im-grade) --
+  // the SAME path the other arenas use. The server regenerates correctness from
+  // the sealed answer key and writes the im_attempt row with the service role
+  // (direct browser inserts to im_attempt are blocked by RLS by design, which is
+  // what the earlier "row-level security policy" error was).
   try {
-    var __P = (typeof SAProgress !== "undefined") ? SAProgress
-            : ((typeof IMProgress !== "undefined") ? IMProgress : null);
     var __st = document.getElementById("aa-rec-status");
-    if (__P && __P.recordArenaCase) {
+    if (typeof IMBackend !== "undefined" && IMBackend.isOnline && IMBackend.isOnline() && IMBackend.gradeCase) {
       if (__st) { __st.textContent = "Saving\u2026"; __st.style.color = "#64748b"; }
-      var __pr = __P.recordArenaCase("market-sandbox", currentCaseIndex, correct, (window.ArenaAttempts && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), {
-        prompt_text: currentCase.story,
-        chosen_label: DIAG_NAMES[choice],
-        correct_label: DIAG_NAMES[currentCase.key]
-      });
-      if (__pr && __pr.then) {
-        __pr.then(function (r) {
-          if (!__st) { return; }
-          if (r && r.error) { __st.textContent = "\u26a0 Not recorded: " + r.error.message; __st.style.color = "#b91c1c"; }
-          else if (r === null || r === undefined) { __st.textContent = "\u26a0 Not recorded \u2014 sign in as an enrolled student to save your grade."; __st.style.color = "#b91c1c"; }
-          else { __st.textContent = "\u2713 Recorded to your grade."; __st.style.color = "#166534"; }
-        }, function () {
-          if (__st) { __st.textContent = "\u26a0 Not recorded (network error)."; __st.style.color = "#b91c1c"; }
-        });
-      }
+      IMBackend.gradeCase("market-sandbox", currentCaseIndex, choice, function (res) {
+        if (!__st) { return; }
+        if (res && res.needEnroll) { __st.textContent = "\u26a0 Not recorded \u2014 an active course enrollment is required."; __st.style.color = "#b91c1c"; }
+        else if (res && res.offline) { __st.textContent = "\u26a0 Not recorded \u2014 you appear signed out or offline. Sign in and try again."; __st.style.color = "#b91c1c"; }
+        else if (res && typeof res.correct === "boolean") { __st.textContent = "\u2713 Recorded to your grade."; __st.style.color = "#166534"; }
+        else { __st.textContent = "\u26a0 Not recorded (unexpected server response)."; __st.style.color = "#b91c1c"; }
+      }, (window.ArenaAttempts && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), { prompt_text: currentCase.story, labels: DIAG_NAMES });
     } else if (__st) {
-      __st.textContent = "\u26a0 Not recorded \u2014 progress module not loaded.";
+      __st.textContent = "\u26a0 Not recorded \u2014 sign in to save your grade.";
       __st.style.color = "#b91c1c";
     }
   } catch (e) {}
@@ -870,7 +865,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var MARKET_ARENA_BUILD = "market-sandbox-2026-09-graded-attempts-v4-recstatus";
+var MARKET_ARENA_BUILD = "market-sandbox-2026-09-graded-server-v5";
 function boot() {
   try { console.log("%cmarket-sandbox build: " + MARKET_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {
