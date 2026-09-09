@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe5';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe6';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3161,8 +3161,8 @@ function openArenaDeadlines(){
     $('adlBody').innerHTML='<div class="msg err" style="display:block;">Arena deadlines aren\u2019t installed yet. Run <b>im_49_arena_deadlines.sql</b> in the SQL editor, then reopen this window.</div>';
     var sv=$('adlSave'); if(sv){ sv.disabled=true; }
   }
-  // graded arenas only (skip the free ungated preview)
-  var GRADED_ARENAS=ARENA_SLUGS.filter(function(s){ return s!=='market-sandbox'; });
+  // every arena is graded (Market Sandbox included), so allow a review deadline for each.
+  var GRADED_ARENAS=ARENA_SLUGS.slice();
   sb.from('im_arena_deadline').select('arena_slug,closes_at').eq('course_id',State.teachCourseId).then(function(res){
     if(res && res.error){ notInstalled(); return; }
     var have={}; ((res && res.data)?res.data:[]).forEach(function(r){ have[r.arena_slug]=r.closes_at; });
