@@ -263,7 +263,7 @@
     <div class="nav-group">
       <div class="nav-group-label">Learn</div>
       <div class="nav-item active" data-view="home"><span class="ico">&#8962;</span> Home</div>
-      <div class="nav-item" data-view="myannounce"><span class="ico">&#128226;</span> Announcements</div>
+      <div class="nav-item" data-view="myannounce"><span class="ico">&#128226;</span> Announcements<span id="annDot" style="display:none;margin-left:7px;color:var(--rose);font-size:10px;vertical-align:middle;" title="New announcement">&#9679;</span></div>
       <div class="nav-item" data-view="mymaterials"><span class="ico">&#127916;</span> Materials</div>
       <div class="nav-item" data-view="chapters"><span class="ico">&#128214;</span> Textbook</div>
       <div class="nav-item" data-view="arenas"><span class="ico">&#127918;</span> Arenas</div>
@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe6';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe7';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -866,6 +866,7 @@ function enterApp(user){
   }).then(function(){
     renderChapters(); renderArenas(); fillPracticeChapters();
     maybeHandleInboundCourse();
+    try{ refreshAnnBadge(); }catch(e){}
   });
   // teaching data (only matters if they teach, but harmless otherwise)
   // A scanned QR may have set STU_ATT_PENDING (captured at load). Route there.
@@ -5333,6 +5334,24 @@ function loadHome() {
   // show the student's enrolled professor courses (if any)
   loadMyCourses();
 }
+function annSeenKey(){ return 'im_annSeen_' + (State.user ? State.user.id : 'anon'); }
+// Show a dot on the Announcements nav item when the newest announcement across
+// the student's courses is newer than what they've already opened. localStorage
+// per student+device; cleared when they open the Announcements tab.
+function refreshAnnBadge(){
+  var dot=$('annDot'); if(!dot || !State.user){ return; }
+  sb.from('im_enrollment').select('course_id').eq('student_id',State.user.id).eq('status','active').then(function(en){
+    var ids=(en.data?en.data:[]).map(function(x){ return x.course_id; });
+    if(!ids.length){ dot.style.display='none'; return; }
+    sb.from('im_announcement').select('created_at').in('course_id',ids).order('created_at',{ascending:false}).limit(1).then(function(r){
+      var rows=r.data?r.data:[];
+      if(!rows.length){ dot.style.display='none'; return; }
+      var newest=new Date(rows[0].created_at).getTime();
+      var seen=0; try{ var v=localStorage.getItem(annSeenKey()); if(v){ seen=new Date(v).getTime(); } }catch(e){}
+      dot.style.display=(newest>seen)?'inline':'none';
+    }, function(){});
+  }, function(){});
+}
 function loadMyAnnounce(){
   var box=$('myAnnBody'); if(!box || !State.user){ return; }
   box.innerHTML=loadingCard();
@@ -5351,6 +5370,8 @@ function loadMyAnnounce(){
           '<div style="font-size:11px;color:var(--text-subtle);margin-top:6px;">'+esc(when)+'</div></div>';
       });
       box.innerHTML=html;
+      try{ if(rows.length){ localStorage.setItem(annSeenKey(), rows[0].created_at); } }catch(e){}
+      var d=$('annDot'); if(d){ d.style.display='none'; }
     });
   });
 }
