@@ -8,7 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="im-backend.js"></script>
 <script src="sa-progress.js"></script>
+<script src="arena-attempts.js"></script>
 
 <style>
 :root {
@@ -290,6 +292,7 @@ footer { text-align: center; padding: 1.5rem; font-size: 0.75rem; color: var(--i
   </div>
   <div class="sb-readout" id="det-readout">Your verdict, detective?</div>
   <div class="sb-shock-row" style="margin-top:0.875rem;">
+    <div id="aa-panel" style="margin:10px 0;"></div>
     <button class="btn-sb btn-sb-primary" onclick="newCase()">New case</button>
     <button class="btn-sb btn-sb-ghost" onclick="resetScore()">Clear practice tally (this device)</button>
   </div>
@@ -660,6 +663,29 @@ function setDiagButtons(disabled) {
 }
 
 function newCase() {
+  // Graded flow: New case starts the first attempt and deals cases within an
+  // active attempt. Between attempts, the panel's buttons control the optional
+  // second attempt; once both are used the arena is locked.
+  var AA = window.ArenaAttempts;
+  var out = document.getElementById("det-readout");
+  if (AA) {
+    if (AA.isLocked && AA.isLocked()) {
+      if (out) { out.innerHTML = "<strong>Both attempts used.</strong> Your Market Sandbox grade is recorded \u2014 see My Grades in the portal."; }
+      return;
+    }
+    if (!AA.isAttemptActive()) {
+      if (AA.attemptsTaken && AA.attemptsTaken() === 0) {
+        AA.startAttempt(true);   // begins attempt 1; deals case 1 via onStartAttempt
+      } else if (out) {
+        out.innerHTML = "Use the buttons above to take your optional second attempt, or keep your score.";
+      }
+      return;
+    }
+  }
+  dealCase();
+}
+
+function dealCase() {
   currentCaseIndex = Math.floor(Math.random() * CASES.length);
   currentCase = CASES[currentCaseIndex];
   caseAnswered = false;
@@ -730,7 +756,7 @@ function diagnose(choice) {
     var __P = (typeof SAProgress !== "undefined") ? SAProgress
             : ((typeof IMProgress !== "undefined") ? IMProgress : null);
     if (__P && __P.recordArenaCase) {
-      __P.recordArenaCase("market-sandbox", currentCaseIndex, correct, 1, {
+      __P.recordArenaCase("market-sandbox", currentCaseIndex, correct, (window.ArenaAttempts && ArenaAttempts.currentAttempt ? ArenaAttempts.currentAttempt() : 1), {
         prompt_text: currentCase.story,
         chosen_label: DIAG_NAMES[choice],
         correct_label: DIAG_NAMES[currentCase.key]
@@ -739,6 +765,9 @@ function diagnose(choice) {
       try { console.warn("market-sandbox: progress module not loaded \u2014 case NOT recorded."); } catch (e) {}
     }
   } catch (e) {}
+
+  // Count this case toward the graded attempt (ends the attempt after 8).
+  try { if (window.ArenaAttempts && ArenaAttempts.caseAnswered) { ArenaAttempts.caseAnswered(correct); } } catch (e) {}
 
   var e0 = eqm(BASE_A, BASE_B);
   var e1 = eqm(BASE_A + currentCase.da, BASE_B + currentCase.db);
@@ -827,7 +856,7 @@ function imDoSignUp() {
 }
 function imDoSignOut() { IMBackend.signOut(function () { imRenderAuth(); }); }
 
-var MARKET_ARENA_BUILD = "market-sandbox-2026-08-record+review-v2+safereset";
+var MARKET_ARENA_BUILD = "market-sandbox-2026-09-graded-attempts-v3";
 function boot() {
   try { console.log("%cmarket-sandbox build: " + MARKET_ARENA_BUILD, "color:#0f3d9e;font-weight:bold;font-size:14px"); } catch (e) {}
   try {
@@ -847,6 +876,18 @@ function boot() {
   initLab();
   initPx();
   imRenderAuth();
+  try {
+    if (typeof ArenaAttempts !== "undefined") {
+      ArenaAttempts.init({
+        slug: "market-sandbox",
+        caseCount: 8,
+        maxAttempts: 2,
+        mount: "aa-panel",
+        recordCase: true,                 // this page records each case itself (with review data)
+        onStartAttempt: function () { dealCase(); }
+      });
+    }
+  } catch (e) {}
 }
 
 if (document.readyState === "loading") {
