@@ -718,24 +718,25 @@ function diagnose(choice) {
   }
   saveDetective();
   renderStats();
-  // Record this case through the grading Edge Function (server-side, tamper-proof).
-  // market-sandbox is a FREE preview arena, so the function records it without
-  // requiring an enrollment. We pass review text so wrong cases are reviewable.
+  // Record this case to the gradebook. market-sandbox's detective cases are
+  // generated client-side (there is no fixed server answer-key vault to match),
+  // and correctness is known right here -- so we record the graded case directly
+  // through the progress module (the SAME path the other 11 arenas use), which
+  // writes one im_attempt row carrying the student's course_id. This makes the
+  // arena count toward the Arenas grade. Review labels let wrong cases be
+  // reviewed later. (This file loads sa-progress.js, not im-backend.js, which is
+  // why the previous IMBackend.gradeCase call never ran and nothing recorded.)
   try {
-    if (typeof IMBackend !== "undefined" && IMBackend.isOnline() && IMBackend.gradeCase) {
-      IMBackend.gradeCase("market-sandbox", currentCaseIndex, choice, function (res) {
-        try {
-          if (res && res.needEnroll) {
-            console.warn("market-sandbox: server returned 403 (needEnroll). The deployed im-grade Edge Function is missing the FREE_ARENAS allowance \u2014 redeploy it. Case NOT recorded.");
-          } else if (res && res.offline) {
-            console.warn("market-sandbox: case NOT recorded (offline / signed out, or server error such as a missing answer key \u2014 check that im_46 ran).");
-          } else if (res && typeof res.correct === "boolean") {
-            console.log("market-sandbox: case recorded (correct=" + res.correct + ")");
-          } else {
-            console.warn("market-sandbox: case NOT recorded (unexpected response).", res);
-          }
-        } catch (e) {}
-      }, 1, { prompt_text: currentCase.story, labels: DIAG_NAMES });
+    var __P = (typeof SAProgress !== "undefined") ? SAProgress
+            : ((typeof IMProgress !== "undefined") ? IMProgress : null);
+    if (__P && __P.recordArenaCase) {
+      __P.recordArenaCase("market-sandbox", currentCaseIndex, correct, 1, {
+        prompt_text: currentCase.story,
+        chosen_label: DIAG_NAMES[choice],
+        correct_label: DIAG_NAMES[currentCase.key]
+      });
+    } else {
+      try { console.warn("market-sandbox: progress module not loaded \u2014 case NOT recorded."); } catch (e) {}
     }
   } catch (e) {}
 
