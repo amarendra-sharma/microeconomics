@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe7';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe9';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -5536,7 +5536,11 @@ function loadHomeDeadlines(){
       sb.from('im_assignment').select('id,course_id,title,due_at').in('course_id',courseIds).eq('is_published',true),
       sb.from('im_quiz_deadline').select('course_id,chapter,closes_at').in('course_id',courseIds),
       sb.from('im_arena_deadline').select('course_id,arena_slug,closes_at').in('course_id',courseIds),
-      sb.from('im_assessment_accommodation').select('course_id,kind,ref_id,due_override').eq('student_id',uid)
+      sb.from('im_assessment_accommodation').select('course_id,kind,ref_id,due_override').eq('student_id',uid),
+      sb.from('im_chapter_progress').select('course_id,chapter,reading_done,quiz_score,quiz_attempts').eq('student_id',uid).in('course_id',courseIds),
+      sb.from('im_submission').select('assignment_id').eq('student_id',uid),
+      sb.from('im_exam_attempt').select('exam_id').eq('student_id',uid).not('exam_id','is',null),
+      sb.from('im_attempt').select('arena_slug').eq('user_id',uid)
     ]).then(function(r){
       var courses={}; ((r[0]&&r[0].data)?r[0].data:[]).forEach(function(c){ courses[c.id]=c; });
       var multi=Object.keys(courses).length>1;
@@ -5544,15 +5548,27 @@ function loadHomeDeadlines(){
       // per-student override: kind|course|ref -> ms
       var ov={}; ((r[5]&&r[5].data)?r[5].data:[]).forEach(function(o){ if(o.due_override){ ov[o.kind+'|'+o.course_id+'|'+String(o.ref_id)]=new Date(o.due_override).getTime(); } });
       function eff(kind,cid,ref,baseMs){ var k=kind+'|'+cid+'|'+String(ref); return (ov[k]!==undefined)?ov[k]:baseMs; }
-      var items=[];
-      ((r[1]&&r[1].data)?r[1].data:[]).forEach(function(e){ if(!e.closes_at){ return; } items.push({ type:'Exam', icon:'\uD83D\uDCDD', label:(e.title||(e.kind==='final'?'Final exam':'Midterm')), due:eff('exam',e.course_id,e.id,new Date(e.closes_at).getTime()), course:ctitle(e.course_id) }); });
-      ((r[2]&&r[2].data)?r[2].data:[]).forEach(function(a){ if(!a.due_at){ return; } items.push({ type:'Assignment', icon:'\uD83D\uDCCE', label:(a.title||'Assignment'), due:eff('assignment',a.course_id,a.id,new Date(a.due_at).getTime()), course:ctitle(a.course_id) }); });
-      // A chapter's quiz deadline is also the read-by date, so surface both.
-      ((r[3]&&r[3].data)?r[3].data:[]).forEach(function(q){ if(!q.closes_at){ return; } var base=new Date(q.closes_at).getTime(); var dueQ=eff('quiz',q.course_id,q.chapter,base);
-        items.push({ type:'Quiz', icon:'\u270D\uFE0F', label:'Chapter '+q.chapter+' quiz', due:dueQ, course:ctitle(q.course_id) });
-        items.push({ type:'Reading', icon:'\uD83D\uDCD6', label:'Chapter '+q.chapter+' reading', due:dueQ, course:ctitle(q.course_id) });
+      // Completion lookups: a finished item is flagged done, so it renders green
+      // ("Completed") instead of ever turning red past due.
+      var quizDone={}, readDone={};
+      ((r[6]&&r[6].data)?r[6].data:[]).forEach(function(p){
+        var k=p.course_id+'|'+p.chapter;
+        if(p.quiz_score!==null&&p.quiz_score!==undefined){ quizDone[k]=true; }
+        else if(p.quiz_attempts&&Number(p.quiz_attempts)>0){ quizDone[k]=true; }
+        if(p.reading_done){ readDone[k]=true; }
       });
-      ((r[4]&&r[4].data)?r[4].data:[]).forEach(function(a){ if(!a.closes_at){ return; } items.push({ type:'Arena', icon:'\uD83C\uDFAE', label:prettySlug(a.arena_slug), due:eff('arena',a.course_id,a.arena_slug,new Date(a.closes_at).getTime()), course:ctitle(a.course_id) }); });
+      var asgDone={}; ((r[7]&&r[7].data)?r[7].data:[]).forEach(function(x){ if(x.assignment_id){ asgDone[x.assignment_id]=true; } });
+      var examDone={}; ((r[8]&&r[8].data)?r[8].data:[]).forEach(function(x){ if(x.exam_id){ examDone[x.exam_id]=true; } });
+      var arenaDone={}; ((r[9]&&r[9].data)?r[9].data:[]).forEach(function(x){ if(x.arena_slug){ arenaDone[x.arena_slug]=true; } });
+      var items=[];
+      ((r[1]&&r[1].data)?r[1].data:[]).forEach(function(e){ if(!e.closes_at){ return; } items.push({ type:'Exam', icon:'\uD83D\uDCDD', label:(e.title||(e.kind==='final'?'Final exam':'Midterm')), due:eff('exam',e.course_id,e.id,new Date(e.closes_at).getTime()), course:ctitle(e.course_id), done:!!examDone[e.id] }); });
+      ((r[2]&&r[2].data)?r[2].data:[]).forEach(function(a){ if(!a.due_at){ return; } items.push({ type:'Assignment', icon:'\uD83D\uDCCE', label:(a.title||'Assignment'), due:eff('assignment',a.course_id,a.id,new Date(a.due_at).getTime()), course:ctitle(a.course_id), done:!!asgDone[a.id] }); });
+      // A chapter's quiz deadline is also the read-by date, so surface both.
+      ((r[3]&&r[3].data)?r[3].data:[]).forEach(function(q){ if(!q.closes_at){ return; } var base=new Date(q.closes_at).getTime(); var dueQ=eff('quiz',q.course_id,q.chapter,base); var kk=q.course_id+'|'+q.chapter;
+        items.push({ type:'Quiz', icon:'\u270D\uFE0F', label:'Chapter '+q.chapter+' quiz', due:dueQ, course:ctitle(q.course_id), done:!!quizDone[kk] });
+        items.push({ type:'Reading', icon:'\uD83D\uDCD6', label:'Chapter '+q.chapter+' reading', due:dueQ, course:ctitle(q.course_id), done:!!readDone[kk] });
+      });
+      ((r[4]&&r[4].data)?r[4].data:[]).forEach(function(a){ if(!a.closes_at){ return; } items.push({ type:'Arena', icon:'\uD83C\uDFAE', label:prettySlug(a.arena_slug), due:eff('arena',a.course_id,a.arena_slug,new Date(a.closes_at).getTime()), course:ctitle(a.course_id), done:!!arenaDone[a.arena_slug] }); });
       renderHomeDeadlines(host, items, multi);
     }, function(){ host.innerHTML=''; });
   }, function(){ host.innerHTML=''; });
@@ -5562,20 +5578,27 @@ function renderHomeDeadlines(host, items, multi){
   if(!items || items.length===0){ host.innerHTML=''; return; }
   items.sort(function(a,b){ return a.due-b.due; });
   var now=Date.now();
-  var upcoming=items.filter(function(x){ return x.due>=now; });
-  var overdue=items.filter(function(x){ return x.due<now; });
+  var doneItems=items.filter(function(x){ return x.done; });
+  var pending=items.filter(function(x){ return !x.done; });
+  var upcoming=pending.filter(function(x){ return x.due>=now; });
+  var overdue=pending.filter(function(x){ return x.due<now; });
   function row(x){
-    var soon=(x.due-now)>=0 && (x.due-now)<48*3600000;
-    var over=x.due<now;
-    var color=over?'var(--rose)':(soon?'var(--amber, #d97706)':'var(--text-muted)');
+    var color, rightText;
+    if(x.done){ color='var(--green)'; rightText='\u2713 Done'; }
+    else {
+      var soon=(x.due-now)>=0 && (x.due-now)<48*3600000;
+      var over=x.due<now;
+      color=over?'var(--rose)':(soon?'var(--amber, #d97706)':'var(--text-muted)');
+      rightText=relDue(x.due);
+    }
     var when=new Date(x.due).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
     return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">'+
       '<div style="font-size:18px;width:22px;text-align:center;">'+x.icon+'</div>'+
       '<div style="flex:1;min-width:0;">'+
-        '<div style="font-weight:600;font-size:13.5px;">'+esc(x.label)+' <span class="tag dim" style="font-weight:500;">'+esc(x.type)+'</span></div>'+
+        '<div style="font-weight:600;font-size:13.5px;'+(x.done?'color:var(--text-muted);':'')+'">'+esc(x.label)+' <span class="tag dim" style="font-weight:500;">'+esc(x.type)+'</span></div>'+
         (multi&&x.course?'<div style="font-size:11.5px;color:var(--text-subtle);">'+esc(x.course)+'</div>':'')+
       '</div>'+
-      '<div style="text-align:right;white-space:nowrap;"><div style="font-size:12.5px;color:'+color+';font-weight:600;">'+esc(relDue(x.due))+'</div>'+
+      '<div style="text-align:right;white-space:nowrap;"><div style="font-size:12.5px;color:'+color+';font-weight:600;">'+esc(rightText)+'</div>'+
         '<div style="font-size:11px;color:var(--text-subtle);">'+esc(when)+'</div></div>'+
     '</div>';
   }
@@ -5586,6 +5609,11 @@ function renderHomeDeadlines(host, items, multi){
   if(overdue.length>0){
     html+='<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--rose);font-weight:600;">Past due ('+overdue.length+')</summary><div style="margin-top:4px;">';
     overdue.slice(-15).reverse().forEach(function(x){ html+=row(x); });
+    html+='</div></details>';
+  }
+  if(doneItems.length>0){
+    html+='<details open style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--green);font-weight:600;">\u2713 Completed ('+doneItems.length+')</summary><div style="margin-top:4px;">';
+    doneItems.forEach(function(x){ html+=row(x); });
     html+='</div></details>';
   }
   html+='<div style="font-size:11px;color:var(--text-subtle);margin-top:8px;">A chapter\u2019s reading is due by that chapter\u2019s quiz deadline. Personal extensions are already reflected here.</div>';
