@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe10';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe11';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1974,11 +1974,13 @@ function renderGradebook(host){
         // exactly like an online exam (see im_71_paper_exam.sql).
         var examById={}; gradedExams.forEach(function(e){ examById[e.id]=e; });
         (ar[8] && ar[8].data ? ar[8].data : []).forEach(function(m){
+          var ex=examById[m.exam_id];
+          var tp=(ex && Number(ex.total_points)>0)?Number(ex.total_points):0;
+          if(!(tp>0)){ return; }  // no valid total set -> leave ungraded; never divide points by points (false 100%)
           if(!examScore[m.student_id]){ examScore[m.student_id]={}; }
           if(!examPossible[m.student_id]){ examPossible[m.student_id]={}; }
           examScore[m.student_id][m.exam_id]=Number(m.points);
-          var ex=examById[m.exam_id];
-          examPossible[m.student_id][m.exam_id]=(ex && Number(ex.total_points)>0)?Number(ex.total_points):Number(m.points);
+          examPossible[m.student_id][m.exam_id]=tp;
         });
         buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf,examPossible,attScoreOf);
       }, function(err){
@@ -3260,7 +3262,7 @@ function loadExams(){
     var html='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Title</th><th>Kind</th><th>Items</th><th>Points</th><th>Status</th><th></th></tr></thead><tbody>';
     rows.forEach(function(e){
       if(e.is_manual){
-        html+='<tr><td>'+esc(e.title)+' <span class="tag amber" title="Graded on paper; scores are typed in">paper</span></td><td><span class="tag violet">'+esc(e.kind)+'</span></td><td>\u2014</td><td>'+esc(e.total_points||0)+'</td>'+
+        html+='<tr><td>'+esc(e.title)+' <span class="tag amber" title="Graded on paper; scores are typed in">paper</span>'+((!e.total_points||Number(e.total_points)<=0)?' <span class="tag rose" title="Click Edit and set Total points, or scores will not count toward grades">\u26a0 set total points</span>':'')+'</td><td><span class="tag violet">'+esc(e.kind)+'</span></td><td>\u2014</td><td>'+esc(e.total_points||0)+'</td>'+
           '<td>'+(e.is_published?'<span class="tag green">published</span>':'<span class="tag dim">draft</span>')+'</td>'+
           '<td class="inline-actions"><button class="btn btn-primary btn-sm" data-scores="'+e.id+'" data-stitle="'+esc(e.title||'')+'" data-spts="'+esc(e.total_points||0)+'">Enter scores</button><button class="btn btn-ghost btn-sm" data-editpaper="'+e.id+'">Edit</button><button class="btn btn-ghost btn-sm" data-pub="'+e.id+'" data-on="'+(e.is_published?'1':'0')+'">'+(e.is_published?'Unpublish':'Publish')+'</button>'+
           '<button class="btn btn-danger btn-sm" data-del="'+e.id+'">Delete</button></td></tr>';
@@ -6594,7 +6596,8 @@ function loadMyGradesDetail(host, summary){
           exams.forEach(function(e){
             if(!e.is_manual){ return; }
             if(manualPtsById[e.id]===undefined || manualPtsById[e.id]===null){ return; }
-            var tp=(e.total_points&&Number(e.total_points)>0)?Number(e.total_points):Number(manualPtsById[e.id]);
+            var tp=(e.total_points&&Number(e.total_points)>0)?Number(e.total_points):0;
+            if(!(tp>0)){ return; }  // no valid total set -> not shown as graded
             var pv=Number(manualPtsById[e.id]); if(pv>tp){ pv=tp; }
             examScore[e.id]=pv; examPossible[e.id]=tp;
           });
