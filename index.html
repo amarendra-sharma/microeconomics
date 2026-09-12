@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe9';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe10';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1826,7 +1826,7 @@ function renderGradebook(host){
   }
   withTimeout(Promise.all([
     sb.from('im_gradebook_v').select('*').eq('course_id',State.teachCourseId),
-    sb.from('im_exam').select('id,kind,total_points,item_ids,is_published,attempt_scoring').eq('course_id',State.teachCourseId).eq('is_published',true)
+    sb.from('im_exam').select('id,kind,total_points,item_ids,is_published,attempt_scoring,weight,is_manual').eq('course_id',State.teachCourseId).eq('is_published',true)
   ]), 'the gradebook view', 20000).then(function(r){
     if(r[0] && r[0].error){ host.innerHTML='<div class="card empty">The gradebook list could not load: '+esc(r[0].error.message)+'</div>'; return; }
     var rows=r[0].data?r[0].data:[];
@@ -1901,7 +1901,8 @@ function renderGradebook(host){
         sb.from('im_bank_items').select('id,points').in('id', Object.keys(gbIdset)),
         sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id',State.teachCourseId),
         sb.from('im_attendance_checkin').select('session_id,user_id,present,quiz_score'),
-        sb.from('im_enrollment').select('user_id,student_id,created_at').eq('course_id',State.teachCourseId)
+        sb.from('im_enrollment').select('user_id,student_id,created_at').eq('course_id',State.teachCourseId),
+        sb.from('im_manual_exam_score').select('student_id,exam_id,points').eq('course_id',State.teachCourseId)
       ]), 'assignments and arenas', 20000).then(function(ar){
         var aRows=ar[0].data?ar[0].data:[];
         var subs=ar[1].data?ar[1].data:[];
@@ -1968,6 +1969,17 @@ function renderGradebook(host){
         var enrAt={}; var enrRows=ar[7]&&ar[7].data?ar[7].data:[]; enrRows.forEach(function(e){ var t=e.created_at?new Date(e.created_at).getTime():NaN; if(!isNaN(t)){ if(e.user_id){ enrAt[e.user_id]=t; } if(e.student_id){ enrAt[e.student_id]=t; } } });
         var attScoreOf={};
         rows.forEach(function(rw){ var info=computeAttendanceScore(attSessions, ckByStu[rw.student_id]||[], c.att_presence_share, enrAt[rw.student_id]); attScoreOf[rw.student_id]= info?info.score:null; });
+        // Paper (manual) exams have no attempt rows; merge their typed scores
+        // into examScore/examPossible so they compute as points/total_points,
+        // exactly like an online exam (see im_71_paper_exam.sql).
+        var examById={}; gradedExams.forEach(function(e){ examById[e.id]=e; });
+        (ar[8] && ar[8].data ? ar[8].data : []).forEach(function(m){
+          if(!examScore[m.student_id]){ examScore[m.student_id]={}; }
+          if(!examPossible[m.student_id]){ examPossible[m.student_id]={}; }
+          examScore[m.student_id][m.exam_id]=Number(m.points);
+          var ex=examById[m.exam_id];
+          examPossible[m.student_id][m.exam_id]=(ex && Number(ex.total_points)>0)?Number(ex.total_points):Number(m.points);
+        });
         buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf,examPossible,attScoreOf);
       }, function(err){
         host.innerHTML='<div class="card empty">Could not load parts of the gradebook ('+esc(String(err&&err.message?err.message:err))+'). Exam and quiz scores may still be shown \u2014 try reloading.</div>';
@@ -3079,8 +3091,9 @@ function wireAsgAI(panel, asgId, points){
 
 function renderExams(host){
   if(!needCourse(host)){ return; }
-  host.innerHTML='<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-primary" id="newExamBtn">+ Assemble exam</button><button class="btn btn-ghost" id="libBtn">\uD83D\uDCDA Use a ready-made exam</button><button class="btn btn-ghost" id="qdlBtn">\u23F0 Quiz deadlines</button><button class="btn btn-ghost" id="adlBtn">\u23F0 Arena deadlines</button><button class="btn btn-ghost" id="rlBtn">\uD83D\uDCCB Reschedules</button></div><div id="examList">'+loadingCard()+'</div>';
+  host.innerHTML='<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-primary" id="newExamBtn">+ Assemble exam</button><button class="btn btn-ghost" id="newPaperBtn">\uD83D\uDCC4 Paper exam</button><button class="btn btn-ghost" id="libBtn">\uD83D\uDCDA Use a ready-made exam</button><button class="btn btn-ghost" id="qdlBtn">\u23F0 Quiz deadlines</button><button class="btn btn-ghost" id="adlBtn">\u23F0 Arena deadlines</button><button class="btn btn-ghost" id="rlBtn">\uD83D\uDCCB Reschedules</button></div><div id="examList">'+loadingCard()+'</div>';
   $('newExamBtn').addEventListener('click', function(){ openAssembler(); });
+  if($('newPaperBtn')){ $('newPaperBtn').addEventListener('click', function(){ openPaperExamCreate(null); }); }
   $('libBtn').addEventListener('click', function(){ openExamLibrary(); });
   $('qdlBtn').addEventListener('click', function(){ openQuizDeadlines(); });
   $('adlBtn').addEventListener('click', function(){ openArenaDeadlines(); });
@@ -3246,6 +3259,13 @@ function loadExams(){
     if(rows.length===0){ $('examList').innerHTML='<div class="card empty">No exams yet. Use “Assemble exam” to build a midterm or final from the item bank.</div>'; return; }
     var html='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Title</th><th>Kind</th><th>Items</th><th>Points</th><th>Status</th><th></th></tr></thead><tbody>';
     rows.forEach(function(e){
+      if(e.is_manual){
+        html+='<tr><td>'+esc(e.title)+' <span class="tag amber" title="Graded on paper; scores are typed in">paper</span></td><td><span class="tag violet">'+esc(e.kind)+'</span></td><td>\u2014</td><td>'+esc(e.total_points||0)+'</td>'+
+          '<td>'+(e.is_published?'<span class="tag green">published</span>':'<span class="tag dim">draft</span>')+'</td>'+
+          '<td class="inline-actions"><button class="btn btn-primary btn-sm" data-scores="'+e.id+'" data-stitle="'+esc(e.title||'')+'" data-spts="'+esc(e.total_points||0)+'">Enter scores</button><button class="btn btn-ghost btn-sm" data-editpaper="'+e.id+'">Edit</button><button class="btn btn-ghost btn-sm" data-pub="'+e.id+'" data-on="'+(e.is_published?'1':'0')+'">'+(e.is_published?'Unpublish':'Publish')+'</button>'+
+          '<button class="btn btn-danger btn-sm" data-del="'+e.id+'">Delete</button></td></tr>';
+        return;
+      }
       var nItems=e.item_ids?e.item_ids.length:0;
       var perStudentBadge='';
       if(e.random_per_student){
@@ -3276,8 +3296,133 @@ function loadExams(){
       if(!confirm('Delete this exam? This cannot be undone.')){ return; }
       sb.from('im_exam').delete().eq('id',b.getAttribute('data-del')).then(loadExams);
     }); });
+    Array.prototype.forEach.call($('examList').querySelectorAll('[data-scores]'), function(b){ b.addEventListener('click', function(){
+      openPaperScores(b.getAttribute('data-scores'), b.getAttribute('data-stitle'), Number(b.getAttribute('data-spts'))||0);
+    }); });
+    Array.prototype.forEach.call($('examList').querySelectorAll('[data-editpaper]'), function(b){ b.addEventListener('click', function(){
+      openPaperExamEdit(b.getAttribute('data-editpaper'));
+    }); });
   });
 }
+/* ====================================================================
+   PAPER (offline) EXAMS -- create the exam, then type each student's
+   score straight into the gradebook. Scores count inside the Exam weight
+   exactly like an online exam (fraction = points / total_points).
+   Requires im_71_paper_exam.sql.
+   ==================================================================== */
+function openPaperExamCreate(existing){
+  if(!State.teachCourseId){ alert('Select a course first.'); return; }
+  var ed = existing || null;
+  var kindV = ed?ed.kind:'midterm';
+  var wpct = (ed && ed.weight!==null && ed.weight!==undefined && ed.weight!=='')?Math.round(Number(ed.weight)*100):'';
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  ov.innerHTML='<div class="modal" style="max-width:480px;"><h3 style="margin-bottom:6px;">'+(ed?'Edit paper exam':'New paper exam')+'</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">A paper exam is graded offline. After you create it, use <b>Enter scores</b> to type each student’s points. It counts inside the exam weight, out of the total points you set here.</p>'+
+    '<label class="fld">Title<input id="pxTitle" type="text" placeholder="e.g. Midterm 1 (in class)" value="'+esc(ed?(ed.title||''):'')+'"></label>'+
+    '<label class="fld">Kind<select id="pxKind"><option value="midterm">Midterm</option><option value="final">Final</option><option value="exam">Exam</option></select></label>'+
+    '<label class="fld">Total points<input id="pxPts" type="number" min="1" step="0.5" placeholder="e.g. 100" value="'+esc(ed?(ed.total_points||''):'')+'"></label>'+
+    '<label class="fld">Weight % (optional — blank uses the course exam weight)<input id="pxWeight" type="number" min="0" max="100" step="0.1" placeholder="e.g. 20" value="'+wpct+'"></label>'+
+    '<div class="msg err" id="pxErr" style="display:none;"></div>'+
+    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="pxCancel">Cancel</button><button class="btn btn-primary btn-sm" id="pxSave">'+(ed?'Save':'Create')+'</button></div></div>';
+  document.body.appendChild(ov);
+  function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
+  $('pxKind').value=kindV;
+  $('pxCancel').addEventListener('click', shut);
+  ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
+  function pxErr(m){ var el=$('pxErr'); el.style.display='block'; el.textContent=m; }
+  $('pxSave').addEventListener('click', function(){
+    var title=$('pxTitle').value.trim();
+    var pts=parseFloat($('pxPts').value);
+    if(!title){ pxErr('Give the exam a title.'); return; }
+    if(!(pts>0)){ pxErr('Total points must be greater than 0.'); return; }
+    var wRaw=$('pxWeight').value;
+    var weight=(wRaw!=='')?Math.max(0,Math.min(1,parseFloat(wRaw)/100)):null;
+    var patch={ title:title, kind:$('pxKind').value, total_points:pts, weight:weight, is_manual:true, is_published:true };
+    $('pxSave').disabled=true;
+    if(ed){
+      sb.from('im_exam').update(patch).eq('id',ed.id).then(function(res){
+        $('pxSave').disabled=false;
+        if(res.error){ pxErr(res.error.message); return; }
+        shut(); loadExams();
+      });
+    } else {
+      patch.course_id=State.teachCourseId; patch.item_ids=[]; patch.attempt_scoring='highest';
+      sb.from('im_exam').insert(patch).select('id,title,total_points').single().then(function(res){
+        $('pxSave').disabled=false;
+        if(res.error){ pxErr(res.error.message); return; }
+        shut(); loadExams();
+        if(res.data){ openPaperScores(res.data.id, res.data.title, Number(res.data.total_points)||pts); }
+      });
+    }
+  });
+}
+
+function openPaperExamEdit(examId){
+  sb.from('im_exam').select('*').eq('id',examId).single().then(function(res){
+    if(res.error||!res.data){ alert('Could not load that exam.'); return; }
+    openPaperExamCreate(res.data);
+  });
+}
+
+function openPaperScores(examId, title, totalPoints){
+  if(!State.teachCourseId){ alert('Select a course first.'); return; }
+  var ov=document.createElement('div'); ov.className='modal-bg';
+  ov.innerHTML='<div class="modal" style="max-width:640px;"><h3 style="margin-bottom:6px;">Enter scores — '+esc(title||'Paper exam')+'</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Type each student’s points out of <b>'+esc(totalPoints||0)+'</b>. Leave a box blank to skip — a student with no score shows “not taken” in their grade until you enter one.</p>'+
+    '<div id="pxsBody">'+loadingCard()+'</div>'+
+    '<div class="msg" id="pxsMsg" style="display:none;"></div>'+
+    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="pxsClose">Close</button><button class="btn btn-primary btn-sm" id="pxsSave">Save all</button></div></div>';
+  document.body.appendChild(ov);
+  function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
+  $('pxsClose').addEventListener('click', shut);
+  ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
+  Promise.all([
+    sb.from('im_gradebook_v').select('student_id,email,full_name').eq('course_id',State.teachCourseId),
+    sb.from('im_manual_exam_score').select('student_id,points').eq('exam_id',examId)
+  ]).then(function(r){
+    if(r[0] && r[0].error){ $('pxsBody').innerHTML='<div class="msg err" style="display:block;">Could not load the roster: '+esc(r[0].error.message)+'</div>'; return; }
+    if(r[1] && r[1].error){ $('pxsBody').innerHTML='<div class="msg err" style="display:block;">Paper-exam scores aren’t installed yet. Run <b>im_71_paper_exam.sql</b> in the SQL editor, then reopen this window.</div>'; var sv=$('pxsSave'); if(sv){ sv.disabled=true; } return; }
+    var roster=r[0].data?r[0].data:[];
+    var have={}; (r[1].data?r[1].data:[]).forEach(function(x){ have[x.student_id]=x.points; });
+    roster.sort(function(a,b){ var an=(a.full_name||a.email||'').toLowerCase(), bn=(b.full_name||b.email||'').toLowerCase(); return an<bn?-1:(an>bn?1:0); });
+    if(roster.length===0){ $('pxsBody').innerHTML='<div class="card empty">No enrolled students yet.</div>'; return; }
+    var h='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Student</th><th style="width:150px;">Points</th></tr></thead><tbody>';
+    roster.forEach(function(st){
+      var v=(have[st.student_id]!==undefined&&have[st.student_id]!==null)?have[st.student_id]:'';
+      h+='<tr><th scope="row" style="font-weight:500;">'+esc(st.full_name||st.email)+'<div style="font-size:11px;color:var(--text-subtle);">'+esc(st.email||'')+'</div></th>'+
+        '<td><input type="number" min="0" max="'+esc(totalPoints||0)+'" step="0.5" data-pxs="'+esc(st.student_id)+'" value="'+esc(v)+'" style="width:90px;"> <span style="font-size:11px;color:var(--text-subtle);">/ '+esc(totalPoints||0)+'</span></td></tr>';
+    });
+    h+='</tbody></table></div>';
+    $('pxsBody').innerHTML=h;
+  }, function(err){ $('pxsBody').innerHTML='<div class="msg err" style="display:block;">Could not load the roster.</div>'; });
+  $('pxsSave').addEventListener('click', function(){
+    var inputs=ov.querySelectorAll('[data-pxs]');
+    if(!inputs || inputs.length===0){ shut(); return; }
+    var nowIso=new Date().toISOString();
+    var uid=State.user?State.user.id:null;
+    var ups=[], dels=[];
+    Array.prototype.forEach.call(inputs, function(inp){
+      var sid=inp.getAttribute('data-pxs');
+      var raw=inp.value.trim();
+      if(raw===''){ dels.push(sid); return; }
+      var pts=parseFloat(raw); if(isNaN(pts)||pts<0){ return; }
+      ups.push({ exam_id:examId, student_id:sid, course_id:State.teachCourseId, points:pts, updated_by:uid, updated_at:nowIso });
+    });
+    var msg=$('pxsMsg'); msg.style.display='block'; msg.className='msg'; msg.textContent='Saving…';
+    $('pxsSave').disabled=true;
+    var work=[];
+    if(ups.length){ work.push(sb.from('im_manual_exam_score').upsert(ups,{onConflict:'exam_id,student_id'})); }
+    if(dels.length){ work.push(sb.from('im_manual_exam_score').delete().eq('exam_id',examId).in('student_id',dels)); }
+    if(work.length===0){ msg.className='msg ok'; msg.textContent='Nothing to save.'; $('pxsSave').disabled=false; return; }
+    Promise.all(work).then(function(rs){
+      $('pxsSave').disabled=false;
+      var e=null; rs.forEach(function(x){ if(x && x.error && !e){ e=x.error; } });
+      if(e){ msg.className='msg err'; msg.textContent='Could not save: '+e.message; return; }
+      msg.className='msg ok'; msg.textContent='Saved '+ups.length+' score'+(ups.length===1?'':'s')+'. Grades update on the next gradebook / My Grades load.';
+    }, function(err){ $('pxsSave').disabled=false; msg.className='msg err'; msg.textContent='Could not save.'; });
+  });
+}
+
 var assemblerSel={};
 var ExamRecipe=null;
 /* ====================================================================
@@ -6312,15 +6457,17 @@ function computeWeightedGrade(callback){
     sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,att_presence_share').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
-    sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring').eq('course_id', courseId).eq('is_published', true),
+    sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring,is_manual').eq('course_id', courseId).eq('is_published', true),
     sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id', courseId),
     sb.from('im_attendance_checkin').select('session_id,present,quiz_score').eq('user_id', uid),
-    sb.from('im_enrollment').select('created_at').eq('course_id', courseId).eq('user_id', uid).maybeSingle()
+    sb.from('im_enrollment').select('created_at').eq('course_id', courseId).eq('user_id', uid).maybeSingle(),
+    sb.from('im_manual_exam_score').select('exam_id,points').eq('course_id', courseId).eq('student_id', uid)
   ]).then(function(r){
     var course = r[0].data; if (!course) { callback(null); return; }
     var prog = r[1].data ? r[1].data : [];
     var arenas = r[2].data ? r[2].data : [];
     var exams = r[3].data ? r[3].data : [];
+    var manualPtsById={}; (r[7] && r[7].data ? r[7].data : []).forEach(function(m){ manualPtsById[m.exam_id]=m.points; });
     var attSessions = r[4].data ? r[4].data : [];
     var attCheckins = r[5].data ? r[5].data : [];
     var W = { reading:Number(course.weight_reading), quizzes:Number(course.weight_quizzes), arenas:Number(course.weight_arenas), midterm:Number(course.weight_midterm), final:Number(course.weight_final), attendance:Number(course.weight_attendance)||0 };
@@ -6337,6 +6484,12 @@ function computeWeightedGrade(callback){
     var gradedExams=exams.slice().sort(function(a,b){ var af=(a.kind==='final')?1:0, bf=(b.kind==='final')?1:0; return af-bf; });
     var examIds=gradedExams.map(function(e){ return e.id; });
     function finish(scoreById){
+      scoreById = scoreById || {};
+      gradedExams.forEach(function(e){
+        if(e.is_manual && manualPtsById[e.id]!==undefined && manualPtsById[e.id]!==null){
+          var tp=examPts(e); scoreById[e.id]= tp>0 ? Math.min(1, Number(manualPtsById[e.id])/tp) : null;
+        }
+      });
       var comps=[['Reading',reading,W.reading],['Quizzes',quizzes,W.quizzes],['Arenas',arenaScore,W.arenas]];
       if(attInfo && W.attendance>0){ comps.push(['Attendance', attInfo.score, W.attendance]); }
       gradedExams.forEach(function(e){
@@ -6396,14 +6549,16 @@ function loadMyGradesDetail(host, summary){
     var courseIds=(en.data?en.data:[]).map(function(x){ return x.course_id; });
     if(courseIds.length===0){ host.innerHTML=(summary?gradeSummaryCard(summary):'')+'<div class="card empty">No graded work yet. When you take exams or submit assignments, your grades appear here.</div>'; return; }
     Promise.all([
-      sb.from('im_exam').select('id,course_id,kind,title,total_points,attempt_scoring').in('course_id',courseIds).eq('is_published',true),
+      sb.from('im_exam').select('id,course_id,kind,title,total_points,attempt_scoring,is_manual').in('course_id',courseIds).eq('is_published',true),
       sb.from('im_assignment').select('id,course_id,title,points').in('course_id',courseIds).eq('is_published',true),
-      sb.from('im_submission').select('assignment_id,score,feedback,submitted_at,graded_at').eq('student_id',uid)
+      sb.from('im_submission').select('assignment_id,score,feedback,submitted_at,graded_at').eq('student_id',uid),
+      sb.from('im_manual_exam_score').select('exam_id,points').eq('student_id',uid)
     ]).then(function(res){
       var exams=res[0].data?res[0].data:[];
       var asgs=res[1].data?res[1].data:[];
       var subs=res[2].data?res[2].data:[];
       var subBy={}; subs.forEach(function(s){ subBy[s.assignment_id]=s; });
+      var manualPtsById={}; (res[3] && res[3].data ? res[3].data : []).forEach(function(m){ manualPtsById[m.exam_id]=m.points; });
       var examIds=exams.map(function(e){ return e.id; });
       var attemptsP = examIds.length ? sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,created_at,graded_at').eq('student_id',uid).in('exam_id',examIds).not('graded_at','is',null) : Promise.resolve({data:[]});
       attemptsP.then(function(at){
@@ -6434,6 +6589,14 @@ function loadMyGradesDetail(host, summary){
             if(!(possible>0)){ possible=(e.total_points&&Number(e.total_points)>0)?Number(e.total_points):Object.keys(grp[e.id]).length; }
             if(total>possible){ total=possible; }
             examScore[e.id]=total; examPossible[e.id]=possible;
+          });
+          // Paper (manual) exams: show typed points out of total_points.
+          exams.forEach(function(e){
+            if(!e.is_manual){ return; }
+            if(manualPtsById[e.id]===undefined || manualPtsById[e.id]===null){ return; }
+            var tp=(e.total_points&&Number(e.total_points)>0)?Number(e.total_points):Number(manualPtsById[e.id]);
+            var pv=Number(manualPtsById[e.id]); if(pv>tp){ pv=tp; }
+            examScore[e.id]=pv; examPossible[e.id]=tp;
           });
           renderMyGrades(host, exams, examScore, examPossible, asgs, subBy, summary);
         }
@@ -6557,7 +6720,7 @@ function renderMyGrades(host, exams, examScore, examPossible, asgs, subBy, summa
       // Review opens only after the deadline, and only if the instructor
       // released it; the server re-checks both, so this button is just a
       // convenience. Students see the questions they got wrong.
-      var rev = taken
+      var rev = (taken && !e.is_manual)
         ? '<button class="btn btn-ghost btn-sm" data-review-exam="'+esc(e.id)+'" data-review-title="'+esc(e.title||e.kind)+'">Review mistakes</button>'
         : '<span style="color:var(--text-subtle);">\u2014</span>';
       html+='<tr><th scope="row" style="font-weight:500;">'+esc(e.title||e.kind)+'</th><td>'+score+'</td><td>'+status+'</td><td>'+rev+'</td></tr>';
@@ -6669,7 +6832,7 @@ function loadMyExams() {
 function loadMyExamsFor(host, uid, courseIds, titleById) {
   {
     Promise.all([
-      sb.from('im_exam').select('id,course_id,kind,title,total_points,time_limit_minutes,instructions,item_ids,is_published,max_attempts,shuffle_questions,attempt_scoring,opens_at,closes_at,proctored,camera_mode,random_per_student,random_recipe').in('course_id', courseIds).eq('is_published', true).order('created_at',{ascending:true}),
+      sb.from('im_exam').select('id,course_id,kind,title,total_points,time_limit_minutes,instructions,item_ids,is_published,max_attempts,shuffle_questions,attempt_scoring,opens_at,closes_at,proctored,camera_mode,random_per_student,random_recipe,is_manual').in('course_id', courseIds).eq('is_published', true).order('created_at',{ascending:true}),
       sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,graded_at,submitted_value').eq('student_id', uid).not('exam_id','is',null),
       sb.from('im_accommodation').select('course_id,time_multiplier,extra_attempts').eq('student_id', uid),
       sb.from('im_assessment_accommodation').select('ref_id,due_override').eq('student_id', uid).eq('kind','exam')
@@ -6679,7 +6842,7 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
       // kind==='midterm'||'final', which silently hid a published, enrolled,
       // listed exam whose kind was anything else (e.g. 'exam'). Quizzes and
       // arenas are surfaced elsewhere, so exclude only those.
-      exams = exams.filter(function(e){ return e.kind !== 'quiz' && e.kind !== 'arena'; });
+      exams = exams.filter(function(e){ return e.kind !== 'quiz' && e.kind !== 'arena' && !e.is_manual; });
       var attempts = r[1].data ? r[1].data : [];
       // Unfinished sittings: attempts issued but never answered (graded_at null
       // AND no submitted value). These let a student resume an interrupted exam.
@@ -7340,15 +7503,17 @@ function loadCompletion() {
     sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,att_presence_share').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
-    sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring').eq('course_id', courseId).eq('is_published', true),
+    sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring,is_manual').eq('course_id', courseId).eq('is_published', true),
     sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id', courseId),
     sb.from('im_attendance_checkin').select('session_id,present,quiz_score').eq('user_id', uid),
-    sb.from('im_enrollment').select('created_at').eq('course_id', courseId).eq('user_id', uid).maybeSingle()
+    sb.from('im_enrollment').select('created_at').eq('course_id', courseId).eq('user_id', uid).maybeSingle(),
+    sb.from('im_manual_exam_score').select('exam_id,points').eq('course_id', courseId).eq('student_id', uid)
   ]).then(function(r) {
     var course = r[0].data; if (!course) { host.innerHTML=''; return; }
     var prog = r[1].data ? r[1].data : [];
     var arenas = r[2].data ? r[2].data : [];
     var exams = r[3].data ? r[3].data : [];
+    var manualPtsById={}; (r[7] && r[7].data ? r[7].data : []).forEach(function(m){ manualPtsById[m.exam_id]=m.points; });
     var lpEnrMs = (r[6] && r[6].data && r[6].data.created_at) ? new Date(r[6].data.created_at).getTime() : null;
     var attInfo = computeAttendanceScore(r[4].data||[], r[5].data||[], course.att_presence_share, lpEnrMs);
     var W = { reading:Number(course.weight_reading), quizzes:Number(course.weight_quizzes), arenas:Number(course.weight_arenas), midterm:Number(course.weight_midterm), final:Number(course.weight_final), attendance:Number(course.weight_attendance)||0 };
@@ -7369,6 +7534,12 @@ function loadCompletion() {
     var examIds = gradedExams.map(function(e){ return e.id; });
 
     function finish(scoreById) {
+      scoreById = scoreById || {};
+      gradedExams.forEach(function(e){
+        if(e.is_manual && manualPtsById[e.id]!==undefined && manualPtsById[e.id]!==null){
+          var tp=examPts(e); scoreById[e.id]= tp>0 ? Math.min(1, Number(manualPtsById[e.id])/tp) : null;
+        }
+      });
       // Exams ALWAYS count toward completion: an untaken exam scores 0, so a
       // student must take all exams to reach 100% / earn the certificate.
       var comps=[['Reading',reading,W.reading],['Quizzes',quizzes,W.quizzes],['Arenas',arenaScore,W.arenas]];
