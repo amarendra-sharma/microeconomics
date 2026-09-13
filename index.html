@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe11';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe12';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3724,7 +3724,7 @@ function quizWorkDirectHtml(items){
       yours=(it.submitted===null||it.submitted==='')?'(no answer)':String(it.submitted);
       correct=(it.answer!==undefined&&it.answer!==null)?String(it.answer):'—';
     }
-    mark = it.is_correct===true?'<span class="tag green">correct</span>':(it.is_correct===false?'<span class="tag rose">incorrect</span>':'<span class="tag dim">ungraded</span>');
+    mark = ((it.points_earned!==null&&it.points_earned!==undefined&&Number(it.points)>0&&Number(it.points_earned)>0&&Number(it.points_earned)<Number(it.points))?'<span class="tag amber">partial credit · '+esc(String(it.points_earned))+' / '+esc(String(it.points))+'</span>':(it.is_correct===true?'<span class="tag green">correct</span>':(it.is_correct===false?'<span class="tag rose">incorrect</span>':'<span class="tag dim">ungraded</span>')));
     html+='<div class="card" style="margin-bottom:12px;padding:14px;">'+
       '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">'+
         '<div style="font-weight:500;">Q'+(i+1)+' · Ch '+esc(String(it.chapter))+' <span class="tag dim">'+esc(it.kind==='short'?'written':(it.kind==='mc'?'MC':'numeric'))+'</span></div><div>'+mark+'</div></div>'+
@@ -3888,9 +3888,11 @@ function questionWorkHtml(items, t, sid){
       if(!isNaN(yi) && it.options[yi]!==undefined){ yours=it.options[yi]; }
       if(!isNaN(ci) && it.options[ci]!==undefined){ correct=it.options[ci]; }
     }
-    mark = it.is_correct===true ? '<span class="tag green">correct</span>'
+    mark = (it.points_earned!==null&&it.points_earned!==undefined&&Number(it.max_points)>0&&Number(it.points_earned)>0&&Number(it.points_earned)<Number(it.max_points))
+         ? '<span class="tag amber">partial credit · '+esc(String(it.points_earned))+' / '+esc(String(it.max_points))+'</span>'
+         : (it.is_correct===true ? '<span class="tag green">correct</span>'
          : (it.is_correct===false ? '<span class="tag rose">incorrect</span>'
-         : '<span class="tag dim">needs marking</span>');
+         : '<span class="tag dim">needs marking</span>'));
     html+='<div class="card" style="margin-bottom:12px;padding:14px;">'+
       '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">'+
         '<div style="font-weight:500;">Q'+(i+1)+(it.chapter?(' \u00b7 Ch '+it.chapter):'')+'</div><div>'+mark+'</div></div>'+
@@ -5827,12 +5829,22 @@ function openQuizReview(chapter){
     var rows=d.items?d.items:[];
     var html='<div class="q-card" style="max-width:720px;margin:0 auto;text-align:left;">';
     html+='<h2 style="font-size:20px;margin-bottom:4px;">Chapter '+chapter+' quiz \u2014 questions to revisit</h2>';
-    html+='<p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">The graded-quiz questions you missed, with the correct answer. Use them to study.</p>';
+    html+='<p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Questions where you didn\u2019t earn full marks, with the model answer and any feedback. Where your instructor awarded partial credit, it\u2019s shown below.</p>';
     if(rows.length===0){
       html+='<p style="color:var(--text-bright);">Nothing to review here \u2014 you didn\u2019t miss any auto-graded questions on this quiz.</p>';
     } else {
       rows.forEach(function(r){
         var yours=(r.your_answer===null||r.your_answer==='')?'<span style="color:var(--text-subtle);">(blank)</span>':esc(String(r.your_answer));
+        var _pe=(r.points_earned===null||r.points_earned===undefined)?null:Number(r.points_earned);
+        var _mx=(r.max_points===null||r.max_points===undefined)?null:Number(r.max_points);
+        var scoreLine='';
+        if(_pe!==null && _mx!==null && _mx>0){
+          if(_pe>0 && _pe<_mx){ scoreLine='<div style="font-size:13px;color:var(--amber);"><b>Partial credit:</b> '+esc(String(_pe))+' / '+esc(String(_mx))+'</div>'; }
+          else if(_pe>=_mx){ scoreLine='<div style="font-size:13px;color:var(--green);"><b>Your score:</b> '+esc(String(_pe))+' / '+esc(String(_mx))+' \u2014 full marks</div>'; }
+          else { scoreLine='<div style="font-size:13px;color:var(--text-muted);"><b>Your score:</b> 0 / '+esc(String(_mx))+'</div>'; }
+        } else if(_pe!==null || _mx!==null){
+          scoreLine='<div style="font-size:13px;color:var(--amber);"><b>Your score:</b> '+esc(String(_pe===null?0:_pe))+' / '+esc(String(_mx===null?'?':_mx))+'</div>';
+        }
         var correct=String(r.correct_answer);
         if(r.options && r.options.length){
           var yi=parseInt(r.your_answer,10), ci=parseInt(correct,10);
@@ -5843,7 +5855,7 @@ function openQuizReview(chapter){
           '<div style="font-size:14px;color:var(--text-bright);margin:0 0 6px;">'+esc(r.prompt||'')+'</div>'+
           (r.figure?('<div style="margin:6px 0;">'+renderFigure(r.figure)+'</div>'):'')+
           '<div style="font-size:13px;"><b>Your answer:</b> '+yours+'</div>'+
-          ((r.points_earned!==undefined||r.max_points!==undefined)?('<div style="font-size:13px;color:var(--amber);"><b>Your score:</b> '+esc(String(r.points_earned===null||r.points_earned===undefined?0:r.points_earned))+' / '+esc(String(r.max_points===null||r.max_points===undefined?'?':r.max_points))+'</div>'):'')+
+          scoreLine+
           '<div style="font-size:13px;color:var(--green);"><b>Correct answer:</b> '+esc(correct)+'</div>'+
           (r.feedback?('<div style="font-size:12.5px;color:var(--violet);margin-top:4px;"><b>Instructor feedback:</b> '+esc(r.feedback)+'</div>'):'')+
           (r.rationale?('<div style="font-size:12.5px;color:var(--text-muted);margin-top:4px;"><b>Why:</b> '+esc(r.rationale)+'</div>'):'')+
@@ -7310,7 +7322,7 @@ function loadProgress() {
       var tb = $('attemptsTbl').querySelector('tbody'); tb.innerHTML = '';
       rows.forEach(function(r) {
         var ch = (r.im_assessment_item && r.im_assessment_item.chapter) ? r.im_assessment_item.chapter : '—';
-        var res2 = r.is_correct ? '<span class="tag-ok">✓ correct</span>' : '<span class="tag-no">✗ wrong</span>';
+        var res2 = r.is_correct ? '<span class="tag-ok">✓ correct</span>' : ((r.points_earned && Number(r.points_earned)>0) ? '<span style="color:var(--amber);font-weight:600;">◐ partial</span>' : '<span class="tag-no">✗ wrong</span>');
         var when = r.graded_at ? new Date(r.graded_at).toLocaleString() : '';
         tb.innerHTML += '<tr><td class="mono">' + esc(r.item_id) + '</td><td>' + esc(ch) + '</td><td>' + res2 +
           '</td><td>' + esc(r.points_earned) + '</td><td>' + esc(when) + '</td></tr>';
