@@ -1207,7 +1207,7 @@
       var floor = pStar + rng_int(rng, 2, 4);
       var qd = (a - floor) / b, qs = (floor - c) / d;
       return {
-        prompt: "The graph shows a price floor of $" + floor + ". Read/compute the surplus (Qs \u2212 Qd) it creates.",
+        prompt: "The graph shows a price floor of $" + floor + ". Read/compute the surplus (Qs \u2212 Qd) it creates. (Demand P = " + a + " \u2212 " + fmtCoef(b) + "Q, supply P = " + c + " + " + fmtCoef(d) + "Q.)",
         diagramSpec: { type: "price_control", dA: a, dB: -b, sA: c, sB: d, control: "floor", level: floor,
           qmax: Math.max(10, qStar + 4), pmax: Math.max(12, a + 1) },
         answer: round2(qs - qd), tolerance: 0.1,
@@ -1508,7 +1508,7 @@
       var pStar = c + d * qStar, a = pStar + b * qStar;
       var ps = 0.5 * qStar * (pStar - c);
       return {
-        prompt: "Using the shaded producer-surplus region, compute producer surplus at equilibrium.",
+        prompt: "Using the shaded producer-surplus region, compute producer surplus at equilibrium. (Demand P = " + a + " \u2212 " + fmtCoef(b) + "Q, supply P = " + c + " + " + fmtCoef(d) + "Q.)",
         diagramSpec: { type: "supply_demand", dA: a, dB: -b, sA: c, sB: d, showEq: true, shade: "surplus",
           qmax: Math.max(10, qStar + 3), pmax: Math.max(12, a + 1) },
         answer: round2(ps), tolerance: 0.5,
