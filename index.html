@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe12';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe14';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1893,14 +1893,82 @@ function renderGradebook(host){
         });
       });
       // assignment averages + manual overrides + arena performance
+      // Page the arena attempts. Without paging, once a course passes the
+      // server's ~1000-row cap the query silently truncated and any student
+      // whose rows fell outside it showed 0 arenas (mirrors the exam-attempt fix).
+      function fetchAllArenaAttempts(){
+        var all=[], PAGE=1000;
+        function page(from){
+          return sb.from('im_attempt')
+            .select('user_id,arena_slug,is_correct,created_at')
+            .eq('course_id',State.teachCourseId)
+            .order('created_at',{ascending:true})
+            .range(from, from+PAGE-1)
+            .then(function(res){
+              if(res && res.error){ return { data: all, error: res.error }; }
+              var got=(res && res.data)?res.data:[];
+              all=all.concat(got);
+              if(got.length < PAGE){ return { data: all }; }
+              if(from > 500000){ return { data: all }; }
+              return page(from + PAGE);
+            });
+        }
+        return page(0);
+      }
+      // Page submissions too (same 1000-row cap risk as the course grows).
+      function fetchAllSubmissions(){
+        var all=[], PAGE=1000;
+        function page(from){
+          return sb.from('im_submission')
+            .select('assignment_id,student_id,score')
+            .eq('course_id',State.teachCourseId)
+            .order('student_id',{ascending:true})
+            .range(from, from+PAGE-1)
+            .then(function(res){
+              if(res && res.error){ return { data: all, error: res.error }; }
+              var got=(res && res.data)?res.data:[];
+              all=all.concat(got);
+              if(got.length < PAGE){ return { data: all }; }
+              if(from > 500000){ return { data: all }; }
+              return page(from + PAGE);
+            });
+        }
+        return page(0);
+      }
+      // Attendance check-ins: scope to THIS course's sessions AND page them.
+      // The old query fetched every course's check-ins with no filter and no
+      // paging, so it both over-fetched and truncated at the 1000-row cap.
+      function fetchAllAttendanceCheckins(){
+        return sb.from('im_attendance_session').select('id').eq('course_id',State.teachCourseId).then(function(sres){
+          var ids=(sres&&sres.data?sres.data:[]).map(function(x){ return x.id; });
+          if(ids.length===0){ return { data: [] }; }
+          var all=[], PAGE=1000;
+          function page(from){
+            return sb.from('im_attendance_checkin')
+              .select('session_id,user_id,present,quiz_score')
+              .in('session_id', ids)
+              .order('session_id',{ascending:true})
+              .range(from, from+PAGE-1)
+              .then(function(res){
+                if(res && res.error){ return { data: all, error: res.error }; }
+                var got=(res && res.data)?res.data:[];
+                all=all.concat(got);
+                if(got.length < PAGE){ return { data: all }; }
+                if(from > 500000){ return { data: all }; }
+                return page(from + PAGE);
+              });
+          }
+          return page(0);
+        });
+      }
       withTimeout(Promise.all([
         sb.from('im_assignment').select('id,points').eq('course_id',State.teachCourseId).eq('is_published',true),
-        sb.from('im_submission').select('assignment_id,student_id,score').eq('course_id',State.teachCourseId),
+        fetchAllSubmissions(),
         sb.from('im_grade_override').select('student_id,override_pct,note').eq('course_id',State.teachCourseId),
-        sb.from('im_attempt').select('user_id,arena_slug,is_correct,created_at').eq('course_id',State.teachCourseId),
+        fetchAllArenaAttempts(),
         sb.from('im_bank_items').select('id,points').in('id', Object.keys(gbIdset)),
         sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id',State.teachCourseId),
-        sb.from('im_attendance_checkin').select('session_id,user_id,present,quiz_score'),
+        fetchAllAttendanceCheckins(),
         sb.from('im_enrollment').select('user_id,student_id,created_at').eq('course_id',State.teachCourseId),
         sb.from('im_manual_exam_score').select('student_id,exam_id,points').eq('course_id',State.teachCourseId)
       ]), 'assignments and arenas', 20000).then(function(ar){
