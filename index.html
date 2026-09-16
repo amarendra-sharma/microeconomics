@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe14';
+var SA_BUILD = 'intro-micro-portal-2026-09-ta-safe15';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1609,6 +1609,7 @@ function openAccommodation(studentId, email, existing){
   var note = existing && existing.note?existing.note:'';
   m.innerHTML='<div class="modal" style="max-width:520px;"><h2>Accommodations</h2>'+
     '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">For <b>'+esc(email||studentId)+'</b> in this course.</div>'+
+    '<div id="acSummary" style="margin:0 0 12px;"></div>'+
     '<div id="acMsg" class="msg"></div>'+
     '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Course-wide (applies to every exam)</div>'+
     '<div class="row2"><div class="field"><label>Time multiplier</label><select id="acMult">'+
@@ -1636,6 +1637,48 @@ function openAccommodation(studentId, email, existing){
       (existing?'<button class="btn btn-danger btn-sm" id="acClear">Remove</button>':'')+
       '<button class="btn btn-ghost" id="acCancel">Cancel</button><button class="btn btn-primary" id="acSave">Save</button></div></div>';
   $('modalHost').appendChild(m);
+  // Read-only: every accommodation already on file for this student, at a glance
+  // (so you can see what you've granted without clicking through each item).
+  (function(){
+    var host=$('acSummary'); if(!host){ return; }
+    host.innerHTML='<div style="font-size:12px;color:var(--text-subtle);">Loading current accommodations…</div>';
+    Promise.all([
+      sb.from('im_assessment_accommodation').select('kind,ref_id,due_override,extra_attempts,note').eq('course_id',State.teachCourseId).eq('student_id',studentId),
+      sb.from('im_exam').select('id,title').eq('course_id',State.teachCourseId),
+      sb.from('im_assignment').select('id,title').eq('course_id',State.teachCourseId)
+    ]).then(function(rr){
+      var items=(rr[0]&&rr[0].data)?rr[0].data:[];
+      var exTitle={}; ((rr[1]&&rr[1].data)?rr[1].data:[]).forEach(function(x){ exTitle[x.id]=x.title; });
+      var asTitle={}; ((rr[2]&&rr[2].data)?rr[2].data:[]).forEach(function(x){ asTitle[x.id]=x.title; });
+      var lines=[];
+      if(existing && (Number(existing.time_multiplier)!==1 || Number(existing.extra_attempts)!==0)){
+        var cw=[];
+        if(Number(existing.time_multiplier)!==1){ cw.push(existing.time_multiplier+'× time on timed exams'); }
+        if(Number(existing.extra_attempts)!==0){ cw.push('+'+existing.extra_attempts+' attempt'+(Number(existing.extra_attempts)===1?'':'s')+' on every exam'); }
+        lines.push('<b>Course-wide</b>: '+cw.join(' · ')+(existing.note?(' — '+esc(existing.note)):''));
+      }
+      items.forEach(function(o){
+        var label;
+        if(o.kind==='exam'){ label=exTitle[o.ref_id]?esc(exTitle[o.ref_id]):'Exam'; }
+        else if(o.kind==='quiz'){ label='Chapter '+esc(String(o.ref_id))+' quiz'; }
+        else if(o.kind==='arena'){ label=(typeof ARENA_TITLE!=='undefined'&&ARENA_TITLE[o.ref_id])?esc(ARENA_TITLE[o.ref_id]):esc(String(o.ref_id)); }
+        else if(o.kind==='assignment'){ label=asTitle[o.ref_id]?esc(asTitle[o.ref_id]):'Assignment'; }
+        else { label=esc(String(o.kind)); }
+        var parts=[];
+        if(o.due_override){ parts.push('due '+new Date(o.due_override).toLocaleString()); }
+        if(o.extra_attempts&&Number(o.extra_attempts)>0){ parts.push('+'+o.extra_attempts+' attempt'+(Number(o.extra_attempts)===1?'':'s')); }
+        lines.push('<b>'+label+'</b>: '+(parts.length?parts.join(' · '):'on file')+(o.note?(' — '+esc(o.note)):''));
+      });
+      if(lines.length===0){
+        host.innerHTML='<div style="font-size:12px;color:var(--text-subtle);border:1px dashed var(--border);border-radius:8px;padding:8px 10px;">No accommodations on file for this student yet.</div>';
+        return;
+      }
+      host.innerHTML='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">'+
+        '<div style="font-weight:600;font-size:12.5px;margin-bottom:6px;">Currently on file for this student</div>'+
+        '<ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--text-muted);">'+
+        lines.map(function(l){ return '<li style="margin-bottom:3px;">'+l+'</li>'; }).join('')+'</ul></div>';
+    }, function(){ if(host){ host.innerHTML=''; } });
+  })();
   // set current multiplier
   var sel=$('acMult'); for(var i=0;i<sel.options.length;i++){ if(parseFloat(sel.options[i].value)===Number(tm)){ sel.selectedIndex=i; } }
 
@@ -6833,7 +6876,57 @@ function renderMyGrades(host, exams, examScore, examPossible, asgs, subBy, summa
       openExamReview(b.getAttribute('data-review-exam'), b.getAttribute('data-review-title'));
     });
   });
+  loadMyAccommodationsCard(host);
 }
+
+// Read-only card of the student's own accommodations (extra time, extra
+// attempts, rescheduled deadlines). Additive: injected at the top of My Grades,
+// and shown only when the student actually has accommodations on file.
+function loadMyAccommodationsCard(host){
+  var uid=State.user?State.user.id:null;
+  var courseId=State.payCourseId||State.selfCourseId;
+  if(!uid||!courseId||!host){ return; }
+  Promise.all([
+    sb.from('im_accommodation').select('time_multiplier,extra_attempts,note').eq('student_id',uid).eq('course_id',courseId).maybeSingle(),
+    sb.from('im_assessment_accommodation').select('kind,ref_id,due_override,extra_attempts,note').eq('student_id',uid).eq('course_id',courseId),
+    sb.from('im_exam').select('id,title').eq('course_id',courseId).eq('is_published',true),
+    sb.from('im_assignment').select('id,title').eq('course_id',courseId).eq('is_published',true)
+  ]).then(function(rr){
+    var cw=(rr[0]&&rr[0].data)?rr[0].data:null;
+    var items=(rr[1]&&rr[1].data)?rr[1].data:[];
+    var exTitle={}; ((rr[2]&&rr[2].data)?rr[2].data:[]).forEach(function(x){ exTitle[x.id]=x.title; });
+    var asTitle={}; ((rr[3]&&rr[3].data)?rr[3].data:[]).forEach(function(x){ asTitle[x.id]=x.title; });
+    var lines=[];
+    if(cw && (Number(cw.time_multiplier)!==1 || Number(cw.extra_attempts)!==0)){
+      var b=[];
+      if(Number(cw.time_multiplier)!==1){ b.push('<b>'+cw.time_multiplier+'×</b> time on timed exams'); }
+      if(Number(cw.extra_attempts)!==0){ b.push('<b>+'+cw.extra_attempts+'</b> attempt'+(Number(cw.extra_attempts)===1?'':'s')+' on exams'); }
+      lines.push(b.join(' · '));
+    }
+    items.forEach(function(o){
+      var label;
+      if(o.kind==='exam'){ label=exTitle[o.ref_id]?esc(exTitle[o.ref_id]):'Exam'; }
+      else if(o.kind==='quiz'){ label='Chapter '+esc(String(o.ref_id))+' quiz'; }
+      else if(o.kind==='arena'){ label=(typeof ARENA_TITLE!=='undefined'&&ARENA_TITLE[o.ref_id])?esc(ARENA_TITLE[o.ref_id]):esc(String(o.ref_id)); }
+      else if(o.kind==='assignment'){ label=asTitle[o.ref_id]?esc(asTitle[o.ref_id]):'Assignment'; }
+      else { label=esc(String(o.kind)); }
+      var parts=[];
+      if(o.due_override){ parts.push('extended to '+new Date(o.due_override).toLocaleString()); }
+      if(o.extra_attempts&&Number(o.extra_attempts)>0){ parts.push('+'+o.extra_attempts+' attempt'+(Number(o.extra_attempts)===1?'':'s')); }
+      if(parts.length){ lines.push('<b>'+label+'</b>: '+parts.join(' · ')); }
+    });
+    if(lines.length===0){ return; }
+    var card=document.createElement('div');
+    card.className='card';
+    card.style.cssText='margin-bottom:16px;border-left:3px solid var(--violet);';
+    card.innerHTML='<h3 style="font-size:15px;margin-bottom:8px;">Your accommodations</h3>'+
+      '<ul style="margin:0;padding-left:18px;font-size:13px;color:var(--text-muted);">'+
+      lines.map(function(l){ return '<li style="margin-bottom:4px;">'+l+'</li>'; }).join('')+'</ul>'+
+      '<div style="font-size:11.5px;color:var(--text-subtle);margin-top:8px;">These are applied automatically. Questions? Contact your instructor.</div>';
+    if(host.firstChild){ host.insertBefore(card, host.firstChild); } else { host.appendChild(card); }
+  }, function(){});
+}
+
 
 /* Student review of a graded exam. Shows ONLY the questions the student got
    wrong, and only once the instructor has released review AND the exam's
