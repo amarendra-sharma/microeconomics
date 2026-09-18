@@ -437,7 +437,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-trade';
+var SA_BUILD = 'intro-micro-portal-2026-09-windows';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1622,8 +1622,10 @@ function openAccommodation(studentId, email, existing){
     '<div class="row2"><div class="field"><label>Type</label><select id="acKind">'+
       '<option value="">\u2014 none \u2014</option><option value="exam">Exam</option><option value="quiz">Chapter quiz</option><option value="arena">Arena</option><option value="assignment">Assignment</option></select></div>'+
     '<div class="field"><label>Which one</label><select id="acRef"><option value="">Choose a type first</option></select></div></div>'+
-    '<div class="row2"><div class="field"><label>New deadline for this student</label><input id="acDue" type="datetime-local"></div>'+
-    '<div class="field"><label>Extra attempts (this item)</label><input id="acItemExtra" type="number" min="0" value="0"></div></div>'+
+    '<div class="row2"><div class="field"><label>Opens early for this student</label><input id="acOpens" type="datetime-local"></div>'+
+    '<div class="field"><label>New deadline for this student</label><input id="acDue" type="datetime-local"></div></div>'+
+    '<div class="field"><label>Extra attempts (this item)</label><input id="acItemExtra" type="number" min="0" value="0"></div>'+
+    '<div style="font-size:11.5px;color:var(--text-subtle);margin:-4px 0 8px;">Leave either date blank to keep the course-wide one. An open date here lets one student start before everybody else.</div>'+
     '<div id="acExisting" style="font-size:12px;color:var(--text-muted);margin:2px 0 8px;"></div>'+
     '<div style="border-top:1px solid var(--border);margin:12px 0 8px;padding-top:10px;">'+
       '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">Reopen an auto-submitted exam or quiz</div>'+
@@ -1643,7 +1645,7 @@ function openAccommodation(studentId, email, existing){
     var host=$('acSummary'); if(!host){ return; }
     host.innerHTML='<div style="font-size:12px;color:var(--text-subtle);">Loading current accommodations…</div>';
     Promise.all([
-      sb.from('im_assessment_accommodation').select('kind,ref_id,due_override,extra_attempts,note').eq('course_id',State.teachCourseId).eq('student_id',studentId),
+      sb.from('im_assessment_accommodation').select('kind,ref_id,due_override,opens_override,extra_attempts,note').eq('course_id',State.teachCourseId).eq('student_id',studentId),
       sb.from('im_exam').select('id,title').eq('course_id',State.teachCourseId),
       sb.from('im_assignment').select('id,title').eq('course_id',State.teachCourseId)
     ]).then(function(rr){
@@ -1665,6 +1667,7 @@ function openAccommodation(studentId, email, existing){
         else if(o.kind==='assignment'){ label=asTitle[o.ref_id]?esc(asTitle[o.ref_id]):'Assignment'; }
         else { label=esc(String(o.kind)); }
         var parts=[];
+        if(o.opens_override){ parts.push('opens '+new Date(o.opens_override).toLocaleString()); }
         if(o.due_override){ parts.push('due '+new Date(o.due_override).toLocaleString()); }
         if(o.extra_attempts&&Number(o.extra_attempts)>0){ parts.push('+'+o.extra_attempts+' attempt'+(Number(o.extra_attempts)===1?'':'s')); }
         lines.push('<b>'+label+'</b>: '+(parts.length?parts.join(' · '):'on file')+(o.note?(' — '+esc(o.note)):''));
@@ -1745,16 +1748,18 @@ function openAccommodation(studentId, email, existing){
   function showExistingItem(){
     var kind=$('acKind').value, ref=$('acRef').value, box=$('acExisting');
     if(!kind||!ref){ box.textContent=''; return; }
-    sb.from('im_assessment_accommodation').select('due_override,extra_attempts,note')
+    sb.from('im_assessment_accommodation').select('due_override,opens_override,extra_attempts,note')
       .eq('course_id',State.teachCourseId).eq('student_id',studentId).eq('kind',kind).eq('ref_id',String(ref))
       .maybeSingle().then(function(r){
         if(r.data){
           var d=r.data.due_override?new Date(r.data.due_override):null;
-          if(d){ $('acDue').value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16); }
+          if(d){ $('acDue').value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16); } else { $('acDue').value=''; }
+          var o=r.data.opens_override?new Date(r.data.opens_override):null;
+          if(o && $('acOpens')){ $('acOpens').value=new Date(o.getTime()-o.getTimezoneOffset()*60000).toISOString().slice(0,16); } else if($('acOpens')){ $('acOpens').value=''; }
           $('acItemExtra').value=r.data.extra_attempts||0;
           box.textContent='An accommodation is already on file for this item \u2014 saving will update it.';
         } else {
-          $('acDue').value=''; $('acItemExtra').value=0; box.textContent='';
+          $('acDue').value=''; if($('acOpens')){ $('acOpens').value=''; } $('acItemExtra').value=0; box.textContent='';
         }
       });
   }
@@ -1792,15 +1797,34 @@ function openAccommodation(studentId, email, existing){
       var kind=$('acKind').value, ref=$('acRef').value;
       if(!kind||!ref){ $('acSave').disabled=false; close(); loadRoster(); return; }
       var dueRaw=$('acDue').value;
+      var opensRaw=$('acOpens')?$('acOpens').value:'';
+      if(dueRaw && opensRaw && new Date(dueRaw)<=new Date(opensRaw)){
+        $('acSave').disabled=false; var eW=$('acMsg'); eW.className='msg err';
+        eW.textContent='The new deadline must come after the open date.'; return;
+      }
       sb.rpc('im_set_reschedule',{
         p_course:State.teachCourseId, p_kind:kind, p_ref:String(ref), p_student:studentId,
         p_closes_at: dueRaw?new Date(dueRaw).toISOString():null,
         p_extra: parseInt($('acItemExtra').value,10)||0,
         p_note: $('acNote').value.trim()
       }).then(function(r2){
-        $('acSave').disabled=false;
-        if(r2 && r2.error){ var e2=$('acMsg'); e2.className='msg err'; e2.textContent = (String(r2.error.message||'').indexOf('function')>=0? 'Rescheduling isn\u2019t installed yet \u2014 run im_28_reschedule_and_reopen.sql.' : r2.error.message); return; }
-        close(); loadRoster();
+        if(r2 && r2.error){ $('acSave').disabled=false; var e2=$('acMsg'); e2.className='msg err'; e2.textContent = (String(r2.error.message||'').indexOf('function')>=0? 'Rescheduling isn\u2019t installed yet \u2014 run im_28_reschedule_and_reopen.sql.' : r2.error.message); return; }
+        // The open side is a separate setter (im_75): im_set_reschedule's own
+        // signature is fixed, so adding a parameter there would break it.
+        sb.rpc('im_set_reschedule_open',{
+          p_course:State.teachCourseId, p_kind:kind, p_ref:String(ref), p_student:studentId,
+          p_opens_at: opensRaw?new Date(opensRaw).toISOString():null
+        }).then(function(r3){
+          $('acSave').disabled=false;
+          if(r3 && r3.error){
+            var e3=$('acMsg'); e3.className='msg err';
+            e3.textContent=(String(r3.error.message||'').indexOf('function')>=0
+              ? 'The deadline was saved. Per-student OPEN dates need im_75_open_windows.sql \u2014 run it, then set the open date again.'
+              : r3.error.message);
+            return;
+          }
+          close(); loadRoster();
+        }, function(e3){ $('acSave').disabled=false; var el3=$('acMsg'); el3.className='msg err'; el3.textContent='The deadline was saved, but the open date was not: '+String(e3&&e3.message?e3.message:e3); });
       }, function(e2){ $('acSave').disabled=false; var el=$('acMsg'); el.className='msg err'; el.textContent='Could not save: '+String(e2&&e2.message?e2.message:e2); });
     });
   });
@@ -2996,10 +3020,14 @@ function renderAssignments(host){
     '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Students submit a written response and/or a link to their work. You grade with a score and feedback. <strong>You can attach files (PDFs, datasets) after you click Create</strong> &mdash; the file area opens automatically below.</p>'+
     '<div class="field"><label for="asgTitle">Title</label><input id="asgTitle" placeholder="e.g. Problem Set 2: elasticity and tax incidence"></div>'+
     '<div class="field"><label for="asgInstr">Instructions</label><textarea id="asgInstr" rows="3" placeholder="What students need to do\u2026"></textarea></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'+
       '<div class="field"><label for="asgPoints">Points</label><input id="asgPoints" type="number" min="0" value="100"></div>'+
+      '<div class="field"><label for="asgOpens">Opens (optional)</label><input id="asgOpens" type="datetime-local"></div>'+
       '<div class="field"><label for="asgDue">Due (optional)</label><input id="asgDue" type="datetime-local"></div>'+
     '</div>'+
+    '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-muted);margin:-2px 0 10px;">'+
+      '<input type="checkbox" id="asgHide" style="width:auto;"> Hide from students until it opens'+
+      '<span style="color:var(--text-subtle);">(otherwise it is listed but locked)</span></label>'+
     '<div id="asgMsg" class="msg" role="status" aria-live="polite"></div>'+
     '<button class="btn btn-primary btn-sm" id="asgCreate">Create &amp; publish</button></div>'+
     '<div id="asgList" aria-live="polite">'+loadingCard()+'</div>';
@@ -3007,13 +3035,22 @@ function renderAssignments(host){
     var title=$('asgTitle').value.trim(), instr=$('asgInstr').value.trim();
     var pts=parseInt($('asgPoints').value,10); if(isNaN(pts)||pts<0){ pts=100; }
     var due=$('asgDue').value ? new Date($('asgDue').value).toISOString() : null;
+    var opens=$('asgOpens').value ? new Date($('asgOpens').value).toISOString() : null;
+    var hide=$('asgHide') ? !!$('asgHide').checked : false;
     var e=$('asgMsg');
     if(!title){ e.className='msg err'; e.textContent='Enter a title.'; $('asgTitle').focus(); return; }
     $('asgCreate').disabled=true;
-    sb.from('im_assignment').insert({ course_id:State.teachCourseId, title:title, instructions:instr, points:pts, due_at:due, created_by:State.user.id, is_published:true }).select().then(function(r){
+    sb.from('im_assignment').insert({ course_id:State.teachCourseId, title:title, instructions:instr, points:pts, due_at:due, opens_at:opens, hide_before_open:hide, created_by:State.user.id, is_published:true }).select().then(function(r){
       $('asgCreate').disabled=false;
-      if(r.error){ e.className='msg err'; e.textContent=r.error.message; return; }
-      $('asgTitle').value=''; $('asgInstr').value=''; $('asgDue').value=''; e.className='msg ok'; e.textContent='Assignment published. Attach files below (optional).';
+      if(r.error){
+        var m=String(r.error.message||'');
+        if(m.indexOf('opens_at')>=0 || m.indexOf('hide_before_open')>=0){
+          e.className='msg err'; e.textContent='This course database has not been upgraded for open dates yet. Run im_75_open_windows.sql, then reload.'; return;
+        }
+        if(m.indexOf('_window_ck')>=0){ e.className='msg err'; e.textContent='The open date must come before the due date.'; return; }
+        e.className='msg err'; e.textContent=m; return;
+      }
+      $('asgTitle').value=''; $('asgInstr').value=''; $('asgDue').value=''; $('asgOpens').value=''; if($('asgHide')){ $('asgHide').checked=false; } e.className='msg ok'; e.textContent='Assignment published. Attach files below (optional).';
       var newId = (r.data && r.data[0]) ? r.data[0].id : null;
       loadAssignmentsList(newId);
     });
@@ -3027,12 +3064,15 @@ function loadAssignmentsList(openFilesFor){
     var html='';
     rows.forEach(function(a){
       var due=a.due_at?('Due '+new Date(a.due_at).toLocaleString()):'No due date';
+      if(a.opens_at){ due='Opens '+new Date(a.opens_at).toLocaleString()+' \u00b7 '+due; }
+      if(a.hide_before_open && a.opens_at){ due=due+' \u00b7 hidden until open'; }
       html+='<div class="card" style="margin-bottom:10px;">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'+
           '<div style="flex:1;"><div style="font-size:15px;font-weight:600;color:var(--text-bright);">'+esc(a.title)+'</div>'+
           '<div style="font-size:12px;color:var(--text-subtle);margin-top:2px;">'+esc(due)+' \u00b7 '+a.points+' pts'+(a.is_published?'':' \u00b7 unpublished')+'</div></div>'+
           '<div class="inline-actions"><button class="btn btn-ghost btn-sm" data-grade="'+a.id+'" data-title="'+esc(a.title)+'" data-pts="'+a.points+'">Submissions &amp; grading</button>'+
           '<button class="btn btn-ghost btn-sm" data-files="'+a.id+'">Files</button>'+
+          '<button class="btn btn-ghost btn-sm" data-dates="'+a.id+'">Dates</button>'+
           '<button class="btn btn-ghost btn-sm" data-pubasg="'+a.id+'" data-on="'+(a.is_published?'1':'0')+'">'+(a.is_published?'Unpublish':'Publish')+'</button>'+
           '<button class="btn btn-danger btn-sm" data-delasg="'+a.id+'">Delete</button></div></div>'+
         '<div id="files-'+a.id+'" class="hidden" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;"></div>'+
@@ -3044,6 +3084,9 @@ function loadAssignmentsList(openFilesFor){
     }); });
     Array.prototype.forEach.call($('asgList').querySelectorAll('[data-files]'), function(b){ b.addEventListener('click', function(){
       openAsgFiles(b.getAttribute('data-files'));
+    }); });
+    Array.prototype.forEach.call($('asgList').querySelectorAll('[data-dates]'), function(b){ b.addEventListener('click', function(){
+      openAsgDates(b.getAttribute('data-dates'));
     }); });
     Array.prototype.forEach.call($('asgList').querySelectorAll('[data-pubasg]'), function(b){ b.addEventListener('click', function(){
       var on=b.getAttribute('data-on')==='1';
@@ -3068,6 +3111,41 @@ function loadAssignmentsList(openFilesFor){
     }
   });
 }
+/* Edit an assignment's window after it has been created. Creation sets the
+   dates once; this is how they move afterwards -- and the only way to add an
+   open date to an assignment that was made before im_75. */
+function openAsgDates(asgId){
+  sb.from('im_assignment').select('id,title,opens_at,due_at,hide_before_open').eq('id',asgId).single().then(function(res){
+    if(res.error||!res.data){ alert('Could not load that assignment.'); return; }
+    var a=res.data;
+    var m=document.createElement('div'); m.className='modal-bg';
+    m.innerHTML='<div class="modal" style="max-width:460px;"><h2>Dates</h2>'+
+      '<div id="adMsg" class="msg"></div>'+
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">'+esc(a.title||'Assignment')+'</div>'+
+      '<div class="row2"><div class="field"><label>Opens</label><input id="adOpen" type="datetime-local" value="'+dtLocalValue(a.opens_at)+'"></div>'+
+      '<div class="field"><label>Due</label><input id="adDue" type="datetime-local" value="'+dtLocalValue(a.due_at)+'"></div></div>'+
+      '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-muted);margin-bottom:6px;"><input type="checkbox" id="adHide" style="width:auto;"'+(a.hide_before_open?' checked':'')+'> Hide from students until it opens</label>'+
+      '<div style="font-size:11.5px;color:var(--text-subtle);margin-bottom:8px;">Leave a field blank to remove that date. Unhidden, the assignment is listed but cannot be submitted until it opens.</div>'+
+      '<div class="inline-actions" style="justify-content:flex-end;"><button class="btn btn-ghost" id="adCancel">Cancel</button>'+
+      '<button class="btn btn-primary" id="adSave">Save</button></div></div>';
+    document.body.appendChild(m);
+    function close(){ if(m.parentNode){ document.body.removeChild(m); } }
+    $('adCancel').addEventListener('click', close);
+    m.addEventListener('click', function(ev){ if(ev.target===m){ close(); } });
+    $('adSave').addEventListener('click', function(){
+      var op=localToIso($('adOpen').value), du=localToIso($('adDue').value);
+      var e=$('adMsg');
+      if(op && du && new Date(du)<=new Date(op)){ e.className='msg err'; e.textContent='The due date must come after the open date.'; return; }
+      $('adSave').disabled=true;
+      sb.from('im_assignment').update({ opens_at:op, due_at:du, hide_before_open:!!$('adHide').checked }).eq('id',asgId).then(function(r){
+        $('adSave').disabled=false;
+        if(r.error){ e.className='msg err'; e.textContent=examWriteError(r.error.message); return; }
+        close(); loadAssignmentsList();
+      });
+    });
+  });
+}
+
 function openAsgFiles(asgId){
   var panel=$('files-'+asgId);
   if(!panel){ return; }
@@ -3220,53 +3298,71 @@ function renderExams(host){
 function openQuizDeadlines(){
   if(!State.teachCourseId){ alert('Select a course first.'); return; }
   var ov=document.createElement('div'); ov.className='modal-bg';
-  ov.innerHTML='<div class="modal" style="max-width:560px;"><h3 style="margin-bottom:6px;">Graded-quiz deadlines</h3>'+
-    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Set a close date and time for each chapter\u2019s graded quiz. After the deadline students can review the questions they missed. Leave a chapter blank for no deadline (no review for that quiz).</p>'+
+  ov.innerHTML='<div class="modal" style="max-width:720px;"><h3 style="margin-bottom:6px;">Graded-quiz window</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Set when each chapter\u2019s graded quiz <b>opens</b> and <b>closes</b>. Leave <i>Opens</i> blank to make it available immediately. After the close date students can review the questions they missed; leave <i>Closes</i> blank for no deadline (and no review for that quiz). Tick <b>Hide</b> to keep a quiz out of the student\u2019s chapter list entirely until it opens \u2014 otherwise it is shown but locked, with the open date.</p>'+
     '<div id="qdlBody">'+loadingCard()+'</div>'+
-    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="qdlClose">Close</button><button class="btn btn-primary btn-sm" id="qdlSave">Save deadlines</button></div></div>';
+    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="qdlClose">Close</button><button class="btn btn-primary btn-sm" id="qdlSave">Save window</button></div></div>';
   document.body.appendChild(ov);
   function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
   $('qdlClose').addEventListener('click', shut);
   ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
-  function notInstalled(){
-    $('qdlBody').innerHTML='<div class="msg err" style="display:block;">Quiz deadlines aren\u2019t installed yet. Run <b>im_25_quiz_deadlines.sql</b> in the SQL editor, then reopen this window.</div>';
+  function notInstalled(msg){
+    $('qdlBody').innerHTML='<div class="msg err" style="display:block;">'+msg+'</div>';
     var sv=$('qdlSave'); if(sv){ sv.disabled=true; }
   }
-  sb.from('im_quiz_deadline').select('chapter,closes_at').eq('course_id',State.teachCourseId).then(function(res){
-    if(res && res.error){ notInstalled(); return; }
-    var have={}; ((res && res.data)?res.data:[]).forEach(function(r){ have[r.chapter]=r.closes_at; });
-    var rowsHtml='';
-    STUDENT_CHAPTERS.forEach(function(c){
-      var val='';
-      if(have[c.n]){
-        var d=new Date(have[c.n]); var pad=function(x){ return (x<10?'0':'')+x; };
-        val=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+  sb.from('im_quiz_deadline').select('chapter,opens_at,closes_at,hide_before_open').eq('course_id',State.teachCourseId).then(function(res){
+    if(res && res.error){
+      /* Distinguish "table missing" from "the new columns are missing", so the
+         message names the migration that actually has to be run. */
+      var m=String(res.error.message||'');
+      if(m.indexOf('opens_at')>=0 || m.indexOf('hide_before_open')>=0){
+        notInstalled('Open dates aren\u2019t installed yet. Run <b>im_75_open_windows.sql</b> in the SQL editor, then reopen this window.');
+      } else {
+        notInstalled('Quiz deadlines aren\u2019t installed yet. Run <b>im_25_quiz_deadlines.sql</b> in the SQL editor, then reopen this window.');
       }
-      rowsHtml+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><label style="flex:1;font-size:13px;">Ch '+c.n+' \u00b7 '+esc(c.title)+'</label>'+
-        '<input type="datetime-local" data-qdl-ch="'+c.n+'" value="'+val+'" style="font-size:13px;padding:5px 8px;"></div>';
+      return;
+    }
+    var have={}; ((res && res.data)?res.data:[]).forEach(function(r){ have[r.chapter]=r; });
+    var rowsHtml='<div style="display:flex;gap:10px;font-size:11.5px;color:var(--text-subtle);margin-bottom:6px;"><span style="flex:1;"></span><span style="width:186px;">Opens</span><span style="width:186px;">Closes</span><span style="width:52px;text-align:center;">Hide</span></div>';
+    STUDENT_CHAPTERS.forEach(function(c){
+      var row=have[c.n]||{};
+      rowsHtml+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'+
+        '<label style="flex:1;font-size:13px;">Ch '+c.n+' \u00b7 '+esc(c.title)+'</label>'+
+        '<input type="datetime-local" data-qdl-open="'+c.n+'" value="'+dtLocalValue(row.opens_at)+'" style="width:186px;font-size:13px;padding:5px 8px;">'+
+        '<input type="datetime-local" data-qdl-ch="'+c.n+'" value="'+dtLocalValue(row.closes_at)+'" style="width:186px;font-size:13px;padding:5px 8px;">'+
+        '<span style="width:52px;text-align:center;"><input type="checkbox" data-qdl-hide="'+c.n+'"'+(row.hide_before_open?' checked':'')+' style="width:auto;"></span></div>';
     });
     $('qdlBody').innerHTML=rowsHtml;
-  }, function(){ notInstalled(); });
+  }, function(){ notInstalled('Quiz deadlines aren\u2019t installed yet. Run <b>im_25_quiz_deadlines.sql</b> in the SQL editor, then reopen this window.'); });
   $('qdlSave').addEventListener('click', function(){
     var inputs=ov.querySelectorAll('[data-qdl-ch]');
     if(!inputs || inputs.length===0){ shut(); return; }
-    var ups=[], dels=[];
+    var ups=[], dels=[], bad=[];
     Array.prototype.forEach.call(inputs, function(inp){
       var ch=parseInt(inp.getAttribute('data-qdl-ch'),10);
-      var v=inp.value;
-      if(v){ ups.push({ course_id:State.teachCourseId, chapter:ch, closes_at:new Date(v).toISOString(), updated_at:new Date().toISOString() }); }
-      else { dels.push(ch); }
+      var closes=localToIso(inp.value);
+      var openEl=ov.querySelector('[data-qdl-open="'+ch+'"]');
+      var hideEl=ov.querySelector('[data-qdl-hide="'+ch+'"]');
+      var opens=openEl?localToIso(openEl.value):null;
+      var hide=hideEl?!!hideEl.checked:false;
+      if(opens && closes && new Date(opens).getTime() >= new Date(closes).getTime()){ bad.push(ch); return; }
+      /* Keep a row if ANY of the three is set; only a fully blank row is deleted. */
+      if(opens || closes || hide){
+        ups.push({ course_id:State.teachCourseId, chapter:ch, opens_at:opens, closes_at:closes,
+                   hide_before_open:hide, updated_at:new Date().toISOString() });
+      } else { dels.push(ch); }
     });
+    if(bad.length){ alert('These chapters open after they close, which would make the quiz unreachable: '+bad.join(', ')+'. Fix them and save again.'); return; }
     var btn=$('qdlSave'); btn.disabled=true; btn.textContent='Saving\u2026';
     var work=[];
     if(ups.length){ work.push(sb.from('im_quiz_deadline').upsert(ups,{ onConflict:'course_id,chapter' })); }
     if(dels.length){ work.push(sb.from('im_quiz_deadline').delete().eq('course_id',State.teachCourseId).in('chapter',dels)); }
     Promise.all(work).then(function(rs){
-      btn.disabled=false; btn.textContent='Save deadlines';
-      var failed=false; rs.forEach(function(r){ if(r && r.error){ failed=true; } });
-      if(failed){ alert('Some deadlines could not be saved.'); return; }
+      btn.disabled=false; btn.textContent='Save window';
+      var failed=null; rs.forEach(function(r){ if(r && r.error && !failed){ failed=r.error.message; } });
+      if(failed){ alert('Some settings could not be saved: '+failed); return; }
       shut();
-    }, function(){ btn.disabled=false; btn.textContent='Save deadlines'; alert('Could not save deadlines.'); });
+    }, function(){ btn.disabled=false; btn.textContent='Save window'; alert('Could not save.'); });
   });
 }
 /* Per-arena review deadlines, mirroring openQuizDeadlines. Writes to
@@ -3276,56 +3372,71 @@ function openQuizDeadlines(){
 function openArenaDeadlines(){
   if(!State.teachCourseId){ alert('Select a course first.'); return; }
   var ov=document.createElement('div'); ov.className='modal-bg';
-  ov.innerHTML='<div class="modal" style="max-width:600px;"><h3 style="margin-bottom:6px;">Arena review deadlines</h3>'+
-    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Set a close date and time for each arena. After that arena\u2019s deadline, students can review the cases they missed in it. Leave an arena blank to fall back to the course\u2019s <b>Access ends</b> date. Requires the <b>Arena results</b> review switch (in course settings) to be on.</p>'+
+  ov.innerHTML='<div class="modal" style="max-width:760px;"><h3 style="margin-bottom:6px;">Arena window</h3>'+
+    '<p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Set when each arena <b>opens</b> and <b>closes</b>. Leave <i>Opens</i> blank to make it available immediately. After the close date students can review the cases they missed; leave <i>Closes</i> blank to fall back to the course\u2019s <b>Access ends</b> date. Tick <b>Hide</b> to keep an arena off the student\u2019s list until it opens \u2014 otherwise it is shown but locked. Review also needs the <b>Arena results</b> switch in course settings.</p>'+
     '<div id="adlBody">'+loadingCard()+'</div>'+
-    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="adlClose">Close</button><button class="btn btn-primary btn-sm" id="adlSave">Save deadlines</button></div></div>';
+    '<div class="inline-actions" style="margin-top:14px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="adlClose">Close</button><button class="btn btn-primary btn-sm" id="adlSave">Save window</button></div></div>';
   document.body.appendChild(ov);
   function shut(){ if(ov.parentNode){ document.body.removeChild(ov); } }
   $('adlClose').addEventListener('click', shut);
   ov.addEventListener('click', function(e){ if(e.target===ov){ shut(); } });
-  function notInstalled(){
-    $('adlBody').innerHTML='<div class="msg err" style="display:block;">Arena deadlines aren\u2019t installed yet. Run <b>im_49_arena_deadlines.sql</b> in the SQL editor, then reopen this window.</div>';
+  function notInstalled(msg){
+    $('adlBody').innerHTML='<div class="msg err" style="display:block;">'+msg+'</div>';
     var sv=$('adlSave'); if(sv){ sv.disabled=true; }
   }
-  // every arena is graded (Market Sandbox included), so allow a review deadline for each.
+  // every arena is graded (Market Sandbox included), so allow a window for each.
   var GRADED_ARENAS=ARENA_SLUGS.slice();
-  sb.from('im_arena_deadline').select('arena_slug,closes_at').eq('course_id',State.teachCourseId).then(function(res){
-    if(res && res.error){ notInstalled(); return; }
-    var have={}; ((res && res.data)?res.data:[]).forEach(function(r){ have[r.arena_slug]=r.closes_at; });
-    var rowsHtml='';
-    GRADED_ARENAS.forEach(function(slug){
-      var val='';
-      if(have[slug]){
-        var d=new Date(have[slug]); var pad=function(x){ return (x<10?'0':'')+x; };
-        val=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+  sb.from('im_arena_deadline').select('arena_slug,opens_at,closes_at,hide_before_open').eq('course_id',State.teachCourseId).then(function(res){
+    if(res && res.error){
+      var m=String(res.error.message||'');
+      if(m.indexOf('opens_at')>=0 || m.indexOf('hide_before_open')>=0){
+        notInstalled('Open dates aren\u2019t installed yet. Run <b>im_75_open_windows.sql</b> in the SQL editor, then reopen this window.');
+      } else {
+        notInstalled('Arena deadlines aren\u2019t installed yet. Run <b>im_49_arena_deadlines.sql</b> in the SQL editor, then reopen this window.');
       }
+      return;
+    }
+    var have={}; ((res && res.data)?res.data:[]).forEach(function(r){ have[r.arena_slug]=r; });
+    var rowsHtml='<div style="display:flex;gap:10px;font-size:11.5px;color:var(--text-subtle);margin-bottom:6px;"><span style="flex:1;"></span><span style="width:186px;">Opens</span><span style="width:186px;">Closes</span><span style="width:52px;text-align:center;">Hide</span></div>';
+    GRADED_ARENAS.forEach(function(slug){
+      var row=have[slug]||{};
       var title=ARENA_TITLE[slug]||slug;
-      rowsHtml+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><label style="flex:1;font-size:13px;">'+esc(title)+'</label>'+
-        '<input type="datetime-local" data-adl-slug="'+esc(slug)+'" value="'+val+'" style="font-size:13px;padding:5px 8px;"></div>';
+      rowsHtml+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'+
+        '<label style="flex:1;font-size:13px;">'+esc(title)+'</label>'+
+        '<input type="datetime-local" data-adl-open="'+esc(slug)+'" value="'+dtLocalValue(row.opens_at)+'" style="width:186px;font-size:13px;padding:5px 8px;">'+
+        '<input type="datetime-local" data-adl-slug="'+esc(slug)+'" value="'+dtLocalValue(row.closes_at)+'" style="width:186px;font-size:13px;padding:5px 8px;">'+
+        '<span style="width:52px;text-align:center;"><input type="checkbox" data-adl-hide="'+esc(slug)+'"'+(row.hide_before_open?' checked':'')+' style="width:auto;"></span></div>';
     });
     $('adlBody').innerHTML=rowsHtml;
-  }, function(){ notInstalled(); });
+  }, function(){ notInstalled('Arena deadlines aren\u2019t installed yet. Run <b>im_49_arena_deadlines.sql</b> in the SQL editor, then reopen this window.'); });
   $('adlSave').addEventListener('click', function(){
     var inputs=ov.querySelectorAll('[data-adl-slug]');
     if(!inputs || inputs.length===0){ shut(); return; }
-    var ups=[], dels=[];
+    var ups=[], dels=[], bad=[];
     Array.prototype.forEach.call(inputs, function(inp){
       var slug=inp.getAttribute('data-adl-slug');
-      var v=inp.value;
-      if(v){ ups.push({ course_id:State.teachCourseId, arena_slug:slug, closes_at:new Date(v).toISOString(), updated_at:new Date().toISOString() }); }
-      else { dels.push(slug); }
+      var closes=localToIso(inp.value);
+      var openEl=ov.querySelector('[data-adl-open="'+slug+'"]');
+      var hideEl=ov.querySelector('[data-adl-hide="'+slug+'"]');
+      var opens=openEl?localToIso(openEl.value):null;
+      var hide=hideEl?!!hideEl.checked:false;
+      if(opens && closes && new Date(opens).getTime() >= new Date(closes).getTime()){ bad.push(ARENA_TITLE[slug]||slug); return; }
+      if(opens || closes || hide){
+        ups.push({ course_id:State.teachCourseId, arena_slug:slug, opens_at:opens, closes_at:closes,
+                   hide_before_open:hide, updated_at:new Date().toISOString() });
+      } else { dels.push(slug); }
     });
+    if(bad.length){ alert('These arenas open after they close, which would make them unreachable: '+bad.join(', ')+'. Fix them and save again.'); return; }
     var btn=$('adlSave'); btn.disabled=true; btn.textContent='Saving\u2026';
     var work=[];
     if(ups.length){ work.push(sb.from('im_arena_deadline').upsert(ups,{ onConflict:'course_id,arena_slug' })); }
     if(dels.length){ work.push(sb.from('im_arena_deadline').delete().eq('course_id',State.teachCourseId).in('arena_slug',dels)); }
     Promise.all(work).then(function(rs){
-      btn.disabled=false; btn.textContent='Save deadlines';
-      var failed=false; rs.forEach(function(r){ if(r && r.error){ failed=true; } });
-      if(failed){ alert('Some deadlines could not be saved.'); return; }
+      btn.disabled=false; btn.textContent='Save window';
+      var failed=null; rs.forEach(function(r){ if(r && r.error && !failed){ failed=r.error.message; } });
+      if(failed){ alert('Some settings could not be saved: '+failed); return; }
       shut();
-    }, function(){ btn.disabled=false; btn.textContent='Save deadlines'; alert('Could not save deadlines.'); });
+    }, function(){ btn.disabled=false; btn.textContent='Save window'; alert('Could not save.'); });
   });
 }
 /* Instructor: every per-student deadline change / extra attempt in the course,
@@ -4415,28 +4526,81 @@ function openIntegrityLog(examId){
 }
 
 function cloneExam(examId){
+  /* Copy an exam. The destination may be THIS course or any other course the
+     professor owns, so an assessment built for one section can be reused in
+     another. The copy is always an independent im_exam row: attempts, grades,
+     open/close dates and proctoring settings stay per-section, so editing the
+     copy never touches the original. Always lands as an unpublished draft with
+     the dates cleared, because a second section almost never runs on the same
+     schedule. */
   sb.from('im_exam').select('*').eq('id',examId).single().then(function(res){
     if(res.error||!res.data){ alert('Could not load the exam to clone.'); return; }
     var e=res.data;
-    var copy={
-      course_id: e.course_id,
-      kind: e.kind,
-      title: (e.title||'Exam') + ' (copy)',
-      item_ids: (e.item_ids||[]).slice(),
-      total_points: e.total_points,
-      time_limit_minutes: e.time_limit_minutes,
-      instructions: e.instructions,
-      max_attempts: e.max_attempts,
-      shuffle_questions: e.shuffle_questions,
-      attempt_scoring: e.attempt_scoring,
-      is_published: false,       // always a draft
-      opens_at: null,            // clear dates so they are set fresh
-      closes_at: null
-    };
-    sb.from('im_exam').insert(copy).select('id').single().then(function(r){
-      if(r.error){ alert('Clone failed: '+r.error.message); return; }
-      loadExams();
-      if(r.data && r.data.id){ openExamEditor(r.data.id); }
+    var courses = (State.courses||[]).filter(function(c){ return c && c.id; });
+    var m=document.createElement('div'); m.className='modal-bg';
+    var opts='';
+    courses.forEach(function(c){
+      var label=esc(c.title||'Course')+(c.term?(' \u00b7 '+esc(c.term)):'');
+      var here=(String(c.id)===String(e.course_id))?' (this section)':'';
+      opts+='<option value="'+esc(c.id)+'"'+(String(c.id)===String(e.course_id)?' selected':'')+'>'+label+here+'</option>';
+    });
+    if(!opts){ opts='<option value="'+esc(e.course_id)+'" selected>This section</option>'; }
+    m.innerHTML='<div class="modal" style="max-width:520px;"><h2>Copy exam</h2>'+
+      '<div class="msg" id="clnMsg"></div>'+
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Copying <b>'+esc(e.title||'Exam')+
+      '</b>. The copy is a separate draft \u2014 its questions are the same, but its dates, publishing and student attempts are independent of the original.</div>'+
+      '<div class="field"><label>Copy into</label><select id="clnCourse">'+opts+'</select></div>'+
+      '<div class="field"><label>Title for the copy</label><input id="clnTitle" value="'+esc((e.title||'Exam'))+'"></div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">'+
+      '<button class="btn btn-ghost" id="clnCancel">Cancel</button>'+
+      '<button class="btn btn-primary" id="clnGo">Copy exam</button></div></div>';
+    document.body.appendChild(m);
+    function close(){ if(m.parentNode){ document.body.removeChild(m); } }
+    $('clnCancel').addEventListener('click', close);
+    $('clnGo').addEventListener('click', function(){
+      var dest=$('clnCourse').value;
+      var title=$('clnTitle').value.trim()||((e.title||'Exam')+' (copy)');
+      var sameCourse=(String(dest)===String(e.course_id));
+      if(sameCourse && title===(e.title||'')){ title=title+' (copy)'; }
+      var copy={
+        course_id: dest,
+        kind: e.kind,
+        title: title,
+        item_ids: (e.item_ids||[]).slice(),
+        total_points: e.total_points,
+        time_limit_minutes: e.time_limit_minutes,
+        instructions: e.instructions,
+        description: e.description,
+        max_attempts: e.max_attempts,
+        shuffle_questions: e.shuffle_questions,
+        attempt_scoring: e.attempt_scoring,
+        weight: e.weight,
+        is_manual: e.is_manual,
+        proctored: e.proctored,
+        camera_mode: e.camera_mode,
+        random_per_student: e.random_per_student,
+        random_recipe: e.random_recipe,
+        hide_before_open: e.hide_before_open,
+        is_published: false,       // always a draft
+        opens_at: null,            // clear dates so they are set fresh
+        closes_at: null
+      };
+      $('clnGo').disabled=true;
+      sb.from('im_exam').insert(copy).select('id').single().then(function(r){
+        $('clnGo').disabled=false;
+        if(r.error){ $('clnMsg').className='msg err'; $('clnMsg').textContent='Copy failed: '+r.error.message; return; }
+        close();
+        if(sameCourse){
+          loadExams();
+          if(r.data && r.data.id){ openExamEditor(r.data.id); }
+        } else {
+          /* The copy lives in another section, so it will not appear in this
+             list. Say where it went rather than silently doing nothing. */
+          var name='the other section';
+          for(var i=0;i<courses.length;i++){ if(String(courses[i].id)===String(dest)){ name=courses[i].title||name; } }
+          alert('Copied to '+name+'. Switch to that course to set its dates and publish it.');
+        }
+      });
     });
   });
 }
@@ -4475,6 +4639,7 @@ function openExamEditor(examId){
         '<div class="field"><label>Time limit (minutes)</label><input id="edTime" type="number" min="0" value="'+(e.time_limit_minutes||'')+'"></div>'+
         '<div class="field"><label>Opens at</label><input id="edOpens" type="datetime-local" value="'+dtLocalValue(e.opens_at)+'"></div>'+
         '<div class="field"><label>Closes at</label><input id="edCloses" type="datetime-local" value="'+dtLocalValue(e.closes_at)+'"></div>'+
+        '<div class="field" style="grid-column:1/3;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input id="edHide" type="checkbox"'+(e.hide_before_open?' checked':'')+'> Hide from students until it opens <span style="color:var(--text-subtle);font-size:11px;">Leave unchecked and the exam is listed but locked, so students can plan around it.</span></label></div>'+
         '<div class="field"><label>Max attempts (0 = unlimited)</label><input id="edAtt" type="number" min="0" value="'+(e.max_attempts===null||e.max_attempts===undefined?1:e.max_attempts)+'"></div>'+
         '<div class="field"><label>Attempt scoring</label><select id="edScore"><option value="highest"'+(e.attempt_scoring==='highest'?' selected':'')+'>Highest</option><option value="latest"'+(e.attempt_scoring==='latest'?' selected':'')+'>Latest</option><option value="average"'+(e.attempt_scoring==='average'?' selected':'')+'>Average</option></select></div>'+
         '<div class="field" style="grid-column:1/3;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input id="edShuf" type="checkbox"'+(e.shuffle_questions?' checked':'')+'> Shuffle question order per attempt</label></div>'+
@@ -4586,6 +4751,7 @@ function openExamEditor(examId){
       weight: ($('edWeight') && $('edWeight').value!=='') ? Math.max(0,Math.min(1, parseFloat($('edWeight').value)/100)) : null,
       time_limit_minutes: $('edTime').value? parseInt($('edTime').value,10): null,
       opens_at: opens, closes_at: closes,
+      hide_before_open: $('edHide') ? !!$('edHide').checked : false,
       max_attempts: $('edAtt').value!==''? parseInt($('edAtt').value,10): 1,
       attempt_scoring: $('edScore').value,
       shuffle_questions: $('edShuf').checked,
@@ -4597,10 +4763,17 @@ function openExamEditor(examId){
     $('edSave').disabled=true;
     sb.from('im_exam').update(patch).eq('id',examId).then(function(r){
       $('edSave').disabled=false;
-      if(r.error){ var e2=$('edMsg'); e2.className='msg err'; e2.textContent=r.error.message; return; }
+      if(r.error){ var e2=$('edMsg'); e2.className='msg err'; e2.textContent=examWriteError(r.error.message); return; }
       close(); loadExams();
     });
   }
+}
+
+function examWriteError(msg){
+  var m=String(msg||'');
+  if(m.indexOf('hide_before_open')>=0){ return 'This course database has not been upgraded for open dates yet. Run im_75_open_windows.sql, then reload.'; }
+  if(m.indexOf('_window_ck')>=0){ return 'The open time must come before the close time.'; }
+  return m;
 }
 
 function openExamLibrary(){
@@ -4660,6 +4833,7 @@ function openAssembler(){
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'+
       '<div class="field"><label>Opens (optional)</label><input id="axOpens" type="datetime-local"></div>'+
       '<div class="field"><label>Closes (optional)</label><input id="axCloses" type="datetime-local"></div>'+
+      '<div class="field" style="grid-column:1/-1;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input id="axHide" type="checkbox" style="width:auto;"> Hide from students until it opens <span style="color:var(--text-subtle);font-size:11px;">Leave unchecked and it is listed but locked, so students can plan around it.</span></label></div>'+
       '<div class="field"><label style="display:flex;align-items:center;gap:7px;margin-top:26px;"><input type="checkbox" id="axShuffle"> Shuffle question order</label></div>'+
     '</div>'+
     // ---- proctoring / integrity (same engine as StrategyArena) ----
@@ -4904,6 +5078,8 @@ function openAssembler(){
     var att=$('axAttempts').value!==''?parseInt($('axAttempts').value,10):1; if(isNaN(att)||att<0){ att=1; }
     var opensV=$('axOpens').value?new Date($('axOpens').value).toISOString():null;
     var closesV=$('axCloses').value?new Date($('axCloses').value).toISOString():null;
+    if(opensV && closesV && new Date(closesV)<=new Date(opensV)){ axErr('The close time must be after the open time.'); return; }
+    var hideV=$('axHide')?!!$('axHide').checked:false;
     var pts, payloadIds, recipe;
     if(perStudent){
       // recipe drives the draw; item_ids left empty. Points are EXACT: each slot
@@ -4922,13 +5098,13 @@ function openAssembler(){
       item_ids:payloadIds,
       total_points:pts, time_limit_minutes:tl, instructions:$('axInstr').value.trim(), is_published:false,
       max_attempts:att, shuffle_questions:$('axShuffle').checked, attempt_scoring:$('axScoring').value,
-      opens_at:opensV, closes_at:closesV, random_per_student:perStudent, random_recipe:recipe,
+      opens_at:opensV, closes_at:closesV, hide_before_open:hideV, random_per_student:perStudent, random_recipe:recipe,
       proctored:($('axProctor')?$('axProctor').checked:true), camera_mode:($('axCamMode')?$('axCamMode').value:'off') };
     $('axSave').disabled=true;
     function doInsert(){
       sb.from('im_exam').insert(payload).then(function(res){
         $('axSave').disabled=false;
-        if(res.error){ axErr(res.error.message); return; }
+        if(res.error){ axErr(examWriteError(res.error.message)); return; }
         close(); loadExams();
       });
     }
@@ -5436,32 +5612,51 @@ function renderChapters() {
   // Reflect reading completion that was earned in the textbook reader (enforced by
   // scroll-depth + dwell-time in sa-progress.js -- not a self-serve "mark read").
   var readMap = {};
+  // Release schedule: im_quiz_deadline carries the chapter's open/close window.
+  // opens_at in the future -> the chapter is not released yet; hide_before_open
+  // keeps it off the grid entirely instead of showing it locked.
+  var schedMap = {};
   function paint(){
     g.innerHTML = '';
+    var nowMs = Date.now();
     STUDENT_CHAPTERS.forEach(function(c) {
+      var sc = schedMap[c.n];
+      var openMs = (sc && sc.opens_at) ? new Date(sc.opens_at).getTime() : null;
+      var notOpen = openMs !== null && nowMs < openMs;
+      if (notOpen && sc.hide_before_open) { return; }
       var locked = chapterLocked(c.n);
       var isRead = !!readMap[c.n];
       var div = document.createElement('div');
       div.className = 'card launch';
-      var pill = locked ? '<div class="pill soon">🔒 Subscribe to unlock</div>' : '<div class="pill">Open textbook →</div>';
+      var pill = locked ? '<div class="pill soon">🔒 Subscribe to unlock</div>'
+               : (notOpen ? '<div class="pill soon">🔒 Opens ' + esc(new Date(openMs).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})) + '</div>'
+                          : '<div class="pill">Open textbook →</div>');
       div.innerHTML =
         '<div class="c-eyebrow">Chapter ' + c.n + (FREE_CHAPTERS[c.n] ? ' · Free' : '') + (isRead ? ' · ✓ Read' : '') + '</div>' +
         '<div class="c-title">' + esc(c.title) + '</div>' +
         '<div class="c-meta">' + c.mins + ' min read</div>' + pill;
-      if (locked) { div.style.opacity = '.7'; }
+      if (locked || notOpen) { div.style.opacity = '.7'; }
       div.addEventListener('click', function() {
         if (chapterLocked(c.n)) { openSubscribePrompt('Chapter ' + c.n + ', ' + c.title); return; }
+        if (notOpen) { alert('Chapter ' + c.n + ' opens ' + new Date(openMs).toLocaleString() + '.'); return; }
         window.open('intro-micro-textbook.html#ch' + c.n, '_blank');
       });
       g.appendChild(div);
     });
   }
   if (uid && courseId) {
-    sb.from('im_chapter_progress').select('chapter,reading_done').eq('student_id',uid).eq('course_id',courseId).then(function(res){
-      var rows = res.data ? res.data : [];
+    Promise.all([
+      sb.from('im_chapter_progress').select('chapter,reading_done').eq('student_id',uid).eq('course_id',courseId),
+      sb.from('im_quiz_deadline').select('chapter,opens_at,hide_before_open').eq('course_id',courseId)
+    ]).then(function(res){
+      var rows = (res[0] && res[0].data) ? res[0].data : [];
       rows.forEach(function(p){ if(p.reading_done){ readMap[p.chapter]=true; } });
+      // A database without the im_75 columns just errors here -- no schedule,
+      // every chapter stays open, which is the old behaviour.
+      var sch = (res[1] && res[1].data) ? res[1].data : [];
+      sch.forEach(function(d){ schedMap[d.chapter]=d; });
       paint();
-    });
+    }, paint);
   } else {
     paint();
   }
@@ -5474,10 +5669,17 @@ function renderArenas() {
   // Count this student's attempts per arena so we can enforce the 2-attempt cap
   // and show remaining attempts. (Guests / not-signed-in: no cap shown.)
   var countBy = {};
+  // Release schedule from im_arena_deadline (opens_at / hide_before_open).
+  var schedMap = {};
   function paint(){
     g.innerHTML = '';
+    var nowMs = Date.now();
     Object.keys(ARENA_TITLE).forEach(function(slug) {
       var file = ARENA_FILE[slug];
+      var sc = schedMap[slug];
+      var openMs = (sc && sc.opens_at) ? new Date(sc.opens_at).getTime() : null;
+      var notOpen = openMs !== null && nowMs < openMs;
+      if (notOpen && sc.hide_before_open) { return; }
       var locked = arenaLocked(slug);
       var used = countBy[slug] ? countBy[slug] : 0;
       var capped = used >= ARENA_MAX_ATTEMPTS;
@@ -5486,14 +5688,18 @@ function renderArenas() {
       var pill;
       if (!file) { pill = '<div class="pill soon">Coming soon</div>'; }
       else if (locked) { pill = '<div class="pill soon">🔒 Subscribe to unlock</div>'; }
+      else if (notOpen) { pill = '<div class="pill soon">🔒 Opens ' + esc(new Date(openMs).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})) + '</div>'; }
       else if (capped) { pill = '<div class="pill soon">Attempts used (' + used + '/' + ARENA_MAX_ATTEMPTS + ')</div>'; }
       else { pill = '<div class="pill">Play → ' + (uid ? '(' + (ARENA_MAX_ATTEMPTS - used) + ' left)' : '') + '</div>'; }
       div.innerHTML =
         '<div class="c-eyebrow">Arena' + (FREE_ARENAS[slug] ? ' · Free' : '') + '</div>' +
         '<div class="c-title">' + esc(ARENA_TITLE[slug]) + '</div>' +
         '<div class="c-meta mono">' + esc(slug) + '</div>' + pill;
-      if (file && !locked && !capped) {
+      if (file && !locked && !capped && !notOpen) {
         div.addEventListener('click', function() { window.open(file + (State.hasAccess ? ((file.indexOf('?')>=0?'&':'?')+'enrolled=1') : ''), '_blank'); });
+      } else if (file && !locked && notOpen) {
+        div.style.opacity = '.7'; div.style.cursor = 'default';
+        div.addEventListener('click', function() { alert('The ' + ARENA_TITLE[slug] + ' arena opens ' + new Date(openMs).toLocaleString() + '.'); });
       } else if (file && locked) {
         div.style.opacity = '.7';
         div.addEventListener('click', function() { openSubscribePrompt(ARENA_TITLE[slug] + ' arena'); });
@@ -5512,7 +5718,13 @@ function renderArenas() {
     // group by attempt_no (added in im_40); older rows default to attempt_no=1.
     var q = sb.from('im_attempt').select('arena_slug, attempt_no').eq('user_id', uid);
     if (courseId) { q = q.eq('course_id', courseId); }
-    q.then(function(res){
+    var sq = courseId
+      ? sb.from('im_arena_deadline').select('arena_slug,opens_at,hide_before_open').eq('course_id', courseId)
+      : Promise.resolve({ data: [] });
+    Promise.all([q, sq]).then(function(rr){
+      var res = rr[0] || {};
+      var sch = (rr[1] && rr[1].data) ? rr[1].data : [];
+      sch.forEach(function(d){ schedMap[d.arena_slug]=d; });
       var rows = res.data ? res.data : [];
       var seen = {};   // arena_slug -> { attempt_no: true }
       rows.forEach(function(r){
@@ -5522,7 +5734,7 @@ function renderArenas() {
       });
       Object.keys(seen).forEach(function(slug){ countBy[slug] = Object.keys(seen[slug]).length; });
       paint();
-    });
+    }, paint);
   } else {
     paint();
   }
@@ -5792,11 +6004,11 @@ function loadHomeDeadlines(){
     if(courseIds.length===0){ host.innerHTML=''; return; }
     Promise.all([
       sb.from('im_course').select('id,title').in('id',courseIds),
-      sb.from('im_exam').select('id,course_id,title,kind,closes_at').in('course_id',courseIds).eq('is_published',true),
-      sb.from('im_assignment').select('id,course_id,title,due_at').in('course_id',courseIds).eq('is_published',true),
-      sb.from('im_quiz_deadline').select('course_id,chapter,closes_at').in('course_id',courseIds),
-      sb.from('im_arena_deadline').select('course_id,arena_slug,closes_at').in('course_id',courseIds),
-      sb.from('im_assessment_accommodation').select('course_id,kind,ref_id,due_override').eq('student_id',uid),
+      sb.from('im_exam').select('id,course_id,title,kind,opens_at,closes_at,hide_before_open').in('course_id',courseIds).eq('is_published',true),
+      sb.from('im_assignment').select('id,course_id,title,due_at,opens_at,hide_before_open').in('course_id',courseIds).eq('is_published',true),
+      sb.from('im_quiz_deadline').select('course_id,chapter,opens_at,closes_at,hide_before_open').in('course_id',courseIds),
+      sb.from('im_arena_deadline').select('course_id,arena_slug,opens_at,closes_at,hide_before_open').in('course_id',courseIds),
+      sb.from('im_assessment_accommodation').select('course_id,kind,ref_id,due_override,opens_override').eq('student_id',uid),
       sb.from('im_chapter_progress').select('course_id,chapter,reading_done,quiz_score,quiz_attempts').eq('student_id',uid).in('course_id',courseIds),
       sb.from('im_submission').select('assignment_id').eq('student_id',uid),
       sb.from('im_exam_attempt').select('exam_id').eq('student_id',uid).not('exam_id','is',null),
@@ -5806,8 +6018,18 @@ function loadHomeDeadlines(){
       var multi=Object.keys(courses).length>1;
       function ctitle(cid){ return (courses[cid]&&courses[cid].title)?courses[cid].title:''; }
       // per-student override: kind|course|ref -> ms
-      var ov={}; ((r[5]&&r[5].data)?r[5].data:[]).forEach(function(o){ if(o.due_override){ ov[o.kind+'|'+o.course_id+'|'+String(o.ref_id)]=new Date(o.due_override).getTime(); } });
+      var ov={}, ovOpen={};
+      ((r[5]&&r[5].data)?r[5].data:[]).forEach(function(o){
+        var k=o.kind+'|'+o.course_id+'|'+String(o.ref_id);
+        if(o.due_override){ ov[k]=new Date(o.due_override).getTime(); }
+        if(o.opens_override){ ovOpen[k]=new Date(o.opens_override).getTime(); }
+      });
       function eff(kind,cid,ref,baseMs){ var k=kind+'|'+cid+'|'+String(ref); return (ov[k]!==undefined)?ov[k]:baseMs; }
+      function effOpen(kind,cid,ref,isoOrNull){ var k=kind+'|'+cid+'|'+String(ref); if(ovOpen[k]!==undefined){ return ovOpen[k]; } return isoOrNull?new Date(isoOrNull).getTime():null; }
+      var nowMs=Date.now();
+      // Hidden until it opens -> keep it off the panel entirely. Otherwise the
+      // item is listed with its open date so students can plan around it.
+      function hidden(hideFlag,openMs){ return !!hideFlag && openMs!==null && nowMs<openMs; }
       // Completion lookups: a finished item is flagged done, so it renders green
       // ("Completed") instead of ever turning red past due.
       var quizDone={}, readDone={};
@@ -5821,14 +6043,33 @@ function loadHomeDeadlines(){
       var examDone={}; ((r[8]&&r[8].data)?r[8].data:[]).forEach(function(x){ if(x.exam_id){ examDone[x.exam_id]=true; } });
       var arenaDone={}; ((r[9]&&r[9].data)?r[9].data:[]).forEach(function(x){ if(x.arena_slug){ arenaDone[x.arena_slug]=true; } });
       var items=[];
-      ((r[1]&&r[1].data)?r[1].data:[]).forEach(function(e){ if(!e.closes_at){ return; } items.push({ type:'Exam', icon:'\uD83D\uDCDD', label:(e.title||(e.kind==='final'?'Final exam':'Midterm')), due:eff('exam',e.course_id,e.id,new Date(e.closes_at).getTime()), course:ctitle(e.course_id), done:!!examDone[e.id] }); });
-      ((r[2]&&r[2].data)?r[2].data:[]).forEach(function(a){ if(!a.due_at){ return; } items.push({ type:'Assignment', icon:'\uD83D\uDCCE', label:(a.title||'Assignment'), due:eff('assignment',a.course_id,a.id,new Date(a.due_at).getTime()), course:ctitle(a.course_id), done:!!asgDone[a.id] }); });
-      // A chapter's quiz deadline is also the read-by date, so surface both.
-      ((r[3]&&r[3].data)?r[3].data:[]).forEach(function(q){ if(!q.closes_at){ return; } var base=new Date(q.closes_at).getTime(); var dueQ=eff('quiz',q.course_id,q.chapter,base); var kk=q.course_id+'|'+q.chapter;
-        items.push({ type:'Quiz', icon:'\u270D\uFE0F', label:'Chapter '+q.chapter+' quiz', due:dueQ, course:ctitle(q.course_id), done:!!quizDone[kk] });
-        items.push({ type:'Reading', icon:'\uD83D\uDCD6', label:'Chapter '+q.chapter+' reading', due:dueQ, course:ctitle(q.course_id), done:!!readDone[kk] });
+      ((r[1]&&r[1].data)?r[1].data:[]).forEach(function(e){
+        var op=effOpen('exam',e.course_id,e.id,e.opens_at);
+        if(hidden(e.hide_before_open,op)){ return; }
+        if(!e.closes_at && op===null){ return; }
+        items.push({ type:'Exam', icon:'\uD83D\uDCDD', label:(e.title||(e.kind==='final'?'Final exam':'Midterm')), due:(e.closes_at?eff('exam',e.course_id,e.id,new Date(e.closes_at).getTime()):null), opens:op, course:ctitle(e.course_id), done:!!examDone[e.id] });
       });
-      ((r[4]&&r[4].data)?r[4].data:[]).forEach(function(a){ if(!a.closes_at){ return; } items.push({ type:'Arena', icon:'\uD83C\uDFAE', label:prettySlug(a.arena_slug), due:eff('arena',a.course_id,a.arena_slug,new Date(a.closes_at).getTime()), course:ctitle(a.course_id), done:!!arenaDone[a.arena_slug] }); });
+      ((r[2]&&r[2].data)?r[2].data:[]).forEach(function(a){
+        var op=effOpen('assignment',a.course_id,a.id,a.opens_at);
+        if(hidden(a.hide_before_open,op)){ return; }
+        if(!a.due_at && op===null){ return; }
+        items.push({ type:'Assignment', icon:'\uD83D\uDCCE', label:(a.title||'Assignment'), due:(a.due_at?eff('assignment',a.course_id,a.id,new Date(a.due_at).getTime()):null), opens:op, course:ctitle(a.course_id), done:!!asgDone[a.id] });
+      });
+      // A chapter's quiz deadline is also the read-by date, so surface both.
+      ((r[3]&&r[3].data)?r[3].data:[]).forEach(function(q){
+        var op=effOpen('quiz',q.course_id,q.chapter,q.opens_at);
+        if(hidden(q.hide_before_open,op)){ return; }
+        if(!q.closes_at && op===null){ return; }
+        var dueQ=q.closes_at?eff('quiz',q.course_id,q.chapter,new Date(q.closes_at).getTime()):null; var kk=q.course_id+'|'+q.chapter;
+        items.push({ type:'Quiz', icon:'\u270D\uFE0F', label:'Chapter '+q.chapter+' quiz', due:dueQ, opens:op, course:ctitle(q.course_id), done:!!quizDone[kk] });
+        items.push({ type:'Reading', icon:'\uD83D\uDCD6', label:'Chapter '+q.chapter+' reading', due:dueQ, opens:op, course:ctitle(q.course_id), done:!!readDone[kk] });
+      });
+      ((r[4]&&r[4].data)?r[4].data:[]).forEach(function(a){
+        var op=effOpen('arena',a.course_id,a.arena_slug,a.opens_at);
+        if(hidden(a.hide_before_open,op)){ return; }
+        if(!a.closes_at && op===null){ return; }
+        items.push({ type:'Arena', icon:'\uD83C\uDFAE', label:prettySlug(a.arena_slug), due:(a.closes_at?eff('arena',a.course_id,a.arena_slug,new Date(a.closes_at).getTime()):null), opens:op, course:ctitle(a.course_id), done:!!arenaDone[a.arena_slug] });
+      });
       renderHomeDeadlines(host, items, multi);
     }, function(){ host.innerHTML=''; });
   }, function(){ host.innerHTML=''; });
@@ -5836,22 +6077,36 @@ function loadHomeDeadlines(){
 
 function renderHomeDeadlines(host, items, multi){
   if(!items || items.length===0){ host.innerHTML=''; return; }
-  items.sort(function(a,b){ return a.due-b.due; });
   var now=Date.now();
+  // An item may have a close time, an open time, or both. Sort on whichever
+  // date the student is actually waiting on: the due date once it is open,
+  // the open date while it is still ahead.
+  items.forEach(function(x){
+    x.notOpen = (x.opens!==null && x.opens!==undefined && now<x.opens);
+    x.key = x.notOpen ? x.opens : ((x.due===null||x.due===undefined) ? x.opens : x.due);
+  });
+  items=items.filter(function(x){ return x.key!==null && x.key!==undefined && !isNaN(x.key); });
+  if(items.length===0){ host.innerHTML=''; return; }
+  items.sort(function(a,b){ return a.key-b.key; });
   var doneItems=items.filter(function(x){ return x.done; });
   var pending=items.filter(function(x){ return !x.done; });
-  var upcoming=pending.filter(function(x){ return x.due>=now; });
-  var overdue=pending.filter(function(x){ return x.due<now; });
+  var overdue=pending.filter(function(x){ return !x.notOpen && x.due!==null && x.due!==undefined && x.due<now; });
+  var upcoming=pending.filter(function(x){ return overdue.indexOf(x)<0; });
   function row(x){
     var color, rightText;
-    if(x.done){ color='var(--green)'; rightText='\u2713 Done'; }
+    var stamp=x.key;
+    if(x.done){ color='var(--green)'; rightText='\u2713 Done'; stamp=(x.due===null||x.due===undefined)?x.key:x.due; }
+    else if(x.notOpen){ color='var(--text-subtle)'; rightText='Opens '+relDue(x.opens); stamp=x.opens; }
+    else if(x.due===null||x.due===undefined){ color='var(--text-muted)'; rightText='Open now'; stamp=x.opens; }
     else {
       var soon=(x.due-now)>=0 && (x.due-now)<48*3600000;
       var over=x.due<now;
       color=over?'var(--rose)':(soon?'var(--amber, #d97706)':'var(--text-muted)');
       rightText=relDue(x.due);
+      stamp=x.due;
     }
-    var when=new Date(x.due).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+    var when=new Date(stamp).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+    if(x.notOpen && x.due!==null && x.due!==undefined){ when=when+' \u2192 '+new Date(x.due).toLocaleString([], {month:'short', day:'numeric'}); }
     return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">'+
       '<div style="font-size:18px;width:22px;text-align:center;">'+x.icon+'</div>'+
       '<div style="flex:1;min-width:0;">'+
@@ -6484,22 +6739,43 @@ function loadMyAssignments(){
     if(ids.length===0){ host.innerHTML='<div class="card empty">You are not enrolled in a course with assignments yet.</div>'; return; }
     Promise.all([
       sb.from('im_assignment').select('*').in('course_id',ids).eq('is_published',true).order('created_at',{ascending:false}),
-      sb.from('im_submission').select('*').eq('student_id',State.user.id)
+      sb.from('im_submission').select('*').eq('student_id',State.user.id),
+      sb.from('im_assessment_accommodation').select('ref_id,due_override,opens_override').eq('student_id',State.user.id).eq('kind','assignment')
     ]).then(function(res){
       var asgs=res[0].data?res[0].data:[];
       var subs=res[1].data?res[1].data:[];
       var subBy={}; subs.forEach(function(s){ subBy[s.assignment_id]=s; });
+      // A per-student reschedule can move this assignment's open (and due) time.
+      var ovOpen={}, ovDue={};
+      ((res[2]&&res[2].data)?res[2].data:[]).forEach(function(o){
+        if(o.opens_override){ ovOpen[o.ref_id]=new Date(o.opens_override).getTime(); }
+        if(o.due_override){ ovDue[o.ref_id]=new Date(o.due_override).getTime(); }
+      });
+      var nowMs=Date.now();
+      // Hidden-until-open assignments are left out of the list entirely.
+      asgs=asgs.filter(function(a){
+        var op=(ovOpen[a.id]!==undefined)?ovOpen[a.id]:(a.opens_at?new Date(a.opens_at).getTime():null);
+        return !(a.hide_before_open && op!==null && nowMs<op);
+      });
       if(asgs.length===0){ host.innerHTML='<div class="card empty">No assignments posted yet.</div>'; return; }
       var html='';
       asgs.forEach(function(a){
         var s=subBy[a.id];
-        var due=a.due_at?('Due '+new Date(a.due_at).toLocaleString()):'No due date';
+        var dueMs=(ovDue[a.id]!==undefined)?ovDue[a.id]:(a.due_at?new Date(a.due_at).getTime():null);
+        var openMs=(ovOpen[a.id]!==undefined)?ovOpen[a.id]:(a.opens_at?new Date(a.opens_at).getTime():null);
+        var notOpen = openMs!==null && nowMs<openMs;
+        var due=dueMs!==null?('Due '+new Date(dueMs).toLocaleString()):'No due date';
+        if(openMs!==null){ due='Opens '+new Date(openMs).toLocaleString()+' \u00b7 '+due; }
         var graded = s && s.score!==null && s.score!==undefined;
         html+='<div class="card" style="margin-bottom:12px;">'+
           '<div style="font-size:16px;font-weight:600;color:var(--text-bright);">'+esc(a.title)+'</div>'+
           '<div style="font-size:12px;color:var(--text-subtle);margin:2px 0 8px;">'+esc(due)+' \u00b7 '+a.points+' pts</div>'+
           (a.instructions?'<div style="font-size:13px;color:var(--text-muted);white-space:pre-wrap;margin-bottom:10px;">'+esc(a.instructions)+'</div>':'')+
           '<div id="stu-files-'+a.id+'" class="asg-files"></div>';
+        if(notOpen){
+          html+='<div class="msg" role="status" style="color:var(--text-subtle);">\uD83D\uDD12 This assignment opens '+esc(new Date(openMs).toLocaleString())+'. You can read it now and submit once it opens.</div></div>';
+          return;
+        }
         if(graded){
           html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;">'+
             '<div style="font-size:14px;font-weight:600;color:var(--green);">Score: '+s.score+' / '+a.points+'</div>'+
@@ -7008,10 +7284,10 @@ function loadMyExams() {
 function loadMyExamsFor(host, uid, courseIds, titleById) {
   {
     Promise.all([
-      sb.from('im_exam').select('id,course_id,kind,title,total_points,time_limit_minutes,instructions,item_ids,is_published,max_attempts,shuffle_questions,attempt_scoring,opens_at,closes_at,proctored,camera_mode,random_per_student,random_recipe,is_manual').in('course_id', courseIds).eq('is_published', true).order('created_at',{ascending:true}),
+      sb.from('im_exam').select('id,course_id,kind,title,total_points,time_limit_minutes,instructions,item_ids,is_published,max_attempts,shuffle_questions,attempt_scoring,opens_at,closes_at,proctored,camera_mode,random_per_student,random_recipe,is_manual,hide_before_open').in('course_id', courseIds).eq('is_published', true).order('created_at',{ascending:true}),
       sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,graded_at,submitted_value').eq('student_id', uid).not('exam_id','is',null),
       sb.from('im_accommodation').select('course_id,time_multiplier,extra_attempts').eq('student_id', uid),
-      sb.from('im_assessment_accommodation').select('ref_id,due_override').eq('student_id', uid).eq('kind','exam')
+      sb.from('im_assessment_accommodation').select('ref_id,due_override,opens_override').eq('student_id', uid).eq('kind','exam')
     ]).then(function(r) {
       var exams = r[0].data ? r[0].data : [];
       // Show anything that is a real exam. Previously this kept only
@@ -7031,8 +7307,8 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
       var accoms = r[2].data ? r[2].data : [];
       var accomByCourse = {}; accoms.forEach(function(a){ accomByCourse[a.course_id]=a; });
       // per-exam deadline overrides for THIS student (a reschedule wins over closes_at)
-      var examDueOverride = {};
-      (r[3] && r[3].data ? r[3].data : []).forEach(function(o){ if(o.due_override){ examDueOverride[o.ref_id]=new Date(o.due_override).getTime(); } });
+      var examDueOverride = {}; var examOpenOverride = {};
+      (r[3] && r[3].data ? r[3].data : []).forEach(function(o){ if(o.due_override){ examDueOverride[o.ref_id]=new Date(o.due_override).getTime(); } if(o.opens_override){ examOpenOverride[o.ref_id]=new Date(o.opens_override).getTime(); } });
       if (exams.length === 0) { host.innerHTML = '<div class="card empty">No exams have been assigned yet.</div>'; return; }
       // count graded SITTINGS per exam = graded attempts on that exam's first item
       var sittingsBy = {}; var lastPts = {};
@@ -7074,12 +7350,16 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
         var now = Date.now();
         // A per-student reschedule (override) replaces the exam's own close time.
         var effClose = (examDueOverride[e.id]!==undefined) ? examDueOverride[e.id] : (e.closes_at ? new Date(e.closes_at).getTime() : null);
-        var notOpen = e.opens_at && now < new Date(e.opens_at).getTime();
+        // A per-student reschedule can also move the OPEN time (early access).
+        var effOpen = (examOpenOverride[e.id]!==undefined) ? examOpenOverride[e.id] : (e.opens_at ? new Date(e.opens_at).getTime() : null);
+        var notOpen = effOpen!==null && now < effOpen;
+        // Hidden until it opens: leave it out of the list entirely.
+        if (notOpen && e.hide_before_open) { return; }
         var closed = effClose && now > effClose;
         var attemptsLeft = (allowed===0) ? 'unlimited' : Math.max(0, allowed - sittings);
         var tmin = e.time_limit_minutes ? (acc && Number(acc.time_multiplier)!==1 ? Math.round(e.time_limit_minutes*Number(acc.time_multiplier)) : e.time_limit_minutes) : null;
         var statusHtml, action;
-        if (notOpen) { statusHtml='<span class="tag dim">Opens '+new Date(e.opens_at).toLocaleString()+'</span>'; action='<button class="btn btn-ghost btn-sm" disabled>Not open</button>'; }
+        if (notOpen) { statusHtml='<span class="tag dim">Opens '+new Date(effOpen).toLocaleString()+'</span>'; action='<button class="btn btn-ghost btn-sm" disabled>Not open</button>'; }
         else if (closed) { statusHtml='<span class="tag rose">Closed</span>'; action='<button class="btn btn-ghost btn-sm" disabled>Closed</button>'; }
         else if (allowed!==0 && sittings>=allowed) {
           var pctS = e.total_points && earnedBy[e.id]!==undefined ? Math.round((earnedBy[e.id]/(e.total_points*Math.max(1,sittings)))*100) : null;
@@ -7103,7 +7383,7 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
           '<div style="font-size:12.5px;color:var(--text-muted);margin-top:3px;">' + meta + '</div></div>' +
           '<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">' + statusHtml + action + '</div></div>';
       });
-      host.innerHTML = html;
+      host.innerHTML = html || '<div class="card empty">No exams have been assigned yet.</div>';
       Array.prototype.forEach.call(host.querySelectorAll('[data-review]'), function(b) {
         b.addEventListener('click', function() { openExamReview(b.getAttribute('data-review')); });
       });
