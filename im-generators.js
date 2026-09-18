@@ -1217,6 +1217,312 @@
   };
 
   /* ---- Ch7: consumer surplus area from a graph (graphical numeric) ------ */
+
+  /* ====================================================================
+     Ch6 / Ch7 — international trade policy (added 2026-09).
+     Parameterisation keeps every value an integer:
+       demand  P = a - Q      supply  P = c + Q     (unit slopes)
+       autarky price = (a+c)/2 = m ;  autarky quantity = m - c
+       at price p:  Qd = a - p,  Qs = p - c,  imports = a + c - 2p = 2(m - p)
+       tariff t -> domestic price pd = pw + t ;  revenue = t * 2(m - pd)
+       deadweight loss = 1/2*t*(t/1) + 1/2*t*(t/1) = t^2
+       quota Qbar -> price p = m - Qbar/2
+     Every generator below is graded server-side from the seed, so these
+     closed forms must stay exact -- do not introduce non-integer slopes.
+     ==================================================================== */
+
+  function tradeParams(rng) {
+    var m = rng_int(rng, 9, 13);          /* autarky price */
+    var c = rng_int(rng, 2, 5);           /* supply intercept */
+    var a = 2 * m - c;                    /* demand intercept */
+    var drop = rng_int(rng, 2, 4);
+    var pw = m - drop;                    /* world price, below autarky */
+    return { m: m, c: c, a: a, pw: pw };
+  }
+  function tradeSpec(P, pw, extra) {
+    var spec = { type: "trade", dA: P.a, dB: -1, sA: P.c, sB: 1,
+                 pw: pw, qmax: P.a - P.c + 2, pmax: P.a + 1 };
+    if (extra) { for (var k in extra) { if (extra.hasOwnProperty.call(extra, k)) { spec[k] = extra[k]; } } }
+    return spec;
+  }
+
+  /* ---- Ch6: direction of trade (mc) ------------------------------------ */
+  GEN["ch6_trade_direction"] = {
+    id: "ch6_trade_direction", chapter: 6, kind: "mc", render: "text",
+    difficulty: "easy", concept: "imports vs exports", points: 1,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var above = rng_pick(rng, [true, false]);
+      var pw = above ? (P.m + rng_int(rng, 1, 3)) : P.pw;
+      var opts = [
+        "It imports, because the world price is below its autarky price",
+        "It exports, because the world price is above its autarky price",
+        "It imports, because the world price is above its autarky price",
+        "It neither imports nor exports, because domestic supply still equals domestic demand"
+      ];
+      var correct = above ? 1 : 0;
+      var sh = shuffleWithAnswer(rng, opts, correct);
+      return {
+        prompt: "A small country has domestic demand P = " + P.a + " − Q and domestic supply P = " + P.c +
+          " + Q, so without trade it would clear at $" + P.m + ". It opens to trade at a world price of $" + pw +
+          ". What happens?",
+        options: sh.options, answer: sh.correctIndex,
+        rationale: "The world price of $" + pw + " is " + (above ? "above" : "below") + " the autarky price of $" +
+          P.m + ", so the country " + (above ? "exports" : "imports") + "."
+      };
+    }
+  };
+
+  /* ---- Ch6: imports at the world price (numeric, graphical) ------------ */
+  GEN["ch6_trade_imports_graph"] = {
+    id: "ch6_trade_imports_graph", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "import volume at the world price", points: 2,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var qd = P.a - P.pw, qs = P.pw - P.c, imp = qd - qs;
+      return {
+        prompt: "Domestic demand is P = " + P.a + " − Q and domestic supply is P = " + P.c +
+          " + Q. The world price is $" + P.pw + ". How many units does this country import?",
+        diagramSpec: tradeSpec(P, P.pw, { showAutarky: true }),
+        answer: imp, tolerance: 0.01,
+        rationale: "At $" + P.pw + ": Qd = " + P.a + " − " + P.pw + " = " + qd + " and Qs = " + P.pw +
+          " − " + P.c + " = " + qs + ". Imports are the gap: " + qd + " − " + qs + " = " + imp +
+          ". (Imports are the gap, not total consumption.)"
+      };
+    }
+  };
+
+  /* ---- Ch6: tariff -> domestic price (numeric) ------------------------- */
+  GEN["ch6_tariff_price"] = {
+    id: "ch6_tariff_price", chapter: 6, kind: "numeric", render: "text",
+    difficulty: "med", concept: "tariff raises price by the duty", points: 2,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var t = rng_int(rng, 1, 2);
+      return {
+        prompt: "A small country imports at a world price of $" + P.pw +
+          ". Its domestic demand is P = " + P.a + " − Q and domestic supply is P = " + P.c +
+          " + Q, giving an autarky price of $" + P.m + ". It imposes a tariff of $" + t +
+          " per imported unit. What is the new domestic price?",
+        answer: P.pw + t, tolerance: 0.01,
+        rationale: "Arbitrage fixes the domestic price at the world price plus the tariff: $" + P.pw +
+          " + $" + t + " = $" + (P.pw + t) + ". It does not rise to the autarky price of $" + P.m + "."
+      };
+    }
+  };
+
+  /* ---- Ch6: tariff revenue (numeric, graphical) ------------------------ */
+  GEN["ch6_tariff_revenue_graph"] = {
+    id: "ch6_tariff_revenue_graph", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "tariff revenue on imported units only", points: 3,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var t = rng_int(rng, 1, 2);
+      var pd = P.pw + t, imp = 2 * (P.m - pd), rev = t * imp;
+      return {
+        prompt: "Domestic demand is P = " + P.a + " − Q, domestic supply is P = " + P.c +
+          " + Q, and the world price is $" + P.pw + ". A tariff of $" + t +
+          " per unit is imposed. How much tariff revenue does the government collect?",
+        diagramSpec: tradeSpec(P, P.pw, { tariff: t, transferLabel: "revenue" }),
+        answer: rev, tolerance: 0.01,
+        rationale: "At $" + pd + ": Qd = " + (P.a - pd) + ", Qs = " + (pd - P.c) + ", so imports = " + imp +
+          ". Revenue = $" + t + " × " + imp + " = $" + rev +
+          ". The tariff is charged only on imported units, not on all " + (P.a - pd) + " consumed."
+      };
+    }
+  };
+
+  /* ---- Ch6: the two distortion triangles (numeric, graphical) ---------- */
+  GEN["ch6_tariff_dwl_graph"] = {
+    id: "ch6_tariff_dwl_graph", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "tariff deadweight loss", points: 3,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var t = rng_int(rng, 1, 3);
+      var pd = P.pw + t;
+      return {
+        prompt: "With domestic demand P = " + P.a + " − Q, domestic supply P = " + P.c +
+          " + Q and a world price of $" + P.pw + ", a tariff of $" + t +
+          " raises the domestic price to $" + pd +
+          ". Domestic output rises by " + t + " units and consumption falls by " + t +
+          " units. What is the total deadweight loss — the two distortion triangles together?",
+        diagramSpec: tradeSpec(P, P.pw, { tariff: t, shade: "dwl", showTransfer: false }),
+        answer: t * t, tolerance: 0.01,
+        rationale: "Production triangle = ½ × " + t + " × $" + t + " = $" + (0.5 * t * t) +
+          "; consumption triangle = ½ × " + t + " × $" + t + " = $" + (0.5 * t * t) +
+          ". Together $" + (t * t) + ". Note this is NOT the tariff revenue, which is a transfer."
+      };
+    }
+  };
+
+  /* ---- Ch6: quota price from supply-plus-quota (numeric, graphical) ---- */
+  GEN["ch6_quota_price_graph"] = {
+    id: "ch6_quota_price_graph", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "quota price via total supply", points: 3,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var free = 2 * (P.m - P.pw);            /* free-trade imports, always even */
+      var qbar = free - 2 * rng_int(rng, 1, 2);  /* a binding cap, keeps price integral */
+      if (qbar < 2) { qbar = 2; }
+      var p = P.m - qbar / 2;
+      return {
+        prompt: "Domestic demand is P = " + P.a + " − Q and domestic supply is P = " + P.c +
+          " + Q. At the world price of $" + P.pw + " the country would import " + free +
+          " units. The government instead caps imports at " + qbar +
+          " units. What domestic price results?",
+        diagramSpec: tradeSpec(P, P.pw, { quota: qbar, showTotalSupply: true, transferLabel: "quota rents" }),
+        answer: p, tolerance: 0.01,
+        rationale: "Above the world price, total supply is domestic supply plus the quota: (P − " + P.c +
+          ") + " + qbar + ". Setting that equal to demand " + P.a + " − P gives P = $" + p +
+          ". Check: Qd = " + (P.a - p) + ", domestic Qs = " + (p - P.c) + ", gap = " + qbar + " — the cap binds."
+      };
+    }
+  };
+
+  /* ---- Ch6: quota rents vs tariff revenue (mc) ------------------------- */
+  GEN["ch6_quota_vs_tariff"] = {
+    id: "ch6_quota_vs_tariff", chapter: 6, kind: "mc", render: "text",
+    difficulty: "hard", concept: "who captures the transfer", points: 3,
+    build: function (rng) {
+      var pool = [
+        { q: "An import quota is set so that it raises the domestic price by exactly as much as a $1 tariff would. Compared with that tariff, the quota produces:",
+          o: [ "The same domestic price and quantities, but the transfer becomes quota rents instead of government revenue",
+               "A lower domestic price, because quantity rather than price is restricted",
+               "A larger deadweight loss, because no revenue is collected",
+               "A smaller volume of imports than the tariff allows" ] },
+        { q: "Under a voluntary export restraint, the exporting country administers the limit. Relative to a tariff with the same price effect, the importing country:",
+          o: [ "Loses the transfer entirely, because the rents are earned abroad",
+               "Gains, because its consumers avoid paying a tax",
+               "Is unaffected, since the deadweight loss is the same either way",
+               "Collects the rents anyway, through customs" ] },
+        { q: "A government auctions its import licences competitively instead of granting them to firms. The effect is that:",
+          o: [ "The treasury recovers the quota rents, making the quota equivalent to a tariff",
+               "The domestic price returns to the world price",
+               "The deadweight loss disappears",
+               "Domestic producers lose their protection" ] },
+        { q: "A tariff and a quota raise the domestic price identically. Which statement about the deadweight loss is correct?",
+          o: [ "It is the same under both, because it depends on the distorted quantities, not on who receives the transfer",
+               "It is larger under the tariff, because a tax is collected",
+               "It is larger under the quota, because the rents leave the country",
+               "It is zero under the quota, because no tax is levied" ] }
+      ];
+      var it = rng_pick(rng, pool);
+      var sh = shuffleWithAnswer(rng, it.o, 0);
+      return { prompt: it.q, options: sh.options, answer: sh.correctIndex,
+        rationale: "Prices and quantities are set by the size of the restriction; what differs between a tariff and a quota is who ends up holding the transfer." };
+    }
+  };
+
+  /* ---- Ch6: domestic output under the tariff (numeric, graphical) ------ */
+  GEN["ch6_tariff_output_graph"] = {
+    id: "ch6_tariff_output_graph", chapter: 6, kind: "numeric", render: "graphical",
+    difficulty: "med", concept: "domestic production under protection", points: 2,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var t = rng_int(rng, 1, 2);
+      var pd = P.pw + t;
+      return {
+        prompt: "Domestic demand is P = " + P.a + " − Q and domestic supply is P = " + P.c +
+          " + Q. The world price is $" + P.pw + " and a tariff of $" + t + " is imposed. How many units do DOMESTIC firms produce at the new price?",
+        diagramSpec: tradeSpec(P, P.pw, { tariff: t }),
+        answer: pd - P.c, tolerance: 0.01,
+        rationale: "Domestic firms read their own supply curve at the ruling price of $" + pd + ": Qs = " +
+          pd + " − " + P.c + " = " + (pd - P.c) +
+          ". They pay no tariff themselves, yet receive the protected price."
+      };
+    }
+  };
+
+  /* ---- Ch7: gains from trade, measured (numeric, graphical) ------------ */
+  GEN["ch7_gains_from_trade_graph"] = {
+    id: "ch7_gains_from_trade_graph", chapter: 7, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "gains from trade as a triangle", points: 3,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var imp = 2 * (P.m - P.pw);
+      var gain = 0.5 * imp * (P.m - P.pw);
+      return {
+        prompt: "A country with demand P = " + P.a + " − Q and supply P = " + P.c +
+          " + Q moves from autarky (price $" + P.m + ") to free trade at a world price of $" + P.pw +
+          ". By how much does total surplus rise?",
+        diagramSpec: tradeSpec(P, P.pw, { showAutarky: true }),
+        answer: gain, tolerance: 0.01,
+        rationale: "The gains-from-trade triangle has base equal to the volume traded (" + imp +
+          ") and height equal to the price change ($" + (P.m - P.pw) + "): ½ × " + imp +
+          " × " + (P.m - P.pw) + " = $" + gain + "."
+      };
+    }
+  };
+
+  /* ---- Ch7: consumer surplus under a tariff (numeric) ------------------ */
+  GEN["ch7_tariff_cs_loss"] = {
+    id: "ch7_tariff_cs_loss", chapter: 7, kind: "numeric", render: "text",
+    difficulty: "hard", concept: "consumer surplus change from a tariff", points: 3,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var t = rng_int(rng, 1, 2);
+      var pd = P.pw + t;
+      var csFree = 0.5 * (P.a - P.pw) * (P.a - P.pw);
+      var csTar = 0.5 * (P.a - pd) * (P.a - pd);
+      return {
+        prompt: "Demand is P = " + P.a + " − Q. Under free trade the price is $" + P.pw +
+          "; a tariff of $" + t + " raises it to $" + pd +
+          ". By how much does consumer surplus FALL?",
+        answer: round2(csFree - csTar), tolerance: 0.05,
+        rationale: "CS is the triangle under demand above the price. Free trade: ½ × " +
+          (P.a - P.pw) + "² = $" + csFree + ". With the tariff: ½ × " + (P.a - pd) +
+          "² = $" + csTar + ". The fall is $" + round2(csFree - csTar) +
+          " — most of which is transferred, not destroyed."
+      };
+    }
+  };
+
+  /* ---- Ch7: total surplus accounting under a tariff (numeric) ---------- */
+  GEN["ch7_tariff_total_surplus"] = {
+    id: "ch7_tariff_total_surplus", chapter: 7, kind: "numeric", render: "graphical",
+    difficulty: "hard", concept: "total surplus with a tariff", points: 3,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var t = rng_int(rng, 1, 2);
+      var pd = P.pw + t;
+      var cs = 0.5 * (P.a - pd) * (P.a - pd);
+      var ps = 0.5 * (pd - P.c) * (pd - P.c);
+      var rev = t * 2 * (P.m - pd);
+      return {
+        prompt: "Demand is P = " + P.a + " − Q, supply is P = " + P.c + " + Q, the world price is $" +
+          P.pw + ", and a tariff of $" + t + " raises the domestic price to $" + pd +
+          ". What is TOTAL surplus (consumer + producer + government revenue)?",
+        diagramSpec: tradeSpec(P, P.pw, { tariff: t, shade: "dwl", transferLabel: "revenue" }),
+        answer: round2(cs + ps + rev), tolerance: 0.05,
+        rationale: "CS = ½ × " + (P.a - pd) + "² = $" + cs + "; PS = ½ × " + (pd - P.c) +
+          "² = $" + ps + "; revenue = $" + rev + ". Total = $" + round2(cs + ps + rev) +
+          ", which is $" + (t * t) + " below the free-trade total."
+      };
+    }
+  };
+
+  /* ---- Ch7: quota with foreign-held licences (numeric) ----------------- */
+  GEN["ch7_quota_foreign_rents"] = {
+    id: "ch7_quota_foreign_rents", chapter: 7, kind: "numeric", render: "text",
+    difficulty: "hard", concept: "rents earned abroad are a national loss", points: 3,
+    build: function (rng) {
+      var P = tradeParams(rng);
+      var t = rng_int(rng, 1, 2);
+      var pd = P.pw + t;
+      var rev = t * 2 * (P.m - pd);
+      return {
+        prompt: "A quota reproduces the price and quantities of a $" + t + " tariff (domestic price $" + pd +
+          ", world price $" + P.pw + "), but the import licences are held by foreign exporters, so the $" + rev +
+          " transfer is earned abroad. The tariff's deadweight loss is $" + (t * t) +
+          ". By how much does this quota reduce the country's total surplus relative to free trade?",
+        answer: t * t + rev, tolerance: 0.01,
+        rationale: "The distortion is identical ($" + (t * t) + "), but the $" + rev +
+          " that a tariff would have kept at home now leaves the country. Total cost = $" + (t * t) +
+          " + $" + rev + " = $" + (t * t + rev) + "."
+      };
+    }
+  };
+
   GEN["ch7_cs_area_graph"] = {
     id: "ch7_cs_area_graph", chapter: 7, kind: "numeric", render: "graphical",
     difficulty: "hard", concept: "consumer surplus area (graph)", points: 2,

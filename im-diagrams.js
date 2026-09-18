@@ -551,6 +551,117 @@
     return "<svg viewBox='0 0 " + W + " " + H + "' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='payoff matrix' style='max-width:100%;height:auto;'>" + s + "</svg>";
   }
 
+
+  /* ---------------------------------------------------------------------
+     'trade' — open-economy supply & demand.
+     spec: { dA,dB, sA,sB,            domestic demand/supply  p = A + B*q
+             pw,                      world price (horizontal line)
+             tariff,                  optional per-unit tariff  (price = pw+tariff)
+             quota,                   optional import cap in units
+             showTotalSupply,         draw domestic supply shifted right by quota
+             shade: 'dwl'|'none',     the two distortion triangles
+             showTransfer,            revenue (tariff) or rent (quota) rectangle
+             transferLabel,           text inside that rectangle
+             qmax,pmax }
+     Either tariff or quota may be given, not both. With neither, the diagram
+     is free trade at the world price.
+     Quota price solves  qd(p) - qs(p) = quota, so the cap exactly binds.
+     --------------------------------------------------------------------- */
+  function tradeDiagram(spec) {
+    var P = makePlot({ qmax: spec.qmax || 100, pmax: spec.pmax || 10, w: spec.w, h: spec.h });
+    var dA = spec.dA, dB = spec.dB, sA = spec.sA, sB = spec.sB;
+    var pw = spec.pw;
+
+    function qd(p) { return (p - dA) / dB; }
+    function qs(p) { return (p - sA) / sB; }
+
+    /* autarky, for reference */
+    var qAut = (sA - dA) / (dB - sB);
+    var pAut = dA + dB * qAut;
+
+    /* domestic price after the policy */
+    var pd = pw;
+    if (spec.tariff) {
+      pd = pw + spec.tariff;
+    } else if (spec.quota != null) {
+      var denom = (1 / dB) - (1 / sB);
+      pd = (spec.quota + (dA / dB) - (sA / sB)) / denom;
+    }
+    /* a cap looser than free-trade volume does not bind */
+    if (spec.quota != null && pd < pw) { pd = pw; }
+
+    var qsW = qs(pw), qdW = qd(pw);
+    var qsD = qs(pd), qdD = qd(pd);
+
+    var s = axes(P, spec.xlab || "Quantity", spec.ylab || "Price ($)");
+
+    /* shaded areas go under the curves */
+    if (spec.showTransfer !== false && pd > pw + 1e-9) {
+      s += poly([[P.X(qsD), P.Y(pw)], [P.X(qsD), P.Y(pd)],
+                 [P.X(qdD), P.Y(pd)], [P.X(qdD), P.Y(pw)]], "#1d4ed822", "#1d4ed8");
+      s += txt(P.X((qsD + qdD) / 2), P.Y((pw + pd) / 2) + 4,
+               spec.transferLabel || (spec.quota != null ? "rents" : "revenue"),
+               { anchor: "middle", fill: "#1d4ed8", weight: 700, size: 11 });
+    }
+    if (spec.shade === "dwl" && pd > pw + 1e-9) {
+      /* production distortion: between supply and the world price, qsW..qsD */
+      s += poly([[P.X(qsW), P.Y(pw)], [P.X(qsD), P.Y(pd)], [P.X(qsD), P.Y(pw)]], C.dwl, C.dwlStroke);
+      /* consumption distortion: between demand and the world price, qdD..qdW */
+      s += poly([[P.X(qdD), P.Y(pw)], [P.X(qdD), P.Y(pd)], [P.X(qdW), P.Y(pw)]], C.dwl, C.dwlStroke);
+    }
+
+    /* total supply = domestic supply + quota, above the world price */
+    if (spec.quota != null && spec.showTotalSupply) {
+      var qTop = qs(P.pmax) + spec.quota;
+      if (qTop > P.qmax) { qTop = P.qmax; }
+      var pTop = sA + sB * (qTop - spec.quota);
+      s += "<polyline points='" +
+           P.X(0) + "," + P.Y(sA) + " " +
+           P.X(qsW) + "," + P.Y(pw) + " " +
+           P.X(qsW + spec.quota) + "," + P.Y(pw) + " " +
+           P.X(qTop) + "," + P.Y(pTop) +
+           "' fill='none' stroke='" + C.alt + "' stroke-width='2.5'/>";
+      s += txt(P.X(qTop) - 4, P.Y(pTop) - 6, "S + quota", { anchor: "end", fill: C.alt, weight: 700, size: 12 });
+    }
+
+    /* curves last so they sit above the fills */
+    s += linearCurve(P, dA, dB, C.demand, spec.dLabel || "D");
+    s += linearCurve(P, sA, sB, C.supply, spec.sLabel || "S", spec.quota != null ? qsW * 0.5 : null);
+
+    /* world price line */
+    s += line(P.X(0), P.Y(pw), P.X(P.qmax), P.Y(pw), C.surplusStroke, 1.5, "6 4");
+    s += txt(P.X(P.qmax) - 4, P.Y(pw) - 6, "P world = " + fmt(pw),
+             { anchor: "end", fill: C.surplusStroke, weight: 700, size: 11 });
+
+    /* domestic price line, when a policy has moved it */
+    if (pd > pw + 1e-9) {
+      s += line(P.X(0), P.Y(pd), P.X(P.qmax), P.Y(pd), C.dwlStroke, 1.5);
+      s += txt(P.X(P.qmax) - 4, P.Y(pd) - 6, "P domestic = " + fmt(pd),
+               { anchor: "end", fill: C.dwlStroke, weight: 700, size: 11 });
+    }
+
+    /* the two domestic quantities at the ruling price */
+    s += markPoint(P, qsD, pd, { qlab: fmt(qsD), plab: fmt(pd) });
+    s += markPoint(P, qdD, pd, { qlab: fmt(qdD), plab: false });
+
+    /* the trade gap, drawn along the ruling price */
+    var gap = qdD - qsD;
+    if (Math.abs(gap) > 1e-9) {
+      var midQ = (qsD + qdD) / 2;
+      s += line(P.X(qsD), P.Y(pd), P.X(qdD), P.Y(pd), C.ink, 3);
+      s += txt(P.X(midQ), P.Y(pd) - 10,
+               (gap > 0 ? "imports " : "exports ") + fmt(Math.abs(gap)),
+               { anchor: "middle", fill: C.ink, weight: 700, size: 12 });
+    }
+
+    if (spec.showAutarky) {
+      s += "<circle cx='" + P.X(qAut) + "' cy='" + P.Y(pAut) + "' r='3.5' fill='" + C.muted + "'/>";
+      s += txt(P.X(qAut) + 6, P.Y(pAut) - 6, "autarky", { fill: C.muted, size: 11, weight: 600 });
+    }
+
+    return svgWrap(P, s, "open economy with world price");
+  }
+
   function renderDiagram(spec) {
     if (!spec || !spec.type) { return ""; }
     switch (spec.type) {
@@ -564,6 +675,7 @@
       case "cost_curves":   return costCurves(spec);
       case "monopoly":      return monopoly(spec);
       case "payoff_matrix":  return payoffMatrix(spec);
+      case "trade":         return tradeDiagram(spec);
       default: return "";
     }
   }
