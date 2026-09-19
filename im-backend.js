@@ -217,12 +217,50 @@
      grades MC/numeric deterministically and written answers via AI, writing
      an im_exam_attempt row per item. cb receives
      { ok, score, total, pending } or { offline:true } / { needEnroll:true }. */
+  /* A sitting's identity, derived from the questions the student was actually
+     dealt. Stable across retries of THIS attempt (same seeds), and different
+     for a fresh attempt at the same chapter -- which matters, because reusing
+     an id across attempts would let the server replay the earlier result. */
+  function sittingKey(prefix, items) {
+    var h = 5381, i, j, s2;
+    for (i = 0; i < items.length; i++) {
+      s2 = String(items[i].generator_id) + ":" + String(items[i].seed);
+      for (j = 0; j < s2.length; j++) { h = ((h * 33) ^ s2.charCodeAt(j)) >>> 0; }
+    }
+    return prefix + ":" + h.toString(36);
+  }
+
   function gradeQuiz(chapter, items, cb) {
     if (!init()) { cb({ ok: false, offline: true }); return; }
     sb.auth.getSession().then(function (sres) {
       var sess = sres && sres.data ? sres.data.session : null;
       if (sess) { session = sess; }
       if (!sess || !sess.access_token) { cb({ ok: false, offline: true }); return; }
+
+      /* Preferred path: mn-submit.js saves the answers locally first, retries
+         transient failures with jittered backoff, and carries one submission_id
+         through every retry so the server can recognise a duplicate. */
+      if (global.MNSubmit && global.MNSubmit.send) {
+        global.MNSubmit.send({
+          url: GRADE_QUIZ_FN_URL,
+          apikey: SUPABASE_ANON_KEY,
+          token: sess.access_token,
+          draftKey: sittingKey("quiz:ch" + chapter, items || []),
+          body: { chapter: chapter, items: items },
+          onStatus: function (st) { if (typeof cb.onStatus === "function") { cb.onStatus(st); } },
+          onDone: function (data) { cb(data || { ok: true, noBody: true }); },
+          onFail: function (info) {
+            if (info.kind === "forbidden") { cb({ ok: false, needEnroll: true, draftKey: info.draftKey }); return; }
+            if (info.kind === "auth") { cb({ ok: false, offline: true, draftKey: info.draftKey }); return; }
+            /* Recoverable: the answers are still on this device. Hand the key
+               back so the UI can offer "try again" without re-taking the quiz. */
+            cb({ ok: false, offline: true, draftKey: info.draftKey, recoverable: !!info.recoverable });
+          }
+        });
+        return;
+      }
+
+      /* Fallback for a course that has not adopted mn-submit.js yet. */
       global.fetch(GRADE_QUIZ_FN_URL, {
         method: "POST",
         headers: {

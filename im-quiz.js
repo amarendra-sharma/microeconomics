@@ -395,7 +395,10 @@
       submit.disabled = true; submit.style.opacity = "0.5"; submit.textContent = "Grading\u2026";
       if (timerId) { clearInterval(timerId); }
       var gradeFn = cfg.gradeExam || gradeQuiz;
-      gradeFn(isExam ? (spec.examId || spec.title) : chapter, payload, function (result) {
+      /* mn-submit.js reports progress while it retries. Without this the student
+         sees a frozen "Grading..." for up to half a minute and assumes it broke,
+         so they reload -- which is exactly when work used to get lost. */
+      var onResult = function (result) {
         var label = isExam ? "Exam" : "Quiz";
         if (result && result.ok && !result.offline) {
           var scoreLine = (typeof result.score !== "undefined" && result.score !== null && typeof result.total !== "undefined" && result.total !== null)
@@ -406,9 +409,12 @@
             "<div style='color:#334155;margin-top:6px;'>" + scoreLine + "</div></div>";
           submit.style.display = "none";
         } else if (result && result.offline) {
+          var kept = result.draftKey
+            ? "Your answers are <b>saved on this device</b> and will not be lost if you close this page \u2014 come back and press <b>Submit</b> again."
+            : "Your answers were graded on this device but <b>were not recorded</b>. Check your connection and press <b>Submit</b> again.";
           out.innerHTML = "<div style='background:#fef2f2;border:1px solid #991b1b;border-radius:10px;padding:16px;'>" +
-            "<div style='font-weight:700;color:#991b1b;font-size:16px;'>Not saved \u2014 you appear to be offline</div>" +
-            "<div style='color:#334155;margin-top:6px;'>Your answers were graded on this device but <b>were not recorded</b>. Check your internet connection and click <b>Submit</b> again. Nothing counts until you see the green \u201C" + label + " submitted\u201D confirmation.</div></div>";
+            "<div style='font-weight:700;color:#991b1b;font-size:16px;'>Not recorded yet</div>" +
+            "<div style='color:#334155;margin-top:6px;'>" + kept + " Nothing counts until you see the green \u201C" + label + " submitted\u201D confirmation.</div></div>";
           submit.disabled = false; submit.style.opacity = "1"; submit.textContent = "Submit " + label.toLowerCase();
         } else {
           out.innerHTML = "<div style='background:#fef2f2;border:1px solid #991b1b;border-radius:10px;padding:16px;'>" +
@@ -418,7 +424,19 @@
           submit.disabled = false; submit.style.opacity = "1"; submit.textContent = "Submit " + label.toLowerCase();
         }
         if (cfg.onSubmit) { cfg.onSubmit(result); }
-      });
+      };
+      onResult.onStatus = function (st) {
+        if (st === "saved") {
+          out.innerHTML = "<div style='background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:12px;'>" +
+            "<div style='color:#334155;font-size:13.5px;'>Answers saved on this device. Sending\u2026</div></div>";
+        } else if (st === "retrying") {
+          out.innerHTML = "<div style='background:#fffbeb;border:1px solid #d97706;border-radius:10px;padding:12px;'>" +
+            "<div style='font-weight:600;color:#92400e;font-size:14px;'>Server is busy \u2014 retrying automatically</div>" +
+            "<div style='color:#334155;margin-top:4px;font-size:13px;'>Your answers are safe on this device. Please keep this tab open; do not re-take the quiz.</div></div>";
+          submit.textContent = "Retrying\u2026";
+        }
+      };
+      gradeFn(isExam ? (spec.examId || spec.title) : chapter, payload, onResult);
     }
     submit.addEventListener("click", doSubmit);
 
