@@ -432,13 +432,15 @@
 <script src="mn-submit.js?v=retry1"></script>
 <script src="im-quiz.js?v=retry1"></script>
 <script src="im-backend.js?v=retry1"></script>
+<script src="sheetwise-core.js?v=sw1"></script>
+<script src="sw-portal.js?v=sw1"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 /* ====================================================================
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-windows';
+var SA_BUILD = 'intro-micro-portal-2026-09-bubblesheets';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -3487,7 +3489,7 @@ function loadExams(){
       if(e.is_manual){
         html+='<tr><td>'+esc(e.title)+' <span class="tag amber" title="Graded on paper; scores are typed in">paper</span>'+((!e.total_points||Number(e.total_points)<=0)?' <span class="tag rose" title="Click Edit and set Total points, or scores will not count toward grades">\u26a0 set total points</span>':'')+'</td><td><span class="tag violet">'+esc(e.kind)+'</span></td><td>\u2014</td><td>'+esc(e.total_points||0)+'</td>'+
           '<td>'+(e.is_published?'<span class="tag green">published</span>':'<span class="tag dim">draft</span>')+'</td>'+
-          '<td class="inline-actions"><button class="btn btn-primary btn-sm" data-scores="'+e.id+'" data-stitle="'+esc(e.title||'')+'" data-spts="'+esc(e.total_points||0)+'">Enter scores</button><button class="btn btn-ghost btn-sm" data-editpaper="'+e.id+'">Edit</button><button class="btn btn-ghost btn-sm" data-pub="'+e.id+'" data-on="'+(e.is_published?'1':'0')+'">'+(e.is_published?'Unpublish':'Publish')+'</button>'+
+          '<td class="inline-actions"><button class="btn btn-primary btn-sm" data-bubble="'+e.id+'" data-btitle="'+esc(e.title||'')+'" title="Print per-student bubble sheets, scan them, and grade automatically">Bubble sheets</button><button class="btn btn-ghost btn-sm" data-scores="'+e.id+'" data-stitle="'+esc(e.title||'')+'" data-spts="'+esc(e.total_points||0)+'">Enter scores</button><button class="btn btn-ghost btn-sm" data-editpaper="'+e.id+'">Edit</button><button class="btn btn-ghost btn-sm" data-pub="'+e.id+'" data-on="'+(e.is_published?'1':'0')+'">'+(e.is_published?'Unpublish':'Publish')+'</button>'+
           '<button class="btn btn-danger btn-sm" data-del="'+e.id+'">Delete</button></td></tr>';
         return;
       }
@@ -3523,6 +3525,10 @@ function loadExams(){
     }); });
     Array.prototype.forEach.call($('examList').querySelectorAll('[data-scores]'), function(b){ b.addEventListener('click', function(){
       openPaperScores(b.getAttribute('data-scores'), b.getAttribute('data-stitle'), Number(b.getAttribute('data-spts'))||0);
+    }); });
+    Array.prototype.forEach.call($('examList').querySelectorAll('[data-bubble]'), function(b){ b.addEventListener('click', function(){
+      if(typeof SWPortal==='undefined'){ alert('Bubble-sheet module (sw-portal.js) did not load. Hard-refresh the page.'); return; }
+      SWPortal.open(b.getAttribute('data-bubble'), b.getAttribute('data-btitle'));
     }); });
     Array.prototype.forEach.call($('examList').querySelectorAll('[data-editpaper]'), function(b){ b.addEventListener('click', function(){
       openPaperExamEdit(b.getAttribute('data-editpaper'));
