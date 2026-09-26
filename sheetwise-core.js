@@ -9,7 +9,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = 'sheetwise-core-1.1';
+  var VERSION = 'sheetwise-core-1.2';
   var PAGE_W = 612, PAGE_H = 792;              // US Letter in points
 
   // Fiducial squares (centres) and orientation bar, in page points.
@@ -127,7 +127,10 @@
       }
       cols.push({ x: cx, bubbles: bs });
     }
-    return { type: 'num', q: q.n, kind: 'num', cols: cols, x: gx, y: y, boxY: boxY,
+    var rowLabels = [];
+    var rowsAll = ['-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    for (var rr = 0; rr < rowsAll.length; rr++) { rowLabels.push({ x: x + 4.2, y: gridY + rr * NUM_DY, ch: rowsAll[rr] }); }
+    return { type: 'num', q: q.n, kind: 'num', cols: cols, x: gx, y: y, boxY: boxY, rowLabels: rowLabels,
       bbox: { x: x, y: y, w: NUM_W - 4, h: NUM_H - 6 } };
   }
 
@@ -168,6 +171,13 @@
           var col = g.cols[c];
           s.push('<rect x="' + (col.x - 7.5) + '" y="' + g.boxY + '" width="15" height="16" fill="none" stroke="#000" stroke-width="0.7"/>');
           for (var k = 0; k < col.bubbles.length; k++) { s.push(bubble(col.bubbles[k])); }
+        }
+        // Row labels printed dark OUTSIDE the bubbles, so students can see which row is which digit.
+        if (g.rowLabels) {
+          for (var rl = 0; rl < g.rowLabels.length; rl++) {
+            var L = g.rowLabels[rl];
+            s.push(txt(L.x, L.y + 2.6, L.ch === '-' ? '\u2212' : L.ch, 7.5, '700', '#000', 'middle'));
+          }
         }
       }
     }
@@ -407,6 +417,20 @@
     return s / n;
   }
 
+  // Ink just OUTSIDE a bubble's outline (annulus r1..r2 times the radius): catches marks that miss the circle.
+  function ringDark(img, H, b, r1, r2) {
+    var s = 0, n = 0;
+    for (var a = 0; a < 20; a++) {
+      var ang = a / 20 * Math.PI * 2, ca = Math.cos(ang), sa = Math.sin(ang);
+      for (var k = 0; k < 3; k++) {
+        var rad = b.r * (r1 + (r2 - r1) * k / 2);
+        var p = mapPt(H, b.x + ca * rad, b.y + sa * rad); s += sampleGray(img, p[0], p[1]); n++;
+      }
+    }
+    return s / n;
+  }
+  var RING = { mc: [1.15, 1.4], num: [1.1, 1.25], OUT: 0.16 };
+
   // Reads every bubble group on one page. Returns { groups: { q: result } }.
   // result: { q, kind, value, status, scores, needsReview }
   function readMarks(img, loc, page) {
@@ -429,6 +453,21 @@
         raw.push({ g: g, s: cols });
       }
     }
+    // Ring ink around each bubble (not for the version row or the minus row, which sits under the write-in boxes).
+    var ringsAll = [];
+    for (i = 0; i < raw.length; i++) {
+      g = raw[i].g;
+      if (g.type === 'choice' && g.kind !== 'version') {
+        raw[i].ring = g.bubbles.map(function (bb) { var r = (loc.white - ringDark(img, loc.H, bb, RING.mc[0], RING.mc[1])) / contrast; ringsAll.push(r); return r; });
+      } else if (g.type === 'num') {
+        raw[i].ring = g.cols.map(function (col) { return col.bubbles.map(function (bb) {
+          if (bb.ch === '-') { return 0; }
+          var r = (loc.white - ringDark(img, loc.H, bb, RING.num[0], RING.num[1])) / contrast; ringsAll.push(r); return r; }); });
+      }
+    }
+    var ringBase = percentile(ringsAll, 0.5);
+    function rnorm(x) { return Math.max(0, (x - ringBase) / Math.max(0.2, 1 - ringBase)); }
+
     // Baseline = what an empty printed bubble reads as on THIS page.
     var base = percentile(all, 0.35);
     function norm(x) { return Math.max(0, Math.min(1.2, (x - base) / Math.max(0.2, 1 - base))); }
@@ -450,6 +489,10 @@
       if (g.type === 'choice') {
         var sc = raw[i].s.map(norm);
         var d = decide(sc, t);
+        if (d.index === null && d.status === 'blank' && raw[i].ring) {
+          var rmax = Math.max.apply(null, raw[i].ring.map(rnorm));
+          if (rmax >= RING.OUT) { d = { index: null, status: 'outside', review: true }; }
+        }
         res[g.q] = { q: g.q, kind: g.kind, scores: sc.map(rd), labels: g.labels,
           value: d.index === null ? null : (g.kind === 'yn' ? (d.index === 0 ? 'yes' : 'no') : String(d.index)),
           display: d.index === null ? '' : g.labels[d.index],
@@ -457,6 +500,14 @@
       } else {
         var colsN = raw[i].s.map(function (a) { return a.map(norm); });
         res[g.q] = readNumeric(g, colsN, t);
+        if (raw[i].ring && !res[g.q].needsReview) {
+          for (var ci2 = 0; ci2 < colsN.length; ci2++) {
+            var colMax = Math.max.apply(null, colsN[ci2]);
+            if (colMax < t.FAINT && Math.max.apply(null, raw[i].ring[ci2].map(rnorm)) >= RING.OUT) {
+              res[g.q].status = 'outside'; res[g.q].needsReview = true; break;
+            }
+          }
+        }
       }
     }
     return { base: rd(base), markScale: rd(k), groups: res };

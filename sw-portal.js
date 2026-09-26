@@ -16,7 +16,7 @@
    ========================================================================== */
 (function () {
   'use strict';
-  var SW_BUILD = 'sw-portal-2.0';
+  var SW_BUILD = 'sw-portal-2.1';
   // Scan libraries: served next to index.html first (same origin, no CDN or
   // worker cross-origin issues); CDN only as a fallback.
   var LIBS = {
@@ -656,6 +656,10 @@
       '<div id="swProg" style="margin-top:10px;font-size:13px;"></div>' +
       '<div id="swLog" style="margin-top:8px;max-height:150px;overflow:auto;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--text-muted);"></div></div>' +
       '<div id="swScanSummary"></div><div id="swReview"></div>';
+    if (!S.sheets.length) {
+      html = '<div class="card" style="margin-bottom:14px;border-left:4px solid var(--danger,#e11d48);"><b>No answer sheets have been issued for this exam yet.</b>' +
+        '<div style="font-size:12.5px;color:var(--text-muted);margin-top:4px;">Scans can only be graded under the exam their sheets were issued for. You can still add a scan here \u2014 Sheetwise will tell you which exam and course it belongs to.</div></div>' + html;
+    }
     el('swBody').innerHTML = html;
     var drop = el('swDrop'), inp = el('swFile');
     el('swPick').addEventListener('click', function () { inp.click(); });
@@ -679,7 +683,7 @@
 
   function ingest(files) {
     if (S.scan.busy) { logLine('Still reading the previous files \u2014 wait for them to finish.', true); return; }
-    if (!S.sheets.length) { el('swProg').textContent = 'Issue sheets first (tab 1).'; return; }
+
     S.scan.busy = true;
     el('swProg').innerHTML = '<span class="spinner"></span> Loading the scan reader\u2026';
     ensureScanLibs().then(function () {
@@ -708,6 +712,8 @@
           function (err) { logLine(name + ': could not open \u2014 ' + (err && err.message ? err.message : String(err)), true); });
       });
     }).then(function () {
+      return lookupForeign();
+    }).then(function () {
       S.scan.busy = false;
       el('swProg').textContent = 'Done. ' + S.scan.pages.length + ' page(s) read so far.';
       renderScanState();
@@ -717,6 +723,37 @@
       renderScanState();
     });
   }
+  // Pages whose QR code isn't a live sheet of THIS exam: find out where they belong.
+  function lookupForeign() {
+    S.scan.foreign = S.scan.foreign || {};
+    var codes = {};
+    S.scan.pages.forEach(function (p) { if (p.ok && p.code && !p.read && !(p.code in S.scan.foreign)) { codes[p.code] = true; } });
+    var list = Object.keys(codes); if (!list.length) { return Promise.resolve(); }
+    return sb.from('im_paper_sheet').select('code,exam_id,course_id,status,student_label').in('code', list).then(function (r) {
+      var rows = r.data || [], exIds = {}, cIds = {};
+      list.forEach(function (c) { S.scan.foreign[c] = { missing: true }; });
+      rows.forEach(function (x) { S.scan.foreign[x.code] = x; exIds[x.exam_id] = true; cIds[x.course_id] = true; });
+      if (!rows.length) { return null; }
+      return Promise.all([
+        sb.from('im_exam').select('id,title').in('id', Object.keys(exIds)),
+        sb.from('im_course').select('id,title').in('id', Object.keys(cIds))
+      ]).then(function (rr) {
+        var et = {}, ct = {};
+        ((rr[0] && rr[0].data) || []).forEach(function (e) { et[e.id] = e.title; });
+        ((rr[1] && rr[1].data) || []).forEach(function (c) { ct[c.id] = c.title; });
+        rows.forEach(function (x) { x.examTitle = et[x.exam_id] || 'another exam'; x.courseTitle = ct[x.course_id] || 'another course'; });
+      });
+    }).then(function () {
+      S.scan.pages.forEach(function (p) {
+        var f = p.ok && p.code && !p.read ? S.scan.foreign[p.code] : null; if (!f) { return; }
+        if (f.missing) { p.warning = 'Sheet ' + p.code + ' doesn\u2019t exist (it may belong to another site or was deleted).'; }
+        else if (String(f.exam_id) === String(S.examId) && f.status === 'void') { p.warning = 'Sheet ' + p.code + ' (' + (f.student_label || '') + ') was replaced when sheets were re-issued. Grade it by typing the student\u2019s current sheet code, or re-scan their new sheet.'; }
+        else { p.warning = 'This page belongs to \u201c' + f.examTitle + '\u201d in ' + f.courseTitle + (f.student_label ? ' (' + f.student_label + ')' : '') + '. Open that exam\u2019s Bubble sheets to grade it.'; p.foreign = true; }
+        logLine('  ' + (p.source || '') + ': ' + p.warning, true);
+      });
+    }, function () { /* lookup is best-effort */ });
+  }
+
   function describeRead(o) {
     if (!o.ok) { return o.error || 'not an answer sheet'; }
     var s = o.code ? sheetByCode(o.code) : null;
@@ -781,6 +818,11 @@
         '<div><div style="font-weight:700;margin-bottom:4px;">Looks like an answer sheet but couldn\u2019t be read</div><div style="font-size:12.5px;color:var(--text-muted);">' + h(p.error || '') + ' (' + h(p.source || '') + '). Re-scan it (whole page, not cropped) and add the file again.</div></div></div>');
     });
     C.orphans.forEach(function (p) {
+      if (p.foreign) {
+        rv.push('<div class="card" style="margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;border-left:4px solid var(--warn,#d97706);"><img src="' + p.preview + '" style="width:150px;border:1px solid var(--border);border-radius:6px;background:#fff">' +
+          '<div><div style="font-weight:700;margin-bottom:4px;">Wrong exam</div><div style="font-size:13px;">' + h(p.warning) + '</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">' + h(p.source || '') + '</div></div></div>');
+        return;
+      }
       rv.push('<div class="card" style="margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;"><img src="' + p.preview + '" style="width:190px;border:1px solid var(--border);border-radius:6px;background:#fff">' +
         '<div style="flex:1"><div style="font-weight:700;margin-bottom:4px;">Page needs its sheet code</div><div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px;">' + h(p.warning || '') + ' (' + h(p.source || '') + ')</div>' +
         '<input type="text" data-orphan="' + p._idx + '" placeholder="7-letter code under the QR" style="width:170px;text-transform:uppercase"> ' +
@@ -809,7 +851,7 @@
   }
   function stat(n, label, warn) { return '<div><div style="font-size:22px;font-weight:800;' + (warn ? 'color:var(--warn,#d97706)' : '') + '">' + n + '</div><div style="font-size:11.5px;color:var(--text-muted)">' + label + '</div></div>'; }
 
-  var STATUS_TXT = { faint: 'Faint mark', multiple: 'More than one bubble filled', unclear: 'Possible erasure', gap: 'Gap between digits', invalid: 'Not a valid number', blank: 'Left blank' };
+  var STATUS_TXT = { outside: 'Mark outside the bubble', faint: 'Faint mark', multiple: 'More than one bubble filled', unclear: 'Possible erasure', gap: 'Gap between digits', invalid: 'Not a valid number', blank: 'Left blank' };
   function reviewCard(e, a) {
     var s = e.sheet, key = h(s.code) + ':' + a.q, ctl;
     if (a.kind === 'num') {
