@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Sheetwise core  —  bubble-sheet layout, printing and optical reading.
+   Sheetwise core  \u2014  bubble-sheet layout, printing and optical reading.
    Framework-independent: no Supabase, no course logic. Anything that can
    hand it a question list and a scanned image can use it.
 
@@ -9,7 +9,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = 'sheetwise-core-1.0';
+  var VERSION = 'sheetwise-core-1.1';
   var PAGE_W = 612, PAGE_H = 792;              // US Letter in points
 
   // Fiducial squares (centres) and orientation bar, in page points.
@@ -31,7 +31,9 @@
 
   /* ------------------------------------------------------------------ layout */
   // questions: [{ n: displayNumber, kind: 'mc'|'yn'|'num', nopts: int }]
-  function layout(questions) {
+  // opts.versions: number of booklet versions (>1 adds a "booklet version" bubble row, read as q 'V')
+  function layout(questions, opts) {
+    opts = opts || {};
     var choice = [], nums = [];
     for (var i = 0; i < questions.length; i++) {
       var q = questions[i];
@@ -53,14 +55,23 @@
     var page = newPage();
     var y = AREA.top;
     var ci = 0;
-
+    var nv = opts.versions || 0;
+    if (nv > 1) {
+      // Booklet-version bubbles live in the header, right of the name box (no answer space used).
+      page.hasVersion = true;
+      page.groups.push({ type: 'label', text: 'BOOKLET VERSION', x: 310, y: 110 });
+      var vl = letters(nv), vb = [];
+      for (var vi = 0; vi < vl.length; vi++) { vb.push({ x: 318 + vi * 18, y: 134, r: MC_R, ch: vl[vi] }); }
+      page.groups.push({ type: 'choice', q: 'V', kind: 'version', labels: vl, bubbles: vb, labelX: null, labelY: 134,
+        bbox: { x: 306, y: 104, w: 18 * vl.length + 12, h: 40 } });
+    }
     while (ci < choice.length) {
       var avail = Math.floor((AREA.bottom - y - 16) / MC_ROW);
       if (avail < 1) { page = newPage(); y = AREA.top; continue; }
       var remaining = choice.length - ci;
       var rows = Math.min(avail, Math.ceil(remaining / mcCols));
       var take = Math.min(remaining, rows * mcCols);
-      page.groups.push({ type: 'label', text: 'Multiple choice — fill one bubble per question', x: AREA.left, y: y + 8 });
+      page.groups.push({ type: 'label', text: 'Multiple choice \u2014 fill one bubble per question', x: AREA.left, y: y + 8 });
       var y0 = y + 16;
       for (var k = 0; k < take; k++) {
         var qq = choice[ci + k];
@@ -86,7 +97,7 @@
       var needed = (labelled ? 0 : 16) + NUM_H;
       if (y + needed > AREA.bottom) { page = newPage(); y = AREA.top; labelled = false; continue; }
       if (!labelled) {
-        page.groups.push({ type: 'label', text: 'Numeric answers — write the number in the boxes, then fill one bubble per column (left-aligned)', x: AREA.left, y: y + 8 });
+        page.groups.push({ type: 'label', text: 'Numeric answers \u2014 write the number in the boxes, then fill one bubble per column (left-aligned)', x: AREA.left, y: y + 8 });
         y += 16; labelled = true;
       }
       for (var c = 0; c < perRow && ni < nums.length; c++, ni++) {
@@ -133,20 +144,21 @@
 
     // Header
     s.push(txt(60, 80, meta.title || 'Exam', 15, '700', '#000'));
-    s.push(txt(60, 100, 'Answer sheet · page ' + (page.index + 1) + ' of ' + (meta.pageCount || 1) + ' · sheet ' + (meta.code || ''), 9.5, '400', '#333'));
-    s.push('<rect x="60" y="110" width="330" height="34" fill="none" stroke="#000" stroke-width="0.8"/>');
+    s.push(txt(60, 100, 'Answer sheet \u00b7 page ' + (page.index + 1) + ' of ' + (meta.pageCount || 1) + ' \u00b7 sheet ' + (meta.code || ''), 9.5, '400', '#333'));
+    var nameW = page.hasVersion ? 238 : 330;
+    s.push('<rect x="60" y="110" width="' + nameW + '" height="34" fill="none" stroke="#000" stroke-width="0.8"/>');
     s.push(txt(66, 121, 'NAME', 6.5, '700', '#555'));
     s.push(txt(66, 138, meta.studentName || '', 13, '600', '#000'));
-    if (meta.studentLine2) { s.push(txt(396, 138, meta.studentLine2, 8, '400', '#444')); }
+    if (meta.studentLine2) { s.push(txt(page.hasVersion ? 150 : 396, page.hasVersion ? 121 : 138, meta.studentLine2, 7.5, '400', '#444')); }
     s.push(txt(60, 154, meta.instructions || 'Use a dark pencil or pen. Fill bubbles completely. Erase cleanly. Do not mark near the black squares or the code.', 7.5, '400', '#444'));
     s.push(qrSVG('SW1|' + (meta.code || '') + '|' + (page.index + 1), QR_BOX.x, QR_BOX.y, QR_BOX.s));
     s.push(txt(QR_BOX.x + QR_BOX.s / 2, QR_BOX.y + QR_BOX.s + 10, meta.code || '', 8, '700', '#000', 'middle'));
 
     for (i = 0; i < page.groups.length; i++) {
       var g = page.groups[i];
-      if (g.type === 'label') { s.push(txt(g.x, g.y + 3, g.text, 8, '700', '#222')); continue; }
+      if (g.type === 'label') { s.push(txt(g.x, g.y + 3, g.text, g.text === 'BOOKLET VERSION' ? 6.5 : 8, '700', g.text === 'BOOKLET VERSION' ? '#555' : '#222')); continue; }
       if (g.type === 'choice') {
-        s.push(txt(g.labelX, g.labelY + 3.2, String(g.q), 9, '700', '#000', 'end'));
+        if (g.labelX !== null) { s.push(txt(g.labelX, g.labelY + 3.2, String(g.q), 9, '700', '#000', 'end')); }
         for (var b = 0; b < g.bubbles.length; b++) { s.push(bubble(g.bubbles[b])); }
         continue;
       }
@@ -165,7 +177,7 @@
 
   function bubble(b) {
     return '<circle cx="' + r2(b.x) + '" cy="' + r2(b.y) + '" r="' + b.r + '" fill="none" stroke="#555" stroke-width="0.7"/>' +
-      '<text x="' + r2(b.x) + '" y="' + r2(b.y + b.r * 0.42) + '" font-size="' + r2(b.r * 1.15) + '" text-anchor="middle" fill="#aaa">' + escX(b.ch === '-' ? '−' : b.ch) + '</text>';
+      '<text x="' + r2(b.x) + '" y="' + r2(b.y + b.r * 0.42) + '" font-size="' + r2(b.r * 1.15) + '" text-anchor="middle" fill="#aaa">' + escX(b.ch === '-' ? '\u2212' : b.ch) + '</text>';
   }
   function txt(x, y, t, size, weight, fill, anchor) {
     return '<text x="' + x + '" y="' + y + '" font-size="' + size + '" font-weight="' + weight + '" fill="' + fill + '"' + (anchor ? ' text-anchor="' + anchor + '"' : '') + '>' + escX(t) + '</text>';
@@ -345,7 +357,7 @@
       if (parts[0] === 'SW1' && parts.length >= 3) { out.code = parts[1]; out.page = parseInt(parts[2], 10) || 1; }
       else { out.qrText = qr; }
     }
-    if (!out.code) { out.warning = 'QR code unreadable — enter the sheet code printed under it.'; }
+    if (!out.code) { out.warning = 'QR code unreadable \u2014 enter the sheet code printed under it.'; }
     return out;
   }
 
@@ -441,7 +453,7 @@
         res[g.q] = { q: g.q, kind: g.kind, scores: sc.map(rd), labels: g.labels,
           value: d.index === null ? null : (g.kind === 'yn' ? (d.index === 0 ? 'yes' : 'no') : String(d.index)),
           display: d.index === null ? '' : g.labels[d.index],
-          status: d.status, needsReview: d.review, bbox: g.bbox };
+          status: d.status, needsReview: d.review || (g.kind === 'version' && d.index === null), bbox: g.bbox };
       } else {
         var colsN = raw[i].s.map(function (a) { return a.map(norm); });
         res[g.q] = readNumeric(g, colsN, t);
