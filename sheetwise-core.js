@@ -9,7 +9,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = 'sheetwise-core-1.2';
+  var VERSION = 'sheetwise-core-1.3';
   var PAGE_W = 612, PAGE_H = 792;              // US Letter in points
 
   // Fiducial squares (centres) and orientation bar, in page points.
@@ -19,6 +19,7 @@
   var WHITE_PTS = [[306, 40], [306, 752], [22, 396], [590, 396], [200, 752], [420, 40]];
   var QR_BOX = { x: 472, y: 56, s: 80 };
   var AREA = { top: 160, bottom: 728, left: 50, right: 562 };
+  var ARCHIVE_PPT = 1.6;   // stored scan resolution (about 115 dpi, ~120 KB per page)
 
   // Choice-bubble geometry
   var MC_ROW = 19, MC_R = 6.5, MC_STEP = 19;
@@ -567,12 +568,12 @@
   function rd(x) { return Math.round(x * 1000) / 1000; }
 
   /* ------------------------------------------------------------- crops */
-  function cropDataURL(img, loc, box, ppt, doc) {
+  function cropDataURL(img, loc, box, ppt, doc, quality) {
     doc = doc || root.document;
     var r = warpRegion(img, loc.H, box.x, box.y, box.w, box.h, ppt || 3);
     var cv = doc.createElement('canvas'); cv.width = r.width; cv.height = r.height;
     var ctx = cv.getContext('2d'); var id = ctx.createImageData(r.width, r.height); id.data.set(r.data); ctx.putImageData(id, 0, 0);
-    return cv.toDataURL('image/jpeg', 0.82);
+    return cv.toDataURL('image/jpeg', quality || 0.82);
   }
   function pagePreview(img, loc, ppt) {
     return cropDataURL(img, loc, { x: 0, y: 0, w: PAGE_W, h: PAGE_H }, ppt || 1.1);
@@ -668,13 +669,15 @@
         r.groups[q].crop = cropDataURL(out._img, out._loc, { x: bb.x - 4, y: bb.y - 2, w: bb.w + 8, h: bb.h + 4 }, 3);
       }
     }
+    // Deskewed archive copy of the whole page (template-aligned: pixel = point * ARCHIVE_PPT)
+    try { out.archive = cropDataURL(out._img, out._loc, { x: 0, y: 0, w: PAGE_W, h: PAGE_H }, ARCHIVE_PPT, null, 0.7); } catch (e) { out.archive = null; }
     out._img = null;                           // free the full-resolution pixels
     out.read = true;
     return out;
   }
 
   root.SheetwiseCore = {
-    VERSION: VERSION, PAGE_W: PAGE_W, PAGE_H: PAGE_H, THRESHOLDS: T,
+    VERSION: VERSION, PAGE_W: PAGE_W, PAGE_H: PAGE_H, ARCHIVE_PPT: ARCHIVE_PPT, THRESHOLDS: T,
     layout: layout, renderPageSVG: renderPageSVG,
     grayFromCanvas: grayFromCanvas, grayFromImageData: grayFromImageData,
     locate: locate, readMarks: readMarks, readCanvas: readCanvas, finishRead: finishRead,

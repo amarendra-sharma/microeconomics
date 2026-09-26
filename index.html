@@ -432,15 +432,15 @@
 <script src="mn-submit.js?v=retry1"></script>
 <script src="im-quiz.js?v=retry1"></script>
 <script src="im-backend.js?v=retry1"></script>
-<script src="sheetwise-core.js?v=sw3"></script>
-<script src="sw-portal.js?v=sw3"></script>
+<script src="sheetwise-core.js?v=sw4"></script>
+<script src="sw-portal.js?v=sw4"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 /* ====================================================================
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-bubblesheets3';
+var SA_BUILD = 'intro-micro-portal-2026-09-bubblesheets4';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -776,11 +776,13 @@ function computeTA(){
     if(rows[i].can_view_grades){ vg=true; }
   }
   State.staffCaps = { roster:vr, grade:gr, grades:vg };
+  State.coInstructor = rows.some(function(r){ return r.staff_role==='co_instructor'; });
   return State.isTA;
 }
 function taAllowedViews(){
   // Map granted caps to teaching views. Intentionally small: TAs get the tools
   // their caps justify and nothing owner-level (no courses/materials/announce).
+  if(State.coInstructor){ return INSTRUCTOR_VIEWS.slice(); }
   var caps = State.staffCaps || {};
   var v = [];
   if(caps.roster){ v.push('roster'); }
@@ -852,7 +854,7 @@ function enterApp(user){
   $('sideUser').textContent=imRealName()||user.email;
   var role=State.role;
   var isTA=false; try{ isTA = computeTA(); }catch(e){ isTA=false; }
-  $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : (isTA ? 'Teaching Assistant' : 'Student'));
+  $('sideRole').textContent = (role==='admin') ? 'Super Administrator' : (role==='professor' ? 'Instructor' : (isTA ? (State.coInstructor ? 'Co-instructor' : 'Teaching Assistant') : 'Student'));
   if(role==='professor' || role==='admin'){ show($('teachGroup')); applyTANav(false); }
   else if(isTA){ show($('teachGroup')); applyTANav(true); }
   else { hide($('teachGroup')); }
@@ -1413,7 +1415,7 @@ function renderStaffPanel(){
     '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Give a TA access to this course and choose exactly what they can do. They do not need an account already \u2014 one is created if needed. Only you (the course owner) can change these permissions.</div>'+
     '<div class="row2"><div class="field"><label>TA email</label><input id="stEmail" type="email" placeholder="ta@university.edu"></div>'+
     '<div class="field"><label>Name (optional)</label><input id="stName" type="text" placeholder="Alex Kim"></div></div>'+
-    '<div class="field"><label>Role</label><select id="stRole"><option value="ta">Teaching assistant</option><option value="co_instructor">Co-instructor</option></select></div>'+
+    '<div class="field"><label>Role</label><select id="stRole"><option value="ta">Teaching assistant \u2014 only the permissions ticked below</option><option value="co_instructor">Co-instructor \u2014 full instructor access to this course</option></select></div>'+
     '<div class="field"><label>This person may:</label>'+capBoxes('stNew',null)+'</div>'+
     '<div class="inline-actions" style="justify-content:flex-end;"><button class="btn btn-primary" id="stAdd">Add to course</button></div>'+
     '<div id="stList" style="margin-top:16px;">'+loadingCard()+'</div></div>';
@@ -1431,12 +1433,15 @@ function loadStaffList(){
       s=staff[i];
       html+='<div class="card" style="margin-bottom:10px;padding:12px 14px;">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">'+
-          '<div><b>'+esc(s.email||s.user_id)+'</b> <span class="tag dim">'+(s.staff_role==='co_instructor'?'co-instructor':'TA')+'</span></div>'+
+          '<div><b>'+esc(s.email||s.user_id)+'</b> <select data-strole="'+esc(s.user_id)+'" style="width:auto;display:inline-block;margin-left:6px;"><option value="ta"'+(s.staff_role!=='co_instructor'?' selected':'')+'>TA (ticked permissions)</option><option value="co_instructor"'+(s.staff_role==='co_instructor'?' selected':'')+'>Co-instructor (full access)</option></select></div>'+
           '<div class="inline-actions"><button class="btn btn-ghost btn-sm" data-savestaff="'+esc(s.user_id)+'">Save permissions</button>'+
           '<button class="btn btn-danger btn-sm" data-delstaff="'+esc(s.user_id)+'">Remove</button></div>'+
         '</div>'+capBoxes('st_'+s.user_id+'_', s)+'</div>';
     }
     box.innerHTML=html;
+    Array.prototype.forEach.call(box.querySelectorAll('[data-strole]'), function(sel){
+      sel.addEventListener('change', function(){ setStaffRole(sel.getAttribute('data-strole'), sel.value); });
+    });
     Array.prototype.forEach.call(box.querySelectorAll('[data-savestaff]'), function(b){
       b.addEventListener('click', function(){ saveStaffPerms(b.getAttribute('data-savestaff')); });
     });
@@ -1467,6 +1472,14 @@ function addStaff(){
     $('stEmail').value=''; $('stName').value='';
     loadStaffList();
   }, function(){ e.textContent='Could not reach the roster service.'; e.className='msg err'; });
+}
+function setStaffRole(userId, role){
+  var e=$('stMsg'); e.textContent='Saving role\u2026'; e.className='msg';
+  sb.from('im_course_staff').update({ staff_role: role }).eq('course_id', State.teachCourseId).eq('user_id', userId).then(function(res){
+    if(res && res.error){ e.textContent='Could not change the role: '+res.error.message+' (run im_78_paper_review.sql first).'; e.className='msg err'; return; }
+    e.textContent = (role==='co_instructor') ? 'Now a co-instructor: full instructor access to this course. They should sign out and back in.' : 'Now a TA: only the ticked permissions apply.';
+    e.className='msg ok'; loadStaffList();
+  }, function(){ e.textContent='Could not reach the server.'; e.className='msg err'; });
 }
 function saveStaffPerms(userId){
   var e=$('stMsg'), payload=collectCaps('st_'+userId+'_');
@@ -7316,7 +7329,7 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
       // per-exam deadline overrides for THIS student (a reschedule wins over closes_at)
       var examDueOverride = {}; var examOpenOverride = {};
       (r[3] && r[3].data ? r[3].data : []).forEach(function(o){ if(o.due_override){ examDueOverride[o.ref_id]=new Date(o.due_override).getTime(); } if(o.opens_override){ examOpenOverride[o.ref_id]=new Date(o.opens_override).getTime(); } });
-      if (exams.length === 0) { host.innerHTML = '<div class="card empty">No exams have been assigned yet.</div>'; return; }
+      if (exams.length === 0) { host.innerHTML = '<div class="card empty">No exams have been assigned yet.</div>'; if (window.SWPortal && SWPortal.studentSection) { SWPortal.studentSection(host); } return; }
       // count graded SITTINGS per exam = graded attempts on that exam's first item
       var sittingsBy = {}; var lastPts = {};
       exams.forEach(function(e){ sittingsBy[e.id]=0; });
@@ -7391,6 +7404,7 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
           '<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">' + statusHtml + action + '</div></div>';
       });
       host.innerHTML = html || '<div class="card empty">No exams have been assigned yet.</div>';
+      if (window.SWPortal && SWPortal.studentSection) { SWPortal.studentSection(host); }
       Array.prototype.forEach.call(host.querySelectorAll('[data-review]'), function(b) {
         b.addEventListener('click', function() { openExamReview(b.getAttribute('data-review')); });
       });
