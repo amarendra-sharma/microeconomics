@@ -440,7 +440,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-lettergrade2';
+var SA_BUILD = 'intro-micro-portal-2026-09-assignwt1';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -1159,7 +1159,7 @@ function openCourseModal(courseId){
     access_starts:c?(c.access_starts||''):'', access_ends:c?(c.access_ends||''):'',
     review_quizzes:c?!!c.review_quizzes:false, review_arenas:c?!!c.review_arenas:false, review_exams:c?!!c.review_exams:false,
     wr:c?c.weight_reading:0.10, wq:c?c.weight_quizzes:0.20, wa:c?c.weight_arenas:0.15, wm:c?c.weight_midterm:0.20, wf:c?c.weight_final:0.25,
-    watt:c?(c.weight_attendance!=null?c.weight_attendance:0):0, attShare:c?(c.att_presence_share!=null?c.att_presence_share:0.7):0.7 };
+    watt:c?(c.weight_attendance!=null?c.weight_attendance:0):0, wasg:c?(c.weight_assignments!=null?c.weight_assignments:0):0, attShare:c?(c.att_presence_share!=null?c.att_presence_share:0.7):0.7 };
   var m=document.createElement('div'); m.className='modal-bg';
   m.innerHTML='<div class="modal"><h2>'+(isNew?'New course':'Edit course')+'</h2>'+
     '<div id="cmMsg" class="msg"></div>'+
@@ -1183,8 +1183,8 @@ function openCourseModal(courseId){
       '<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cmRevE" '+(v.review_exams?'checked':'')+'> Exams</label>'+
     '</div><div style="font-size:11.5px;color:var(--text-subtle);margin-top:5px;">When on, students can reopen a graded attempt and see which answers were right &mdash; but only <strong>after the &ldquo;Access ends&rdquo; date above</strong> has passed. So arena review for your section opens on your course&rsquo;s own deadline; leave these off during an active term.</div></div>'+
     '<div class="field"><label>Grade weights — must sum to 100%</label>'+
-    '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;">'+
-      wInput('cmWr','Reading',v.wr)+wInput('cmWq','Quizzes',v.wq)+wInput('cmWa','Arenas',v.wa)+wInput('cmWm','Midterm',v.wm)+wInput('cmWf','Final',v.wf)+wInput('cmWatt','Attendance',v.watt)+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:8px;">'+
+      wInput('cmWr','Reading',v.wr)+wInput('cmWq','Quizzes',v.wq)+wInput('cmWa','Arenas',v.wa)+wInput('cmWm','Midterm',v.wm)+wInput('cmWf','Final',v.wf)+wInput('cmWatt','Attendance',v.watt)+wInput('cmWasg','Assignments',v.wasg)+
     '</div><div id="cmWsum" style="font-size:11.5px;color:var(--text-subtle);margin-top:6px;"></div><div style="font-size:11px;color:var(--text-subtle);margin-top:4px;">The <b>Midterm</b> and <b>Final</b> weights here are defaults. If you set a weight on an individual exam (in Exams &rarr; edit), that exam uses its own weight instead \u2014 which is how you run several midterms, each weighted separately.</div></div>'+
     '<div class="field"><label>Attendance split — presence vs pop quiz</label>'+
     '<div style="display:flex;align-items:center;gap:10px;"><input id="cmAttSplit" type="number" min="0" max="100" step="5" value="'+Math.round((v.attShare!=null?v.attShare:0.7)*100)+'" style="width:80px;"><span style="font-size:12.5px;color:var(--text-muted);">% of the Attendance grade comes from <b>being present</b>; the rest comes from the in-class <b>pop quiz</b>.</span></div>'+
@@ -1196,9 +1196,9 @@ function openCourseModal(courseId){
     '</div></div>';
   $('modalHost').appendChild(m);
   function closeM(){ $('modalHost').innerHTML=''; }
-  function sumW(){ var s=num('cmWr')+num('cmWq')+num('cmWa')+num('cmWm')+num('cmWf')+num('cmWatt'); $('cmWsum').textContent='Current sum: '+Math.round(s*100)+'%'; $('cmWsum').style.color=(Math.abs(s-1)<0.001)?'var(--green)':'var(--rose)'; }
+  function sumW(){ var s=num('cmWr')+num('cmWq')+num('cmWa')+num('cmWm')+num('cmWf')+num('cmWatt')+num('cmWasg'); $('cmWsum').textContent='Current sum: '+Math.round(s*100)+'%'; $('cmWsum').style.color=(Math.abs(s-1)<0.001)?'var(--green)':'var(--rose)'; }
   function num(id){ var x=parseFloat($(id).value); return isNaN(x)?0:x/100; }
-  ['cmWr','cmWq','cmWa','cmWm','cmWf'].forEach(function(id){ $(id).addEventListener('input',sumW); }); sumW();
+  ['cmWr','cmWq','cmWa','cmWm','cmWf','cmWatt','cmWasg'].forEach(function(id){ $(id).addEventListener('input',sumW); }); sumW();
   $('cmCancel').addEventListener('click', closeM);
   m.addEventListener('click', function(e){ if(e.target===m){ closeM(); } });
   if(!isNew){ $('cmArchive').addEventListener('click', function(){
@@ -1207,14 +1207,14 @@ function openCourseModal(courseId){
   $('cmSave').addEventListener('click', function(){
     var title=$('cmTitle').value.trim();
     if(!title){ cmErr('Title is required.'); return; }
-    var sumv=num('cmWr')+num('cmWq')+num('cmWa')+num('cmWm')+num('cmWf')+num('cmWatt');
+    var sumv=num('cmWr')+num('cmWq')+num('cmWa')+num('cmWm')+num('cmWf')+num('cmWatt')+num('cmWasg');
     if(Math.abs(sumv-1)>0.001){ cmErr('Weights must sum to 100%.'); return; }
     var payload={ title:title, term:$('cmTerm').value.trim(), description:$('cmDesc').value.trim(),
       join_code:$('cmCode').value.trim(),
       access_starts:$('cmStart').value||null, access_ends:$('cmEnd').value||null,
       review_quizzes:$('cmRevQ').checked, review_arenas:$('cmRevA').checked, review_exams:$('cmRevE').checked,
       weight_reading:num('cmWr'), weight_quizzes:num('cmWq'), weight_arenas:num('cmWa'), weight_midterm:num('cmWm'), weight_final:num('cmWf'),
-      weight_attendance:num('cmWatt'), att_presence_share:(function(){ var e=$('cmAttSplit'); var x=e?parseFloat(e.value):70; if(isNaN(x)){x=70;} x=Math.max(0,Math.min(100,x)); return x/100; })() };
+      weight_attendance:num('cmWatt'), weight_assignments:num('cmWasg'), att_presence_share:(function(){ var e=$('cmAttSplit'); var x=e?parseFloat(e.value):70; if(isNaN(x)){x=70;} x=Math.max(0,Math.min(100,x)); return x/100; })() };
     // Only an admin can set the fee flag; for anyone else we simply do not send
     // it (and the database guard forces requires_payment=true regardless).
     if($('cmPay')){ payload.requires_payment=$('cmPay').checked; }
@@ -1897,7 +1897,7 @@ function renderGradebook(host){
   var c=findCourse(State.teachCourseId);
   if(!c){ host.innerHTML='<div class="card empty">Could not find this course. Try reselecting it from your course list.</div>'; return; }
   function wnum(v, d){ return (v===null||v===undefined||isNaN(Number(v)))?d:Number(v); }
-  var weights={reading:wnum(c.weight_reading,0.1),quizzes:wnum(c.weight_quizzes,0.2),arenas:wnum(c.weight_arenas,0.1),midterm:wnum(c.weight_midterm,0.3),final:wnum(c.weight_final,0.3),attendance:wnum(c.weight_attendance,0)};
+  var weights={reading:wnum(c.weight_reading,0.1),quizzes:wnum(c.weight_quizzes,0.2),arenas:wnum(c.weight_arenas,0.1),midterm:wnum(c.weight_midterm,0.3),final:wnum(c.weight_final,0.3),attendance:wnum(c.weight_attendance,0),assignments:wnum(c.weight_assignments,0)};
   // 1) gradebook view rows, 2) published exams, 3) exam attempts, + assignments/overrides
   // Guard every stage with a timeout so a hung query names itself instead of
   // spinning forever.
@@ -2084,6 +2084,8 @@ function renderGradebook(host){
         arenaRows.forEach(function(r){ if(!arenaByStudent[r.student_id]){ arenaByStudent[r.student_id]=[]; } arenaByStudent[r.student_id].push(r); });
         var arenaScoreOf={};
         Object.keys(arenaByStudent).forEach(function(sid){ arenaScoreOf[sid]=computeArenaScore(arenaByStudent[sid]); });
+        var arenaPerfOf={};
+        Object.keys(arenaByStudent).forEach(function(sid){ var _a=arenaByStudent[sid]; var _s=0; for(var _i=0;_i<_a.length;_i++){ _s+=(_a[_i].score||0); } arenaPerfOf[sid]=_a.length>0?(_s/_a.length):null; });
         var ptsOf={}; aRows.forEach(function(a){ ptsOf[a.id]=a.points||0; });
         // per student: sum(score)/sum(points over graded assignments)
         var earn={}, poss={};
@@ -2095,6 +2097,9 @@ function renderGradebook(host){
         });
         var asgScore={};
         Object.keys(earn).forEach(function(sid){ asgScore[sid]= poss[sid]>0 ? (earn[sid]/poss[sid]) : null; });
+        var _totAsgPts=0; aRows.forEach(function(a){ _totAsgPts+=(a.points||0); });
+        var asgProjectedOf={};
+        Object.keys(earn).forEach(function(sid){ asgProjectedOf[sid]= _totAsgPts>0 ? Math.min(1, earn[sid]/_totAsgPts) : null; });
         var overrideOf={}; ovr.forEach(function(o){ overrideOf[o.student_id]={ pct:o.override_pct, note:o.note }; });
         // Possible points per student per exam = sum of that student's issued
         // items' real point values (from the bank), so the gradebook denominator
@@ -2133,7 +2138,7 @@ function renderGradebook(host){
           examScore[m.student_id][m.exam_id]=Number(m.points);
           examPossible[m.student_id][m.exam_id]=tp;
         });
-        buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf,examPossible,attScoreOf);
+        buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf,examPossible,attScoreOf,arenaPerfOf,asgProjectedOf);
       }, function(err){
         host.innerHTML='<div class="card empty">Could not load parts of the gradebook ('+esc(String(err&&err.message?err.message:err))+'). Exam and quiz scores may still be shown \u2014 try reloading.</div>';
       });
@@ -2240,9 +2245,9 @@ function openGradeScaleEditor(c, host){
   });
 }
 
-function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf,examPossible,attScoreOf){
+function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf,examPossible,attScoreOf,arenaPerfOf,asgProjectedOf){
   try {
-  asgScore = asgScore || {}; overrideOf = overrideOf || {}; arenaScoreOf = arenaScoreOf || {}; examPossible = examPossible || {}; attScoreOf = attScoreOf || {};
+  asgScore = asgScore || {}; overrideOf = overrideOf || {}; arenaScoreOf = arenaScoreOf || {}; examPossible = examPossible || {}; attScoreOf = attScoreOf || {}; arenaPerfOf = arenaPerfOf || {}; asgProjectedOf = asgProjectedOf || {};
   if(rows.length===0){ host.innerHTML='<div class="card empty">No enrolled students yet. Share the join code <span class="pill-code">'+esc(c.join_code)+'</span> so students can join.</div>'; return; }
   // Effective point total for an exam (falls back to question count).
   function examPts(e){ if(!e){ return 0; } if(e.total_points && Number(e.total_points)>0){ return Number(e.total_points); } return (e.item_ids && e.item_ids.length) ? e.item_ids.length : 0; }
@@ -2261,6 +2266,8 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
     var attend=(attScoreOf[r.student_id]!==undefined&&attScoreOf[r.student_id]!==null)?attScoreOf[r.student_id]:null;
     var comps=[['reading',reading,weights.reading],['quizzes',quizzes,weights.quizzes],['arenas',arenas,weights.arenas]];
     if(attend!==null && weights.attendance>0){ comps.push(['attendance',attend,weights.attendance]); }
+    var asgProj=(asgProjectedOf[r.student_id]!==undefined&&asgProjectedOf[r.student_id]!==null)?asgProjectedOf[r.student_id]:null;
+    if(asgProj!==null && weights.assignments>0){ comps.push(['assignments', asgProj, weights.assignments]); }
     // one component per published exam, each on its own weight
     var examScores={}; // examId -> fraction (or null)
     gradedExams.forEach(function(e){
@@ -2279,9 +2286,22 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
     var asg=(asgScore[r.student_id]!==undefined&&asgScore[r.student_id]!==null)?asgScore[r.student_id]:null;
     var ovr=overrideOf[r.student_id]?overrideOf[r.student_id]:null;
     var finalPct = ovr ? (Number(ovr.pct)/100) : total;
+    // Letter basis: PERFORMANCE ON COMPLETED WORK. Each component scored over
+    // what the student has actually done, renormalized over engaged components
+    // (reading & attendance folded at their completion rate).
+    var pcomps=[];
+    if(r.chapters_read>0 && weights.reading>0){ pcomps.push([reading, weights.reading]); }
+    if(r.quizzes_scored&&Number(r.quizzes_scored)>0 && weights.quizzes>0){ var _qp=Number(r.quiz_score_sum)/Number(r.quizzes_scored); if(_qp>1){_qp=1;} pcomps.push([_qp, weights.quizzes]); }
+    if(arenaPerfOf[r.student_id]!==undefined && arenaPerfOf[r.student_id]!==null && weights.arenas>0){ pcomps.push([arenaPerfOf[r.student_id], weights.arenas]); }
+    if(attend!==null && weights.attendance>0){ pcomps.push([attend, weights.attendance]); }
+    if(asg!==null && weights.assignments>0){ pcomps.push([asg, weights.assignments]); }
+    gradedExams.forEach(function(e){ if(examScores[e.id]!==null && examScores[e.id]!==undefined){ pcomps.push([examScores[e.id], examWeight(e)]); } });
+    var _pw=pcomps.reduce(function(s,x){return s+x[1];},0);
+    var perfPct = _pw>0 ? pcomps.reduce(function(s,x){return s+x[0]*x[1];},0)/_pw : null;
+    var letterBasis = ovr ? (Number(ovr.pct)/100) : perfPct;
     return { sid:r.student_id, email:r.email, name:r.full_name, sub:r.sub_status, reading:reading, quizzes:quizzes, arenas:arenas, attendance:attend,
       practice:(r.practice_attempts>0?r.practice_correct/r.practice_attempts:null),
-      examScores:examScores, assignments:asg, computed:total, override:ovr, finalPct:finalPct };
+      examScores:examScores, assignments:asg, computed:total, override:ovr, finalPct:finalPct, perfPct:perfPct, letterBasis:letterBasis };
   });
   var html='<div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'+
     '<div style="font-size:12.5px;color:var(--text-muted);"><b>Grade on work completed so far.</b> The weighted total renormalizes over components that have data. <b>Assignments</b> are shown for reference; to fold them (or participation) into a student\u2019s final grade, use the <b>Override</b> column \u2014 an entered override becomes the Final grade and is what the CSV exports.</div>'+
@@ -2319,7 +2339,7 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
       '<td>'+pct(g.computed)+'</td>'+
       '<td><label class="sr-only" for="ovr-'+g.sid+'">Override percent for '+esc(g.name||g.email)+'</label><input id="ovr-'+g.sid+'" type="number" min="0" max="100" step="0.1" placeholder="\u2014" value="'+(g.override?g.override.pct:'')+'" style="width:64px;"></td>'+
       '<td style="font-weight:600;color:var(--text-bright);">'+pct(g.finalPct)+(g.override?' <span class="tag violet" title="manual override">ovr</span>':'')+'</td>'+
-      '<td style="font-weight:700;color:var(--navy);">'+esc(letterForStudent(g, gscale))+'</td>'+
+      '<td style="font-weight:700;color:var(--navy);" title="'+((g.letterBasis===null||g.letterBasis===undefined)?'no completed work yet':(Math.round(g.letterBasis*100)+'% on completed work'))+'">'+((g.letterBasis===null||g.letterBasis===undefined)?'\u2014':esc(letterForPct(g.letterBasis*100, gscale)))+'</td>'+
       '<td><button class="btn btn-ghost btn-sm" data-saveovr="'+g.sid+'">Save</button> <button class="btn btn-ghost btn-sm" data-breakdown="'+g.sid+'" data-bdname="'+esc(g.name||g.email||'')+'">Detail</button></td></tr>';
   });
   html+='</tbody></table></div>';
@@ -2449,7 +2469,7 @@ function exportCSV(c,rows,examCols){
     var ovr = g.override ? g.override.pct : '';
     var examVals = examCols.map(function(col){ var f=g.examScores?g.examScores[col.id]:null; return p(f); });
     var line=[ '"'+(g.name||'').replace(/"/g,'""')+'"', '"'+(g.email||'')+'"', g.sub,
-      p(g.reading),p(g.quizzes),p(g.arenas),(g.attendance===null||g.attendance===undefined?'':p(g.attendance)),p(g.assignments) ].concat(examVals).concat([ p(g.computed), ovr, p(g.finalPct), '"'+letterForStudent(g, gscale)+'"' ]);
+      p(g.reading),p(g.quizzes),p(g.arenas),(g.attendance===null||g.attendance===undefined?'':p(g.attendance)),p(g.assignments) ].concat(examVals).concat([ p(g.computed), ovr, p(g.finalPct), '"'+((g.letterBasis===null||g.letterBasis===undefined)?'\u2014':letterForPct(g.letterBasis*100, gscale))+'"' ]);
     lines.push(line.join(','));
   });
   var blob=new Blob([lines.join('\n')],{type:'text/csv'});
@@ -6971,14 +6991,16 @@ function computeWeightedGrade(callback){
   var courseId = State.payCourseId || State.selfCourseId;
   if (!uid || !courseId) { callback(null); return; }
   Promise.all([
-    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,att_presence_share,grade_scale').eq('id', courseId).maybeSingle(),
+    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,weight_assignments,att_presence_share,grade_scale').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring,is_manual').eq('course_id', courseId).eq('is_published', true),
     sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id', courseId),
     sb.from('im_attendance_checkin').select('session_id,present,quiz_score').eq('user_id', uid),
     sb.from('im_enrollment').select('created_at').eq('course_id', courseId).eq('user_id', uid).maybeSingle(),
-    sb.from('im_manual_exam_score').select('exam_id,points').eq('course_id', courseId).eq('student_id', uid)
+    sb.from('im_manual_exam_score').select('exam_id,points').eq('course_id', courseId).eq('student_id', uid),
+    sb.from('im_assignment').select('id,points').eq('course_id', courseId).eq('is_published', true),
+    sb.from('im_submission').select('assignment_id,score').eq('student_id', uid)
   ]).then(function(r){
     var course = r[0].data; if (!course) { callback(null); return; }
     var prog = r[1].data ? r[1].data : [];
@@ -6987,7 +7009,13 @@ function computeWeightedGrade(callback){
     var manualPtsById={}; (r[7] && r[7].data ? r[7].data : []).forEach(function(m){ manualPtsById[m.exam_id]=m.points; });
     var attSessions = r[4].data ? r[4].data : [];
     var attCheckins = r[5].data ? r[5].data : [];
-    var W = { reading:Number(course.weight_reading), quizzes:Number(course.weight_quizzes), arenas:Number(course.weight_arenas), midterm:Number(course.weight_midterm), final:Number(course.weight_final), attendance:Number(course.weight_attendance)||0 };
+    var W = { reading:Number(course.weight_reading), quizzes:Number(course.weight_quizzes), arenas:Number(course.weight_arenas), midterm:Number(course.weight_midterm), final:Number(course.weight_final), attendance:Number(course.weight_attendance)||0, assignments:Number(course.weight_assignments)||0 };
+    var _asgPts={}; (r[8]&&r[8].data?r[8].data:[]).forEach(function(a){ _asgPts[a.id]=a.points||0; });
+    var _asgTot=0; for(var _ak in _asgPts){ _asgTot+=_asgPts[_ak]; }
+    var _asgEarn=0, _asgGradedPts=0, _asgGraded=0;
+    (r[9]&&r[9].data?r[9].data:[]).forEach(function(sub){ if(sub.score!==null&&sub.score!==undefined&&_asgPts[sub.assignment_id]!==undefined){ _asgEarn+=Number(sub.score); _asgGradedPts+=_asgPts[sub.assignment_id]; _asgGraded++; } });
+    var _asgProjected = _asgTot>0 ? Math.min(1,_asgEarn/_asgTot) : null;
+    var _asgPerf = _asgGradedPts>0 ? Math.min(1,_asgEarn/_asgGradedPts) : null;
     var enrAtMs = (r[6] && r[6].data && r[6].data.created_at) ? new Date(r[6].data.created_at).getTime() : null;
     var attInfo = computeAttendanceScore(attSessions, attCheckins, course.att_presence_share, enrAtMs);
     var chaptersRead=0, quizSum=0, quizN=0, quizzesPassed=0;
@@ -7008,6 +7036,7 @@ function computeWeightedGrade(callback){
         }
       });
       var comps=[['Reading',reading,W.reading],['Quizzes',quizzes,W.quizzes],['Arenas',arenaScore,W.arenas]];
+      if(_asgProjected!==null && W.assignments>0){ comps.push(['Assignments', _asgProjected, W.assignments, _asgGraded===0]); }
       if(attInfo && W.attendance>0){ comps.push(['Attendance', attInfo.score, W.attendance]); }
       gradedExams.forEach(function(e){
         var w=examWeight(e); if(!(w>0)){ return; }
@@ -7016,7 +7045,19 @@ function computeWeightedGrade(callback){
       });
       var wsum=comps.reduce(function(s,x){return s+x[2];},0);
       var total=wsum>0?comps.reduce(function(s,x){return s+x[1]*x[2];},0)/wsum:0;
-      callback({ course:course, comps:comps, total:total, perChapter:prog, perArena:arenaBreakdown(arenas) });
+      // performance on COMPLETED work (letter basis): components scored over what
+      // the student has done, renormalized (reading & attendance at completion rate).
+      var _pc=[];
+      if(chaptersRead>0 && W.reading>0){ _pc.push([reading, W.reading]); }
+      if(quizN>0 && W.quizzes>0){ var _qp=quizSum/quizN; if(_qp>1){_qp=1;} _pc.push([_qp, W.quizzes]); }
+      var _ab=arenaBreakdown(arenas); var _arp=(_ab&&_ab.length)?(_ab.reduce(function(s,x){return s+(x.pct||0);},0)/_ab.length):null;
+      if(_arp!==null && W.arenas>0){ _pc.push([_arp, W.arenas]); }
+      if(attInfo && W.attendance>0){ _pc.push([attInfo.score, W.attendance]); }
+      if(_asgPerf!==null && W.assignments>0){ _pc.push([_asgPerf, W.assignments]); }
+      gradedExams.forEach(function(e){ var w=examWeight(e); if(!(w>0)){return;} var sc=(scoreById&&scoreById[e.id]!==undefined)?scoreById[e.id]:null; if(sc!==null){ _pc.push([sc, w]); } });
+      var _pw=_pc.reduce(function(s,x){return s+x[1];},0);
+      var perfTotal=_pw>0?_pc.reduce(function(s,x){return s+x[0]*x[1];},0)/_pw:null;
+      callback({ course:course, comps:comps, total:total, perfTotal:perfTotal, perChapter:prog, perArena:arenaBreakdown(arenas) });
     }
     if (examIds.length===0){ finish({}); return; }
     sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,created_at').eq('student_id',uid).in('exam_id',examIds).not('graded_at','is',null).then(function(ea){
@@ -7134,8 +7175,8 @@ function gradeSummaryCard(summary){
   if(!summary){ return ''; }
   var pct = Math.round(summary.total*100);
   var _gsc = effectiveGradeScale(summary.course);
-  var _has = summary.total>0; if(!_has && summary.comps){ for(var _i=0;_i<summary.comps.length;_i++){ if(summary.comps[_i][3]===false){ _has=true; break; } } }
-  var _letter = _has ? letterForPct(summary.total*100, _gsc) : '\u2014';
+  var _pb = (summary.perfTotal!==null && summary.perfTotal!==undefined) ? summary.perfTotal : null;
+  var _letter = (_pb===null) ? '\u2014' : letterForPct(_pb*100, _gsc);
   var rows='';
   summary.comps.forEach(function(c){
     var notTaken = c[3]===true;
@@ -7145,7 +7186,8 @@ function gradeSummaryCard(summary){
   var h='<div class="card" style="margin-bottom:16px;">';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
   h+='<h3 style="font-size:15px;margin:0;">Your grade so far</h3>';
-  h+='<span class="mono" style="font-size:22px;color:var(--text-bright);font-weight:600;">'+pct+'% <span style="font-size:0.82em;color:var(--navy);" title="Your current letter grade">'+esc(_letter)+'</span></span></div>';
+  h+='<span class="mono" style="font-size:22px;color:var(--text-bright);font-weight:600;">'+pct+'%</span></div>';
+  h+='<div style="font-size:12.5px;color:var(--text-muted);margin:-2px 0 10px;">Letter grade: <b style="color:var(--navy);">'+esc(_letter)+'</b>'+(_pb!==null?(' \u2014 based on your performance on completed work so far ('+Math.round(_pb*100)+'%). The '+pct+'% above counts work not yet done as 0.'):' \u2014 appears once you have graded work')+'</div>';
   h+='<table class="data-table"><caption class="sr-only">Weighted grade components</caption><thead><tr><th scope="col">Component</th><th scope="col">Score</th><th scope="col">Weight</th></tr></thead><tbody>'+rows+'</tbody></table>';
   h+='<div style="font-size:12px;color:var(--text-subtle);margin-top:8px;">Weighted total of all components. Reading and quizzes update as you complete them. Arenas are scored on performance: each of the 13 arenas contributes the average of your attempts (up to two), and arenas you have not played count as 0. Exams you have not taken count as 0 until taken. This matches how your instructor\u2019s gradebook weights each part.</div>';
   h+='</div>';
@@ -8076,14 +8118,16 @@ function loadCompletion() {
   if (!courseId) { host.innerHTML = ''; return; }
 
   Promise.all([
-    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,att_presence_share,grade_scale').eq('id', courseId).maybeSingle(),
+    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,weight_assignments,att_presence_share,grade_scale').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring,is_manual').eq('course_id', courseId).eq('is_published', true),
     sb.from('im_attendance_session').select('id,quiz_points,base_points,open_at,created_at').eq('course_id', courseId),
     sb.from('im_attendance_checkin').select('session_id,present,quiz_score').eq('user_id', uid),
     sb.from('im_enrollment').select('created_at').eq('course_id', courseId).eq('user_id', uid).maybeSingle(),
-    sb.from('im_manual_exam_score').select('exam_id,points').eq('course_id', courseId).eq('student_id', uid)
+    sb.from('im_manual_exam_score').select('exam_id,points').eq('course_id', courseId).eq('student_id', uid),
+    sb.from('im_assignment').select('id,points').eq('course_id', courseId).eq('is_published', true),
+    sb.from('im_submission').select('assignment_id,score').eq('student_id', uid)
   ]).then(function(r) {
     var course = r[0].data; if (!course) { host.innerHTML=''; return; }
     var prog = r[1].data ? r[1].data : [];
@@ -8092,7 +8136,13 @@ function loadCompletion() {
     var manualPtsById={}; (r[7] && r[7].data ? r[7].data : []).forEach(function(m){ manualPtsById[m.exam_id]=m.points; });
     var lpEnrMs = (r[6] && r[6].data && r[6].data.created_at) ? new Date(r[6].data.created_at).getTime() : null;
     var attInfo = computeAttendanceScore(r[4].data||[], r[5].data||[], course.att_presence_share, lpEnrMs);
-    var W = { reading:Number(course.weight_reading), quizzes:Number(course.weight_quizzes), arenas:Number(course.weight_arenas), midterm:Number(course.weight_midterm), final:Number(course.weight_final), attendance:Number(course.weight_attendance)||0 };
+    var W = { reading:Number(course.weight_reading), quizzes:Number(course.weight_quizzes), arenas:Number(course.weight_arenas), midterm:Number(course.weight_midterm), final:Number(course.weight_final), attendance:Number(course.weight_attendance)||0, assignments:Number(course.weight_assignments)||0 };
+    var _asgPts={}; (r[8]&&r[8].data?r[8].data:[]).forEach(function(a){ _asgPts[a.id]=a.points||0; });
+    var _asgTot=0; for(var _ak in _asgPts){ _asgTot+=_asgPts[_ak]; }
+    var _asgEarn=0, _asgGradedPts=0, _asgGraded=0;
+    (r[9]&&r[9].data?r[9].data:[]).forEach(function(sub){ if(sub.score!==null&&sub.score!==undefined&&_asgPts[sub.assignment_id]!==undefined){ _asgEarn+=Number(sub.score); _asgGradedPts+=_asgPts[sub.assignment_id]; _asgGraded++; } });
+    var _asgProjected = _asgTot>0 ? Math.min(1,_asgEarn/_asgTot) : null;
+    var _asgPerf = _asgGradedPts>0 ? Math.min(1,_asgEarn/_asgGradedPts) : null;
 
     // components (same definitions as the gradebook)
     var chaptersRead = 0, quizzesPassed = 0, quizSum = 0, quizN = 0;
@@ -8119,6 +8169,7 @@ function loadCompletion() {
       // Exams ALWAYS count toward completion: an untaken exam scores 0, so a
       // student must take all exams to reach 100% / earn the certificate.
       var comps=[['Reading',reading,W.reading],['Quizzes',quizzes,W.quizzes],['Arenas',arenaScore,W.arenas]];
+      if(_asgProjected!==null && W.assignments>0){ comps.push(['Assignments', _asgProjected, W.assignments, _asgGraded===0]); }
       if(attInfo && W.attendance>0){ comps.push(['Attendance', attInfo.score, W.attendance]); }
       gradedExams.forEach(function(e){
         var w=examWeight(e); if(!(w>0)){ return; }
