@@ -440,7 +440,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-bubblesheets4';
+var SA_BUILD = 'intro-micro-portal-2026-09-lettergrade2';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2148,6 +2148,98 @@ function renderGradebook(host){
    during earlier work, which made the gradebook and roster crash.) */
 function subTag(s){ if(s==='active'){return '<span class="tag green">active</span>';} if(s==='pending'){return '<span class="tag amber">pending</span>';} if(s==='expired'){return '<span class="tag rose">expired</span>';} if(s==='comped'){return '<span class="tag violet">comped</span>';} return '<span class="tag dim">'+esc(s)+'</span>'; }
 
+/* ====================================================================
+   LETTER GRADES  (auto from each student's current weighted %)
+   The scale is per-course (im_course.grade_scale, jsonb); if none is set
+   the default +/- scale below is used. Purely a derived display — it does
+   not change any stored score. Requires im_74_grade_scale.sql.
+   ==================================================================== */
+var DEFAULT_GRADE_SCALE = [
+  {min:93,letter:"A"},{min:90,letter:"A-"},{min:87,letter:"B+"},{min:83,letter:"B"},
+  {min:80,letter:"B-"},{min:77,letter:"C+"},{min:73,letter:"C"},{min:70,letter:"C-"},
+  {min:67,letter:"D+"},{min:63,letter:"D"},{min:60,letter:"D-"},{min:0,letter:"F"}
+];
+function effectiveGradeScale(c){
+  var sc = c && c.grade_scale;
+  if(!sc || !sc.length){ return DEFAULT_GRADE_SCALE; }
+  var arr=[];
+  for(var i=0;i<sc.length;i++){
+    if(sc[i] && sc[i].letter!==undefined && sc[i].letter!=='' && !isNaN(Number(sc[i].min))){
+      arr.push({ min:Number(sc[i].min), letter:String(sc[i].letter) });
+    }
+  }
+  if(!arr.length){ return DEFAULT_GRADE_SCALE; }
+  arr.sort(function(a,b){ return b.min - a.min; });
+  return arr;
+}
+function letterForPct(pct, scale){
+  if(pct===null||pct===undefined||isNaN(Number(pct))){ return "—"; }
+  scale = (scale && scale.length) ? scale : DEFAULT_GRADE_SCALE;
+  for(var i=0;i<scale.length;i++){ if(Number(pct) >= Number(scale[i].min)){ return scale[i].letter; } }
+  return scale[scale.length-1].letter;
+}
+/* Letter for a gradebook student row, or a dash when they have no graded work yet. */
+function letterForStudent(g, scale){
+  var has = !!(g && (g.override || g.finalPct>0 || (g.assignments!==null && g.assignments!==undefined)));
+  if(!has && g && g.examScores){ for(var k in g.examScores){ if(g.examScores[k]!==null && g.examScores[k]!==undefined){ has=true; break; } } }
+  if(!has){ return "\u2014"; }
+  return letterForPct(g.finalPct*100, scale);
+}
+/* Instructor: edit the per-course grade scale. */
+function openGradeScaleEditor(c, host){
+  var scale = effectiveGradeScale(c).slice();
+  var m=document.createElement('div'); m.className='modal-bg';
+  function rowsHtml(){
+    var h='';
+    for(var i=0;i<scale.length;i++){
+      h+='<div class="row2" data-gsrow="'+i+'" style="gap:8px;align-items:flex-end;margin-bottom:6px;">'+
+        '<div class="field" style="margin:0;width:100px;"><label>Letter</label><input class="gsL" value="'+esc(scale[i].letter)+'"></div>'+
+        '<div class="field" style="margin:0;width:130px;"><label>Min %</label><input class="gsM" type="number" min="0" max="100" step="0.1" value="'+esc(String(scale[i].min))+'"></div>'+
+        '<button class="btn btn-ghost btn-sm gsDel" type="button">Remove</button></div>';
+    }
+    return h;
+  }
+  m.innerHTML='<div class="modal" style="max-width:460px;"><h2>Grade scale</h2>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Letter grades are assigned automatically from each student’s current weighted percentage — the highest letter whose <b>Min %</b> they meet — and update as work is completed. Applies to <b>'+esc(c.title||'this course')+'</b>.</div>'+
+    '<div id="gsRows">'+rowsHtml()+'</div>'+
+    '<div class="inline-actions" style="margin-top:6px;gap:8px;"><button class="btn btn-ghost btn-sm" id="gsAdd" type="button">+ Add band</button><button class="btn btn-ghost btn-sm" id="gsReset" type="button">Reset to default</button></div>'+
+    '<div id="gsMsg" class="msg"></div>'+
+    '<div class="inline-actions" style="justify-content:flex-end;margin-top:10px;"><button class="btn btn-ghost" id="gsCancel">Cancel</button><button class="btn btn-primary" id="gsSave">Save scale</button></div></div>';
+  $('modalHost').appendChild(m);
+  function close(){ $('modalHost').innerHTML=''; }
+  function readRows(){
+    var out=[]; Array.prototype.forEach.call(m.querySelectorAll('[data-gsrow]'), function(rw){
+      var L=rw.querySelector('.gsL').value.trim(); var Mv=rw.querySelector('.gsM').value;
+      if(L!=='' && Mv!==''){ out.push({ letter:L, min:Number(Mv) }); }
+    });
+    return out;
+  }
+  function rebind(){
+    Array.prototype.forEach.call(m.querySelectorAll('.gsDel'), function(b){
+      b.addEventListener('click', function(){ scale=readRows(); var idx=parseInt(b.parentNode.getAttribute('data-gsrow'),10); scale.splice(idx,1); $('gsRows').innerHTML=rowsHtml(); rebind(); });
+    });
+  }
+  rebind();
+  $('gsCancel').addEventListener('click', close);
+  m.addEventListener('click', function(e){ if(e.target===m){ close(); } });
+  $('gsAdd').addEventListener('click', function(){ scale=readRows(); scale.push({letter:'',min:0}); $('gsRows').innerHTML=rowsHtml(); rebind(); });
+  $('gsReset').addEventListener('click', function(){ scale=DEFAULT_GRADE_SCALE.slice(); $('gsRows').innerHTML=rowsHtml(); rebind(); });
+  $('gsSave').addEventListener('click', function(){
+    var arr=readRows(); var msg=$('gsMsg');
+    if(arr.length===0){ msg.className='msg err'; msg.textContent='Add at least one grade band.'; return; }
+    var i; for(i=0;i<arr.length;i++){ if(isNaN(arr[i].min)||arr[i].min<0||arr[i].min>100){ msg.className='msg err'; msg.textContent='Each Min % must be between 0 and 100.'; return; } }
+    arr.sort(function(a,b){ return b.min-a.min; });
+    $('gsSave').disabled=true;
+    sb.from('im_course').update({ grade_scale: arr }).eq('id', c.id).then(function(res){
+      $('gsSave').disabled=false;
+      if(res.error){ msg.className='msg err'; msg.textContent=(String(res.error.message||'').toLowerCase().indexOf('grade_scale')>=0?'Grade scale isn’t installed yet — run im_74_grade_scale.sql, then reopen this window.':res.error.message); return; }
+      c.grade_scale = arr;
+      close();
+      if(typeof renderGradebook==='function' && host){ renderGradebook(host); }
+    }, function(){ $('gsSave').disabled=false; msg.className='msg err'; msg.textContent='Could not save the scale.'; });
+  });
+}
+
 function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overrideOf,arenaScoreOf,examPossible,attScoreOf){
   try {
   asgScore = asgScore || {}; overrideOf = overrideOf || {}; arenaScoreOf = arenaScoreOf || {}; examPossible = examPossible || {}; attScoreOf = attScoreOf || {};
@@ -2193,7 +2285,7 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
   });
   var html='<div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'+
     '<div style="font-size:12.5px;color:var(--text-muted);"><b>Grade on work completed so far.</b> The weighted total renormalizes over components that have data. <b>Assignments</b> are shown for reference; to fold them (or participation) into a student\u2019s final grade, use the <b>Override</b> column \u2014 an entered override becomes the Final grade and is what the CSV exports.</div>'+
-    '<button class="btn btn-ghost btn-sm" id="csvBtn">Export CSV</button></div>';
+    '<button class="btn btn-ghost btn-sm" id="gsBtn">Grade scale</button> <button class="btn btn-ghost btn-sm" id="csvBtn">Export CSV</button></div>';
   // build dynamic exam column headers (one per published exam)
   var examCols=gradedExams.map(function(e){
     var w=examWeight(e); var wpc=(w!==null&&w!==undefined)?(' '+Math.round(w*100)+'%'):'';
@@ -2212,7 +2304,8 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
     return (Number(av)-Number(bv))*dir;
   });
   var examHeadHtml=examCols.map(function(col){ return '<th scope="col">'+col.label+'</th>'; }).join('');
-  html+='<div class="tbl-wrap"><table class="tbl"><thead><tr>'+sTh('Student','name')+'<th scope="col">Sub</th>'+sTh('Reading','reading')+sTh('Quizzes','quizzes')+sTh('Arenas','arenas')+sTh('Attend','attendance')+sTh('Assign','assignments')+examHeadHtml+sTh('Weighted','computed')+'<th scope="col">Override %</th>'+sTh('Final','finalPct')+'<th scope="col"></th></tr></thead><tbody>';
+  var gscale=effectiveGradeScale(c);
+  html+='<div class="tbl-wrap"><table class="tbl"><thead><tr>'+sTh('Student','name')+'<th scope="col">Sub</th>'+sTh('Reading','reading')+sTh('Quizzes','quizzes')+sTh('Arenas','arenas')+sTh('Attend','attendance')+sTh('Assign','assignments')+examHeadHtml+sTh('Weighted','computed')+'<th scope="col">Override %</th>'+sTh('Final','finalPct')+'<th scope="col" title="Auto letter from the grade scale">Letter</th>'+'<th scope="col"></th></tr></thead><tbody>';
   computed.forEach(function(g){
     var examCells=examCols.map(function(col){
       var f=g.examScores[col.id];
@@ -2226,6 +2319,7 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
       '<td>'+pct(g.computed)+'</td>'+
       '<td><label class="sr-only" for="ovr-'+g.sid+'">Override percent for '+esc(g.name||g.email)+'</label><input id="ovr-'+g.sid+'" type="number" min="0" max="100" step="0.1" placeholder="\u2014" value="'+(g.override?g.override.pct:'')+'" style="width:64px;"></td>'+
       '<td style="font-weight:600;color:var(--text-bright);">'+pct(g.finalPct)+(g.override?' <span class="tag violet" title="manual override">ovr</span>':'')+'</td>'+
+      '<td style="font-weight:700;color:var(--navy);">'+esc(letterForStudent(g, gscale))+'</td>'+
       '<td><button class="btn btn-ghost btn-sm" data-saveovr="'+g.sid+'">Save</button> <button class="btn btn-ghost btn-sm" data-breakdown="'+g.sid+'" data-bdname="'+esc(g.name||g.email||'')+'">Detail</button></td></tr>';
   });
   html+='</tbody></table></div>';
@@ -2237,6 +2331,7 @@ function buildGradebook(host,c,weights,rows,gradedExams,examScore,asgScore,overr
       renderGradebook(host);
     });
   });
+  if($('gsBtn')){ $('gsBtn').addEventListener('click', function(){ openGradeScaleEditor(c, host); }); }
   $('csvBtn').addEventListener('click', function(){ exportCSV(c,computed,examCols); });
   Array.prototype.forEach.call(host.querySelectorAll('[data-saveovr]'), function(b){ b.addEventListener('click', function(){
     var sid=b.getAttribute('data-saveovr');
@@ -2346,14 +2441,15 @@ function exportCSV(c,rows,examCols){
     var t=String(col.label).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").replace(/&quot;/g,'"');
     return '"'+t.replace(/"/g,'""')+'%"';
   });
-  var head=['Student','Email','Subscription','Reading%','Quizzes%','Arenas%','Attendance%','Assignments%'].concat(examHead).concat(['Weighted%','Override%','Final grade%']);
+  var gscale=effectiveGradeScale(c);
+  var head=['Student','Email','Subscription','Reading%','Quizzes%','Arenas%','Attendance%','Assignments%'].concat(examHead).concat(['Weighted%','Override%','Final grade%','Letter']);
   var lines=[head.join(',')];
   rows.forEach(function(g){
     function p(x){ return x===null||x===undefined?'':Math.round(x*100); }
     var ovr = g.override ? g.override.pct : '';
     var examVals = examCols.map(function(col){ var f=g.examScores?g.examScores[col.id]:null; return p(f); });
     var line=[ '"'+(g.name||'').replace(/"/g,'""')+'"', '"'+(g.email||'')+'"', g.sub,
-      p(g.reading),p(g.quizzes),p(g.arenas),(g.attendance===null||g.attendance===undefined?'':p(g.attendance)),p(g.assignments) ].concat(examVals).concat([ p(g.computed), ovr, p(g.finalPct) ]);
+      p(g.reading),p(g.quizzes),p(g.arenas),(g.attendance===null||g.attendance===undefined?'':p(g.attendance)),p(g.assignments) ].concat(examVals).concat([ p(g.computed), ovr, p(g.finalPct), '"'+letterForStudent(g, gscale)+'"' ]);
     lines.push(line.join(','));
   });
   var blob=new Blob([lines.join('\n')],{type:'text/csv'});
@@ -6875,7 +6971,7 @@ function computeWeightedGrade(callback){
   var courseId = State.payCourseId || State.selfCourseId;
   if (!uid || !courseId) { callback(null); return; }
   Promise.all([
-    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,att_presence_share').eq('id', courseId).maybeSingle(),
+    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,att_presence_share,grade_scale').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring,is_manual').eq('course_id', courseId).eq('is_published', true),
@@ -7037,6 +7133,9 @@ function loadMyGradesDetail(host, summary){
 function gradeSummaryCard(summary){
   if(!summary){ return ''; }
   var pct = Math.round(summary.total*100);
+  var _gsc = effectiveGradeScale(summary.course);
+  var _has = summary.total>0; if(!_has && summary.comps){ for(var _i=0;_i<summary.comps.length;_i++){ if(summary.comps[_i][3]===false){ _has=true; break; } } }
+  var _letter = _has ? letterForPct(summary.total*100, _gsc) : '\u2014';
   var rows='';
   summary.comps.forEach(function(c){
     var notTaken = c[3]===true;
@@ -7046,7 +7145,7 @@ function gradeSummaryCard(summary){
   var h='<div class="card" style="margin-bottom:16px;">';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
   h+='<h3 style="font-size:15px;margin:0;">Your grade so far</h3>';
-  h+='<span class="mono" style="font-size:22px;color:var(--text-bright);font-weight:600;">'+pct+'%</span></div>';
+  h+='<span class="mono" style="font-size:22px;color:var(--text-bright);font-weight:600;">'+pct+'% <span style="font-size:0.82em;color:var(--navy);" title="Your current letter grade">'+esc(_letter)+'</span></span></div>';
   h+='<table class="data-table"><caption class="sr-only">Weighted grade components</caption><thead><tr><th scope="col">Component</th><th scope="col">Score</th><th scope="col">Weight</th></tr></thead><tbody>'+rows+'</tbody></table>';
   h+='<div style="font-size:12px;color:var(--text-subtle);margin-top:8px;">Weighted total of all components. Reading and quizzes update as you complete them. Arenas are scored on performance: each of the 13 arenas contributes the average of your attempts (up to two), and arenas you have not played count as 0. Exams you have not taken count as 0 until taken. This matches how your instructor\u2019s gradebook weights each part.</div>';
   h+='</div>';
@@ -7977,7 +8076,7 @@ function loadCompletion() {
   if (!courseId) { host.innerHTML = ''; return; }
 
   Promise.all([
-    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,att_presence_share').eq('id', courseId).maybeSingle(),
+    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,att_presence_share,grade_scale').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring,is_manual').eq('course_id', courseId).eq('is_published', true),
