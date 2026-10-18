@@ -2727,6 +2727,121 @@ function exportCSV(c,rows,examCols){
    ANALYTICS — concept-mastery heatmap + chapter engagement
    ==================================================================== */
 /* ====================================================================
+   ANALYTICS — course adapter: Introduction to Microeconomics (im_)
+   --------------------------------------------------------------------
+   The only part of the analytics panel that knows this course's tables.
+   Everything it returns is in the shape the shared core expects, so the
+   statistics and the renderers below are identical to every other
+   MacroNations course.
+
+   Notes specific to this course:
+     - chapter quizzes are GENERATED, so a question's identity is its
+       generator_id and item_id is null on those rows
+     - arena play is stored one row per CASE, which is what makes the
+       hardest-cases table possible here
+     - exams are on paper: scores arrive through im_manual_exam_score
+       and there are no per-question records for them
+   ==================================================================== */
+var AN_CFG = {
+  caps: { attendance:true, arenas:true, arenaCases:true },
+  courseId: function(){ return State.teachCourseId; },
+  course:   function(cid){ return findCourse(cid); },
+  arenaName:function(slug){ return (typeof ARENA_TITLE!=='undefined' && ARENA_TITLE[slug]) ? ARENA_TITLE[slug] : slug; },
+
+  fetchTier1: function(cid){
+    return Promise.all([
+      sb.from('im_gradebook_v').select('student_id,full_name,email,chapters_read').eq('course_id',cid),
+      sb.from('im_quiz_deadline').select('chapter,closes_at').eq('course_id',cid),
+      sb.from('im_arena_deadline').select('arena_slug,closes_at').eq('course_id',cid),
+      anPaged('im_chapter_progress','student_id,chapter,reading_done,quiz_passed,quiz_score,quiz_attempts',cid),
+      sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,is_manual,closes_at').eq('course_id',cid).eq('is_published',true),
+      sb.from('im_manual_exam_score').select('student_id,exam_id,points').eq('course_id',cid),
+      sb.from('im_assignment').select('id,title,points,due_at,hidden').eq('course_id',cid).eq('is_published',true),
+      sb.from('im_submission').select('assignment_id,student_id,score,submitted_at,graded_at').eq('course_id',cid)
+    ]).then(function(r){
+      for(var i=0;i<r.length;i++){ if(r[i] && r[i].error){ return { error:r[i].error.message }; } }
+      var D={ students:r[0].data||[], quizDl:r[1].data||[], arenaDl:r[2].data||[], prog:r[3].data||[],
+              exams:r[4].data||[], asg:r[6].data||[], subs:r[7].data||[], examPct:{} };
+      var ptsOf={}; D.exams.forEach(function(e){ ptsOf[e.id]=Number(e.total_points)||0; });
+      (r[5].data||[]).forEach(function(m){
+        var tp=ptsOf[m.exam_id]; if(!(tp>0)){ return; }
+        if(!D.examPct[m.exam_id]){ D.examPct[m.exam_id]={}; }
+        D.examPct[m.exam_id][m.student_id]=Math.min(1, Number(m.points)/tp);
+      });
+      return D;
+    });
+  },
+
+  fetchAnswers: function(cid){
+    return Promise.all([
+      anPaged('im_exam_attempt','student_id,exam_id,item_id,generator_id,is_correct,submitted_value,points_earned,started_at',cid),
+      sb.from('im_assessment_item').select('id,generator_id,chapter,concept_tag,prompt,item_type')
+    ]).then(function(r){
+      if(r[0].error){ return { error:r[0].error.message }; }
+      var meta={};
+      (r[1].data||[]).forEach(function(it){
+        var m={ chapter:it.chapter, tag:it.concept_tag, prompt:it.prompt, type:it.item_type };
+        if(it.generator_id){ meta['g:'+it.generator_id]=m; }
+        meta['i:'+it.id]=m;
+      });
+      var rows=[];
+      (r[0].data||[]).forEach(function(x){
+        if(!x.generator_id && !x.item_id){ return; }
+        var key=x.generator_id?('g:'+x.generator_id):('i:'+x.item_id);
+        rows.push({ sid:x.student_id, examId:x.exam_id||null, itemKey:key,
+                    chapter:(meta[key]?meta[key].chapter:null),
+                    ok:!!x.is_correct, val:x.submitted_value,
+                    pts:Number(x.points_earned)||0, at:x.started_at });
+      });
+      return { rows:rows, meta:meta };
+    });
+  },
+
+  fetchArenas: function(cid, D){
+    return anPaged('im_attempt','user_id,arena_slug,case_index,is_correct',cid,'user_id').then(function(res){
+      if(res.error){ return { error:res.error.message }; }
+      var enrolled={}; D.students.forEach(function(s){ enrolled[s.student_id]=true; });
+      var agg={}, perCase={}, perStu={};
+      (res.data||[]).forEach(function(r){
+        if(!enrolled[r.user_id] || !r.arena_slug){ return; }   /* ignore anyone off this roster */
+        if(!agg[r.arena_slug]){ agg[r.arena_slug]={}; }
+        if(!agg[r.arena_slug][r.user_id]){ agg[r.arena_slug][r.user_id]={ c:0, n:0 }; }
+        var g=agg[r.arena_slug][r.user_id]; g.n++; if(r.is_correct){ g.c++; }
+        var ck=r.arena_slug+'#'+(r.case_index===null||r.case_index===undefined?'?':r.case_index);
+        if(!perCase[ck]){ perCase[ck]={ arena:r.arena_slug, idx:r.case_index, c:0, n:0 }; }
+        perCase[ck].n++; if(r.is_correct){ perCase[ck].c++; }
+        if(!perStu[r.user_id]){ perStu[r.user_id]={ c:0, n:0 }; }
+        perStu[r.user_id].n++; if(r.is_correct){ perStu[r.user_id].c++; }
+      });
+      var scores={}, plays={}, arenaByStu={};
+      Object.keys(agg).forEach(function(a){
+        scores[a]={}; plays[a]={};
+        Object.keys(agg[a]).forEach(function(s){
+          scores[a][s]=agg[a][s].n?agg[a][s].c/agg[a][s].n:0;
+          plays[a][s]=agg[a][s].n;
+        });
+      });
+      Object.keys(perStu).forEach(function(s){ arenaByStu[s]=perStu[s].n?perStu[s].c/perStu[s].n:0; });
+      return { scores:scores, plays:plays, playsLabel:'Cases each', arenaByStu:arenaByStu,
+               perCase:Object.keys(perCase).map(function(k){ return perCase[k]; }),
+               note:'An arena score is the share of that arena’s cases the student answered correctly. '+
+                    'A low mean on a low case count usually means students are abandoning the arena rather than failing it.' };
+    });
+  },
+
+  fetchAttendance: function(cid){
+    return sb.from('im_attendance_session').select('id,title,open_at,close_at,base_points,quiz_points,created_at')
+      .eq('course_id',cid).order('created_at',{ascending:true}).then(function(sres){
+      if(sres && sres.error){ return { error:'Attendance is not installed on this course.' }; }
+      var sess=sres.data||[];
+      if(!sess.length){ return { sessions:[], checkins:[] }; }
+      var ids=sess.map(function(s){ return s.id; });
+      return sb.from('im_attendance_checkin').select('session_id,user_id,present,quiz_score').in('session_id',ids)
+        .then(function(cres){ return { sessions:sess, checkins:cres.data||[] }; });
+    });
+  }
+};
+/* ====================================================================
    ANALYTICS — STATISTICS
    --------------------------------------------------------------------
    Every figure the Analytics panel shows is computed here, in one place,
@@ -3236,7 +3351,18 @@ function anHeatCells(cells){
    ==================================================================== */
 var AN = { cid:null, t1:null, t2:null, t3:null, host:null };
 
+/* A course may rename a section or rewrite its note through
+   AN_CFG.labels, keyed by section id: { 'an-quiz': {title:…, note:…} }.
+   Econometrics uses it — it has chapter progress rather than chapter
+   quizzes, and labs rather than arenas. Absent, every course reads
+   exactly as it did before. */
+function anLbl(key, dflt){
+  var L=(typeof AN_CFG!=='undefined' && AN_CFG && AN_CFG.labels) ? AN_CFG.labels : null;
+  return (L && L[key]!==undefined && L[key]!==null) ? L[key] : dflt;
+}
 function anSec(id, title, note, right){
+  var L=(typeof AN_CFG!=='undefined' && AN_CFG && AN_CFG.labels) ? AN_CFG.labels[id] : null;
+  if(L){ if(L.title){ title=L.title; } if(L.note){ note=L.note; } }
   return '<section class="an-sec" id="'+id+'"><div class="an-sec-h"><div>'+
          '<h3>'+title+'</h3><div class="an-sec-note">'+note+'</div></div>'+
          (right||'')+'</div><div id="'+id+'-body">'+loadingCard()+'</div></section>';
@@ -3264,35 +3390,54 @@ function anPaged(table, cols, cid, orderCol){
   return page(0);
 }
 
+/* ====================================================================
+   ANALYTICS — the panel
+   --------------------------------------------------------------------
+   Everything below this line is IDENTICAL in every MacroNations course.
+   The only per-course code is the adapter object AN_CFG, defined just
+   above: it names the tables and hands back rows in a normalised shape,
+   so no statistic or renderer here knows a table name. When a course's
+   schema changes, the adapter changes and this does not.
+
+   Loaded in three tiers so opening the tab is cheap. Tier 1 is one
+   round trip of small tables and drives most of the page. Tier 2 pulls
+   the per-answer rows only when question analysis is asked for. Tier 3
+   pulls the arena rows the same way. These databases run on shared-CPU
+   instances that have fallen over under memory pressure before, so
+   nothing here fetches what is not shown.
+   ==================================================================== */
 function renderAnalytics(host){
   if(!needCourse(host)){ return; }
   anTipInit();
-  var cid=State.teachCourseId;
+  var cid=AN_CFG.courseId();
   AN={ cid:cid, t1:null, t2:null, t3:null, host:host };
-  var c=findCourse(cid);
-  host.innerHTML=
-    '<div id="an-head">'+loadingCard()+'</div>'+
+  var c=AN_CFG.course(cid);
+  var caps=AN_CFG.caps||{};
+  var html='<div id="an-head">'+loadingCard()+'</div>'+
     anSec('an-quiz','Chapter quizzes',
       'One row per chapter: who took it, how they scored, how many attempts it took, and how the scores were spread. '+
       'Means are over the students who have a score; the <b>took it</b> column is what tells you who is missing.',
       '<button class="btn btn-ghost btn-sm" id="an-items-btn" title="Pull the per-answer rows and analyse every question">Analyse questions</button>')+
     anSec('an-exam','Exams',
       'Score distribution and spread per published exam. Paper exams are summarised from the scores you typed in; '+
-      'online exams additionally get per-question analysis and a reliability figure once you load question analysis.','')+
-    anSec('an-arena','Arenas',
-      'Participation and performance per arena, and which individual cases the class is getting wrong.',
-      '<button class="btn btn-ghost btn-sm" id="an-arena-btn" title="Pull the per-case rows and analyse each arena">Analyse arenas</button>')+
-    anSec('an-read','Reading',
+      'online exams additionally get per-question analysis and a reliability figure once you load question analysis.','');
+  if(caps.arenas!==false){
+    html+=anSec('an-arena','Arenas',
+      'Participation and performance per arena'+(caps.arenaCases?', and which individual cases the class is getting wrong':'')+'.',
+      '<button class="btn btn-ghost btn-sm" id="an-arena-btn" title="Pull the arena rows and analyse each one">Analyse arenas</button>');
+  }
+  html+=anSec('an-read','Reading',
       'Completion per chapter against the chapter’s deadline, and where the class stops reading.','')+
-    anSec('an-asg','Assignments','Submission, grading and score spread per assignment.','')+
-    anSec('an-att','Attendance','Check-in rate and pop-quiz performance per session.','')+
-    anSec('an-risk','Students at risk',
+    anSec('an-asg','Assignments','Submission, grading and score spread per assignment.','');
+  if(caps.attendance){
+    html+=anSec('an-att','Attendance','Check-in rate and pop-quiz performance per session.','');
+  }
+  html+=anSec('an-risk','Students at risk',
       'Ranked by missed work due so far and by performance on what was done — the list to email this week. '+
       'The gradebook’s letter is still the grade of record; this is a triage view.','')+
-    anSec('an-eng','Engagement over time',
-      'Where the class drops off, chapter by chapter.','')+
+    anSec('an-eng','Engagement over time','Where the class drops off, chapter by chapter.','')+
     anSec('an-pred','What predicts exam performance',
-      'How strongly each component correlates with midterm scores <b>in this section</b>. Correlation is not causation — '+
+      'How strongly each component correlates with exam scores <b>in this section</b>. Correlation is not causation — '+
       'a student who does the reading is not a randomly chosen student — but a component with no relationship to the '+
       'exam is worth knowing about.','')+
     anSec('an-fix','Questions to fix',
@@ -3300,82 +3445,73 @@ function renderAnalytics(host){
       'answered wrongly more often than rightly. Load question analysis above to populate this.','')+
     anSec('an-concept','Concept mastery',
       'Accuracy by concept tag across every graded answer. Load question analysis above to populate this.','');
+  host.innerHTML=html;
 
   var btn=document.getElementById('an-items-btn');
   if(btn){ btn.addEventListener('click', function(){ anLoadItems(btn); }); }
   var abtn=document.getElementById('an-arena-btn');
   if(abtn){ abtn.addEventListener('click', function(){ anLoadArenas(abtn); }); }
-
   anSet('an-fix', anEmpty('Press <b>Analyse questions</b> at the top of the Chapter quizzes section.'));
   anSet('an-concept', anEmpty('Press <b>Analyse questions</b> at the top of the Chapter quizzes section.'));
-  anSet('an-arena', anEmpty('Press <b>Analyse arenas</b> to pull the per-case rows for this course.'));
+  if(caps.arenas!==false){ anSet('an-arena', anEmpty('Press <b>Analyse arenas</b> to pull the arena rows for this course.')); }
 
-  Promise.all([
-    sb.from('im_gradebook_v').select('student_id,full_name,email,chapters_read').eq('course_id',cid),
-    sb.from('im_quiz_deadline').select('chapter,closes_at').eq('course_id',cid),
-    sb.from('im_arena_deadline').select('arena_slug,closes_at').eq('course_id',cid),
-    anPaged('im_chapter_progress','student_id,chapter,reading_done,quiz_passed,quiz_score,quiz_attempts,updated_at',cid),
-    sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,is_manual,closes_at').eq('course_id',cid).eq('is_published',true),
-    sb.from('im_manual_exam_score').select('student_id,exam_id,points').eq('course_id',cid),
-    sb.from('im_assignment').select('id,title,points,due_at,hidden').eq('course_id',cid).eq('is_published',true),
-    sb.from('im_submission').select('assignment_id,student_id,score,submitted_at,graded_at').eq('course_id',cid)
-  ]).then(function(r){
-    var err=null; for(var i=0;i<r.length;i++){ if(r[i] && r[i].error){ err=r[i].error; break; } }
-    if(err){
-      document.getElementById('an-head').innerHTML='<div class="card empty">Analytics could not load: '+esc(err.message)+'</div>';
+  AN_CFG.fetchTier1(cid).then(function(D){
+    if(D && D.error){
+      document.getElementById('an-head').innerHTML='<div class="card empty">Analytics could not load: '+esc(D.error)+'</div>';
       return;
     }
-    var now=Date.now();
-    var D={ cid:cid, course:c, now:now };
-    D.students=r[0].data||[];
-    D.nStu=D.students.length;
-    D.quizDl=r[1].data||[];
-    D.arenaDl=r[2].data||[];
-    D.prog=r[3].data||[];
-    D.exams=r[4].data||[];
-    D.manual=r[5].data||[];
-    D.asg=r[6].data||[];
-    D.subs=r[7].data||[];
-
-    D.dlByCh={}; D.quizDl.forEach(function(d){ D.dlByCh[Number(d.chapter)]=d.closes_at; });
-    D.dueCh=dueChapters(D.quizDl, now).sort(function(a,b){ return a-b; });
-    D.dueChSet=dueSetOf(D.dueCh);
-    D.allCh=D.quizDl.map(function(d){ return Number(d.chapter); }).sort(function(a,b){ return a-b; });
-    if(!D.allCh.length){
-      var seen={}; D.prog.forEach(function(p){ seen[Number(p.chapter)]=true; });
-      D.allCh=Object.keys(seen).map(Number).sort(function(a,b){ return a-b; });
-    }
-    D.dueArenas=dueArenaSlugs(D.arenaDl, now);
-
-    D.byCh={}; D.byStu={};
-    D.allCh.forEach(function(ch){ D.byCh[ch]={ scores:[], attempts:[], passed:0, takers:0, read:0 }; });
-    D.prog.forEach(function(p){
-      var ch=Number(p.chapter);
-      if(!D.byCh[ch]){ D.byCh[ch]={ scores:[], attempts:[], passed:0, takers:0, read:0 }; }
-      var b=D.byCh[ch];
-      if(p.reading_done){ b.read++; }
-      if(p.quiz_passed){ b.passed++; }
-      if(p.quiz_score!==null && p.quiz_score!==undefined){
-        var q=Number(p.quiz_score); if(q>1){ q=1; } if(q<0||isNaN(q)){ q=0; }
-        b.scores.push(q); b.takers++;
-      }
-      if(p.quiz_attempts!==null && p.quiz_attempts!==undefined && Number(p.quiz_attempts)>0){ b.attempts.push(Number(p.quiz_attempts)); }
-      if(!D.byStu[p.student_id]){ D.byStu[p.student_id]={}; }
-      D.byStu[p.student_id][ch]=p;
-    });
-    D.examPct={};
-    var ptsOf={}; D.exams.forEach(function(e){ ptsOf[e.id]=Number(e.total_points)||0; });
-    D.manual.forEach(function(m){
-      var tp=ptsOf[m.exam_id]; if(!(tp>0)){ return; }
-      if(!D.examPct[m.exam_id]){ D.examPct[m.exam_id]={}; }
-      D.examPct[m.exam_id][m.student_id]=Math.min(1, Number(m.points)/tp);
-    });
+    anDerive(D, c, cid);
     AN.t1=D;
     anRenderHead(D); anRenderQuizzes(D); anRenderExams(D); anRenderReading(D);
     anRenderAssignments(D); anRenderRisk(D); anRenderEngagement(D); anRenderPredictors(D);
-    anLoadAttendance(D);
+    if(caps.attendance){ anLoadAttendance(D); }
   }, function(e){
-    document.getElementById('an-head').innerHTML='<div class="card empty">Analytics could not load: '+esc(String(e&&e.message?e.message:e))+'</div>';
+    document.getElementById('an-head').innerHTML='<div class="card empty">Analytics could not load: '+
+      esc(String(e&&e.message?e.message:e))+'</div>';
+  });
+}
+
+/* Everything the renderers need that can be computed from the adapter's
+   rows rather than fetched. Kept here so no course can derive it
+   differently. */
+function anDerive(D, c, cid){
+  var now=Date.now();
+  D.cid=cid; D.course=c; D.now=now;
+  D.nStu=D.students.length;
+  D.readDl=D.readDl||D.quizDl;              /* no separate reading deadline -> the quiz date governs both */
+  D.dlByCh={};   D.quizDl.forEach(function(d){ D.dlByCh[Number(d.chapter)]=d.closes_at; });
+  D.rdlByCh={};  D.readDl.forEach(function(d){ D.rdlByCh[Number(d.chapter)]=d.closes_at; });
+  D.dueCh=dueChapters(D.quizDl, now).sort(function(a,b){ return a-b; });
+  D.dueChSet=dueSetOf(D.dueCh);
+  D.dueReadCh=dueChapters(D.readDl, now).sort(function(a,b){ return a-b; });
+  D.dueReadSet=dueSetOf(D.dueReadCh);
+  var chSet={};
+  D.quizDl.forEach(function(d){ chSet[Number(d.chapter)]=true; });
+  D.readDl.forEach(function(d){ chSet[Number(d.chapter)]=true; });
+  if(!Object.keys(chSet).length){
+    /* no deadlines set: fall back to the chapters students have touched */
+    D.prog.forEach(function(p){ chSet[Number(p.chapter)]=true; });
+  }
+  D.allCh=Object.keys(chSet).map(Number).sort(function(a,b){ return a-b; });
+  D.dueArenas=dueArenaSlugs(D.arenaDl||[], now);
+
+  D.byCh={}; D.byStu={};
+  D.allCh.forEach(function(ch){ D.byCh[ch]={ scores:[], attempts:[], passed:0, takers:0, read:0 }; });
+  D.prog.forEach(function(p){
+    var ch=Number(p.chapter);
+    if(!D.byCh[ch]){ D.byCh[ch]={ scores:[], attempts:[], passed:0, takers:0, read:0 }; }
+    var b=D.byCh[ch];
+    if(p.reading_done){ b.read++; }
+    if(p.quiz_passed){ b.passed++; }
+    if(p.quiz_score!==null && p.quiz_score!==undefined){
+      var q=Number(p.quiz_score); if(q>1){ q=1; } if(q<0||isNaN(q)){ q=0; }
+      b.scores.push(q); b.takers++;
+    }
+    if(p.quiz_attempts!==null && p.quiz_attempts!==undefined && Number(p.quiz_attempts)>0){
+      b.attempts.push(Number(p.quiz_attempts));
+    }
+    if(!D.byStu[p.student_id]){ D.byStu[p.student_id]={}; }
+    D.byStu[p.student_id][ch]=p;
   });
 }
 
@@ -3387,10 +3523,10 @@ function anRenderHead(D){
   var dueDone=0; D.dueCh.forEach(function(ch){ if(D.byCh[ch]){ dueDone+=D.byCh[ch].takers; } });
   document.getElementById('an-head').innerHTML='<div class="stat-row">'+
     stat(D.nStu,'students')+
-    stat(dueCount+' / '+D.allCh.length,'chapter quizzes due')+
-    stat(dueSlots?anP(dueDone/dueSlots,0):AN_DASH,'of due quizzes done')+
-    stat(doneScores.length?anP(anMean(doneScores),0):AN_DASH,'mean on quizzes taken')+
-    stat(D.dueArenas.length+' / '+D.arenaDl.length,'arenas due')+'</div>';
+    stat(dueCount+' / '+D.allCh.length,anLbl('headDue','chapter quizzes due'))+
+    stat(dueSlots?anP(dueDone/dueSlots,0):AN_DASH,anLbl('headDone','of due quizzes done'))+
+    stat(doneScores.length?anP(anMean(doneScores),0):AN_DASH,anLbl('headMean','mean on quizzes taken'))+
+    stat(D.dueArenas.length+' / '+D.arenaDl.length,anLbl('headArenas','arenas due'))+'</div>';
 }
 
 function anRenderQuizzes(D){
@@ -3418,14 +3554,16 @@ function anRenderQuizzes(D){
   }
   anSet('an-quiz',
     '<div class="an-scroll"><table class="an-tbl"><thead><tr>'+
-    '<th>Chapter</th><th class="num">Due</th><th class="num">Took it</th><th class="num">Missing</th>'+
-    '<th class="num">Mean</th><th class="num">Median</th><th class="num">SD</th><th class="num">Passed</th>'+
+    '<th>Chapter</th><th class="num">Due</th><th class="num">'+anLbl('quizTook','Took it')+'</th><th class="num">Missing</th>'+
+    '<th class="num">Mean</th><th class="num">Median</th><th class="num">SD</th>'+
+    '<th class="num">'+anLbl('quizPassed','Passed')+'</th>'+
     '<th class="num">Attempts</th><th class="num">Retook</th><th>Spread</th>'+
     '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="an-caveat"><b>Missing</b> counts enrolled students with no score on a quiz whose deadline has passed. '+
-    '<b>SD</b> is the sample standard deviation over the students who took it — a small SD on a low mean means the '+
-    'whole class struggled, a large SD means the chapter split them. <b>Retook</b> is how many needed more than one attempt. '+
-    'The spread bars are the five grade bands 0–59, 60–69, 70–79, 80–89, 90–100.</div>');
+    '<div class="an-caveat">'+anLbl('quizCaveat',
+      '<b>Missing</b> counts enrolled students with no score on a quiz whose deadline has passed. '+
+      '<b>SD</b> is the sample standard deviation over the students who took it — a small SD on a low mean means the '+
+      'whole class struggled, a large SD means the chapter split them. <b>Retook</b> is how many needed more than one attempt. '+
+      'The spread bars are the five grade bands 0–59, 60–69, 70–79, 80–89, 90–100.')+'</div>');
 }
 function anRenderExams(D){
   if(!D.exams.length){ anSet('an-exam', anEmpty('No published exams in this course yet.')); return; }
@@ -3474,6 +3612,10 @@ function anRenderExams(D){
 
 function anRenderReading(D){
   if(!D.allCh.length){ anSet('an-read', anEmpty('No chapters to report on yet.')); return; }
+  /* caps.quizSeparate:false says the chapter score and the reading figure are
+     the same number (Econometrics), so follow-through would always read 100%
+     and is left out rather than printed meaninglessly. */
+  var sep=((AN_CFG.caps||{}).quizSeparate!==false);
   var labels=[], vals=[], rows='';
   D.allCh.forEach(function(ch){
     var b=D.byCh[ch], due=!!D.dueChSet[ch], dl=D.dlByCh[ch];
@@ -3483,19 +3625,21 @@ function anRenderReading(D){
       '<td class="num">'+(dl?new Date(dl).toLocaleDateString(undefined,{month:'short',day:'numeric'}):AN_DASH)+'</td>'+
       '<td class="num">'+b.read+' / '+D.nStu+'</td>'+
       '<td class="num">'+(D.nStu?anP(b.read/D.nStu,0):AN_DASH)+'</td>'+
-      '<td class="num">'+b.takers+'</td>'+
-      '<td class="num">'+(b.read?anP(b.takers/b.read,0):AN_DASH)+'</td></tr>';
+      (sep?('<td class="num">'+b.takers+'</td>'+
+            '<td class="num">'+(b.read?anP(b.takers/b.read,0):AN_DASH)+'</td>'):'')+'</tr>';
   });
   anSet('an-read',
     anLineChart(labels, [{name:'Read', values:vals}],
       { height:188, width:660, aria:'Share of the class that has marked each chapter read' })+
-    '<div class="an-scroll" style="margin-top:18px;"><table class="an-tbl"><thead><tr>'+
-    '<th>Chapter</th><th class="num">Due</th><th class="num">Marked read</th><th class="num">Share</th>'+
-    '<th class="num">Also took the quiz</th><th class="num">Quiz follow-through</th>'+
+    '<div class="an-scroll" style="margin-top:18px;'+(sep?'':'max-width:640px;')+'"><table class="an-tbl"><thead><tr>'+
+    '<th>Chapter</th><th class="num">Due</th><th class="num">'+anLbl('readCol','Marked read')+'</th><th class="num">Share</th>'+
+    (sep?'<th class="num">Also took the quiz</th><th class="num">Quiz follow-through</th>':'')+
     '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="an-caveat"><b>Quiz follow-through</b> is the share of the students who read a chapter who also have a quiz '+
-    'score for it. A high reading number with low follow-through is the pattern of a class clicking through the reading '+
-    'without engaging — worth a word in the next lecture.</div>');
+    (sep
+      ? '<div class="an-caveat"><b>Quiz follow-through</b> is the share of the students who read a chapter who also have a quiz '+
+        'score for it. A high reading number with low follow-through is the pattern of a class clicking through the reading '+
+        'without engaging — worth a word in the next lecture.</div>'
+      : (anLbl('readCaveat','') ? '<div class="an-caveat">'+anLbl('readCaveat','')+'</div>' : '')));
 }
 
 function anRenderAssignments(D){
@@ -3524,39 +3668,6 @@ function anRenderAssignments(D){
     '</tr></thead><tbody>'+rows+'</tbody></table></div>');
 }
 
-function anLoadAttendance(D){
-  sb.from('im_attendance_session').select('id,title,open_at,close_at,base_points,quiz_points,created_at')
-    .eq('course_id',D.cid).order('created_at',{ascending:true}).then(function(sres){
-    if(sres && sres.error){ anSet('an-att', anEmpty('Attendance is not installed on this course.')); return; }
-    var sess=sres.data||[];
-    if(!sess.length){ anSet('an-att', anEmpty('No attendance sessions in this course.')); return; }
-    var ids=sess.map(function(s){ return s.id; });
-    sb.from('im_attendance_checkin').select('session_id,user_id,present,quiz_score').in('session_id',ids).then(function(cres){
-      var ck=cres.data||[];
-      var bySess={}; ck.forEach(function(x){ if(!bySess[x.session_id]){ bySess[x.session_id]=[]; } bySess[x.session_id].push(x); });
-      var rows='';
-      sess.forEach(function(s){
-        var list=bySess[s.id]||[];
-        var present=list.filter(function(x){ return x.present; }).length;
-        var qs=list.filter(function(x){ return x.quiz_score!==null && x.quiz_score!==undefined; })
-                   .map(function(x){ return Number(x.quiz_score); });
-        var when=s.open_at||s.created_at;
-        var closed=dueBefore(s.close_at, Date.now());
-        rows+='<tr><td><b>'+esc(s.title||'Session')+'</b>'+(closed?'':' <span class="an-flag ok">open</span>')+'</td>'+
-          '<td class="num">'+(when?new Date(when).toLocaleDateString(undefined,{month:'short',day:'numeric'}):AN_DASH)+'</td>'+
-          '<td class="num">'+present+' / '+D.nStu+'</td>'+
-          '<td class="num">'+(D.nStu?anP(present/D.nStu,0):AN_DASH)+'</td>'+
-          '<td class="num">'+(Number(s.quiz_points)>0?(qs.length?anP(anMean(qs),1):'no answers'):AN_DASH)+'</td></tr>';
-      });
-      anSet('an-att', '<div class="an-scroll"><table class="an-tbl"><thead><tr>'+
-        '<th>Session</th><th class="num">Date</th><th class="num">Present</th><th class="num">Rate</th>'+
-        '<th class="num">Pop-quiz mean</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-        (ck.length===0?'<div class="an-caveat">No student has ever checked in to any of these sessions. A closed session '+
-          'with no check-ins at all is left out of the letter grade, on the assumption it was a cancelled class or a test '+
-          'of the feature rather than an assessment the class missed.</div>':''));
-    });
-  });
-}
 function anRenderRisk(D){
   if(!D.dueCh.length){ anSet('an-risk', anEmpty('Nothing is due yet, so there is nothing to be behind on.')); return; }
   var firstEx=null, i;
@@ -3608,7 +3719,7 @@ function anRenderRisk(D){
     '<th>Student</th><th>Level</th><th class="num">Missed</th><th class="num">Avg on due</th>'+
     '<th class="num">'+esc(firstEx?(firstEx.title||'Exam'):'Exam')+'</th><th class="num">Trend</th>'+
     '<th class="num">Unread</th><th>Why</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
-    '<div class="an-caveat"><b>Avg on due</b> counts a quiz not taken as 0, over every quiz whose deadline has passed — '+
+    '<div class="an-caveat"><b>Avg on due</b> '+anLbl('riskAvgWord','counts a quiz not taken as 0, over every quiz whose deadline has passed')+' — '+
     'the same convention as the letter grade. <b>Trend</b> compares the last three due chapters with the first three, in '+
     'percentage points, and needs at least six due chapters before it means anything. '+
     rows.length+' of '+D.nStu+' students are flagged.</div>');
@@ -3630,11 +3741,14 @@ function anRenderEngagement(D){
     if(worst===null || d>worst.d){ worst={ d:d, from:D.allCh[i-1], to:D.allCh[i] }; }
   }
   anSet('an-eng',
-    anLineChart(labels, [{name:'Read', values:read},{name:'Quiz', values:quiz}],
+    anLineChart(labels,
+      (((AN_CFG.caps||{}).quizSeparate!==false)
+        ? [{name:'Read', values:read},{name:'Quiz', values:quiz}]
+        : [{name:anLbl('engSeries','Started'), values:read}]),
       { height:200, width:680, aria:'Share of the class reading each chapter and taking each chapter quiz' })+
     (worst && worst.d>0.05
       ? '<div class="an-caveat" style="margin-top:16px;">The sharpest fall is between <b>chapter '+worst.from+
-        '</b> and <b>chapter '+worst.to+'</b>: quiz participation drops '+anP(worst.d,0)+
+        '</b> and <b>chapter '+worst.to+'</b>: '+anLbl('engWord','quiz participation')+' drops '+anP(worst.d,0)+
         '. If that is where the material gets harder rather than where the term got busy, it is the chapter to revisit.</div>'
       : '<div class="an-caveat" style="margin-top:16px;">Participation is holding steady across the chapters that are due.</div>'));
 }
@@ -3722,65 +3836,37 @@ function anRenderPredictors(D){
    on the surrounding quiz or exam, MINUS this item -- see anPointBiserial
    for why the subtraction matters on quizzes this short.
    ==================================================================== */
-function anLoadItems(btn){
-  var D=AN.t1; if(!D){ return; }
-  if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
-  anSet('an-fix', loadingCard()); anSet('an-concept', loadingCard());
-  Promise.all([
-    anPaged('im_exam_attempt','student_id,exam_id,item_id,generator_id,is_correct,submitted_value,points_earned,started_at',D.cid),
-    sb.from('im_assessment_item').select('id,generator_id,chapter,concept_tag,prompt,item_type')
-  ]).then(function(r){
-    if(btn){ btn.disabled=false; btn.textContent='Analyse questions'; }
-    if(r[0].error){ anSet('an-fix', anEmpty('Could not load the answer rows: '+esc(r[0].error.message))); return; }
-    var rows=(r[0].data||[]).filter(function(x){ return x.generator_id || x.item_id; });
-    var meta={};
-    (r[1].data||[]).forEach(function(it){
-      var m={ chapter:it.chapter, tag:it.concept_tag, prompt:it.prompt, type:it.item_type };
-      if(it.generator_id){ meta['g:'+it.generator_id]=m; }
-      meta['i:'+it.id]=m;
-    });
-    if(!rows.length){
-      var msg='No per-question answer rows in this course. Paper exams and manually entered scores leave no '+
-              'question-level record, so there is nothing to analyse.';
-      anSet('an-fix', anEmpty(msg)); anSet('an-concept', anEmpty(msg));
-      return;
-    }
-    AN.t2=anBuildItems(rows, meta, D);
-    anRenderItems(AN.t2, D);
-    anRenderConcepts(AN.t2);
-    anRenderFix(AN.t2);
-    anRenderExams(D);          /* re-render: KR-20 is available now */
-    anRenderTiming(AN.t2, D);
-  }, function(e){
-    if(btn){ btn.disabled=false; btn.textContent='Analyse questions'; }
-    anSet('an-fix', anEmpty('Could not load the answer rows: '+esc(String(e&&e.message?e.message:e))));
-  });
-}
 
-function anBuildItems(rows, meta, D){
+/* ---- turning answer rows into question statistics -------------------
+   Takes the adapter's normalised rows:
+     { sid, examId|null, itemKey, chapter|null, ok, val, pts, at|null }
+   so this function knows nothing about any course's tables. */
+function anBuildItems(rows, meta){
   /* ---- 1. one answer per student per question -----------------------
      A student who retakes a chapter quiz gets a fresh row for every
-     question they see again, and in this course that is common: answers
-     per student per chapter run from 3 to 20. Left alone, those repeats
-     corrupt both statistics. Difficulty would count a retaker two or
-     three times, and later attempts are likelier to be right. The
-     criterion would be worse still: summing a student's points over a
+     question they see again, and that is common: in Microeconomics,
+     answers per student per chapter run from 3 to 20. Left alone, the
+     repeats corrupt both statistics. Difficulty would count a retaker
+     two or three times, and later attempts are likelier to be right.
+     The criterion would be worse: summing a student's points over a
      chapter measures HOW OFTEN THEY RETOOK IT as much as how well they
-     did, and the discrimination figures come out tracking persistence
-     rather than understanding.
-     So: keep each student's FIRST answer to each question, by start
-     time, and drop the rest. */
-  var first={}, i;
+     did, and discrimination then tracks persistence, not understanding.
+     So: keep each student's FIRST answer to each question and drop the
+     rest. */
+  var first={};
   rows.forEach(function(row){
-    var key=row.generator_id ? ('g:'+row.generator_id) : ('i:'+row.item_id);
-    var m=meta[key]||{};
-    var grp=row.exam_id ? ('exam:'+row.exam_id) : ('ch:'+((m&&m.chapter)!==undefined&&m.chapter!==null?m.chapter:'?'));
-    var uk=row.student_id+'|'+grp+'|'+key;
-    var t=row.started_at?new Date(row.started_at).getTime():Number.MAX_SAFE_INTEGER;
+    var m=meta[row.itemKey]||{};
+    var ch=(row.chapter!==null && row.chapter!==undefined) ? row.chapter : m.chapter;
+    var grp=row.examId ? ('exam:'+row.examId)
+                       : ('ch:'+((ch!==undefined && ch!==null)?ch:'?'));
+    var uk=row.sid+'|'+grp+'|'+row.itemKey;
+    var t=(row.at!==null && row.at!==undefined) ? new Date(row.at).getTime() : Number.MAX_SAFE_INTEGER;
+    if(isNaN(t)){ t=Number.MAX_SAFE_INTEGER; }
     var prev=first[uk];
     if(!prev || t<prev.t){
-      first[uk]={ t:t, key:key, grp:grp, meta:m, sid:row.student_id,
-                  ok:!!row.is_correct, val:row.submitted_value, pts:Number(row.points_earned)||0 };
+      first[uk]={ t:t, key:row.itemKey, grp:grp, chapter:ch, meta:m, sid:row.sid,
+                  ok:!!row.ok, val:row.val, pts:Number(row.pts)||0,
+                  poss:(row.poss===null||row.poss===undefined)?null:Number(row.poss) };
     }
   });
   var uniq=Object.keys(first).map(function(k){ return first[k]; });
@@ -3788,8 +3874,8 @@ function anBuildItems(rows, meta, D){
 
   /* ---- 2. each student's score on each quiz or exam ------------------
      Held as a count of items and a count correct, so the criterion below
-     can be a PROPORTION. A proportion is comparable between a student
-     who saw six questions and one who saw nine; a sum is not. */
+     is a PROPORTION. A proportion is comparable between a student who
+     saw six questions and one who saw nine; a sum is not. */
   var grpStu={};
   uniq.forEach(function(a){
     if(!grpStu[a.grp]){ grpStu[a.grp]={}; }
@@ -3800,7 +3886,7 @@ function anBuildItems(rows, meta, D){
 
   var byItem={};
   uniq.forEach(function(a){
-    if(!byItem[a.key]){ byItem[a.key]={ key:a.key, grp:a.grp, meta:a.meta, rows:[] }; }
+    if(!byItem[a.key]){ byItem[a.key]={ key:a.key, grp:a.grp, meta:a.meta, chapter:a.chapter, rows:[] }; }
     byItem[a.key].rows.push(a);
   });
 
@@ -3837,7 +3923,7 @@ function anBuildItems(rows, meta, D){
              .sort(function(a,b){ return b.n-a.n; });
     }
     items.push({
-      key:key, grp:it.grp, meta:it.meta, n:it.rows.length,
+      key:key, grp:it.grp, meta:it.meta, chapter:it.chapter, n:it.rows.length,
       p:anDifficulty(flags),
       rpb:anPointBiserial(f2, c2),
       d27:anUpperLowerD(f2, c2),
@@ -4021,18 +4107,19 @@ function anRenderConcepts(T){
 }
 
 /* ---- on time vs late, from the real answer timestamps -------------- */
+/* ---- on time vs late, from the answer timestamps -------------------
+   Only meaningful where the course records when an answer was given;
+   adapters that have no timestamp pass at:null and this renders nothing. */
 function anRenderTiming(T, D){
-  var byCh={};
-  T.rows.forEach(function(r){
-    if(r.exam_id || !r.started_at){ return; }
-    var key=r.generator_id?('g:'+r.generator_id):('i:'+r.item_id);
-    var m=(T.byItem[key]||{}).meta||{};
-    var ch=m.chapter; if(ch===null||ch===undefined){ return; }
+  var byCh={}, any=false;
+  T.uniq.forEach(function(r){
+    if(r.grp.indexOf('ch:')!==0 || r.t===Number.MAX_SAFE_INTEGER){ return; }
+    var ch=r.chapter; if(ch===null||ch===undefined){ return; }
+    any=true;
     if(!byCh[ch]){ byCh[ch]={}; }
-    var t=new Date(r.started_at).getTime();
-    if(isNaN(t)){ return; }
-    if(byCh[ch][r.student_id]===undefined || t<byCh[ch][r.student_id]){ byCh[ch][r.student_id]=t; }
+    if(byCh[ch][r.sid]===undefined || r.t<byCh[ch][r.sid]){ byCh[ch][r.sid]=r.t; }
   });
+  if(!any){ return; }
   var rows=[];
   D.dueCh.forEach(function(ch){
     var dl=D.dlByCh[ch] ? new Date(D.dlByCh[ch]).getTime() : null;
@@ -4048,11 +4135,11 @@ function anRenderTiming(T, D){
   host.insertAdjacentHTML('beforeend',
     '<div style="margin-top:26px;border-top:1px solid var(--border);padding-top:20px;">'+
     '<h4 style="font-size:14.5px;color:var(--text-bright);margin-bottom:3px;">On time, late, or not at all</h4>'+
-    '<div class="an-sec-note">For each chapter whose deadline has passed, when students first opened the quiz, '+
+    '<div class="an-sec-note">For each chapter whose deadline has passed, when students first answered, '+
     'measured against that deadline.</div>'+
     anStack100(rows)+
-    '<div class="an-caveat">Timed from the first answer a student started on that chapter, so a student who opened the '+
-    'quiz before the deadline and finished after it counts as on time. <b>Not at all</b> is every enrolled student with '+
+    '<div class="an-caveat">Timed from the first answer a student gave on that chapter, so a student who started '+
+    'before the deadline and finished after it counts as on time. <b>Not at all</b> is every enrolled student with '+
     'no answer on record.</div></div>');
 }
 /* ====================================================================
@@ -4063,62 +4150,98 @@ function anRenderTiming(T, D){
    the gradebook and the student's own view use. Pulled only on demand:
    it is the largest table in the course.
    ==================================================================== */
+/* ---- tier 2: question analysis ------------------------------------- */
+function anLoadItems(btn){
+  var D=AN.t1; if(!D){ return; }
+  if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
+  anSet('an-fix', loadingCard()); anSet('an-concept', loadingCard());
+  AN_CFG.fetchAnswers(D.cid, D).then(function(A){
+    if(btn){ btn.disabled=false; btn.textContent='Analyse questions'; }
+    if(A && A.error){ anSet('an-fix', anEmpty('Could not load the answer rows: '+esc(A.error))); return; }
+    if(!A.rows.length){
+      var msg='No per-question answer rows in this course. Paper exams and manually entered scores leave no '+
+              'question-level record, so there is nothing to analyse.';
+      anSet('an-fix', anEmpty(msg)); anSet('an-concept', anEmpty(msg));
+      return;
+    }
+    AN.t2=anBuildItems(A.rows, A.meta);
+    /* Courses that mark exams on paper already have scores from tier 1.
+       Courses that mark them online do not, because pulling every answer
+       just to draw a distribution is the fetch this panel is built to
+       avoid -- so their exam figures appear now, with the answers. */
+    var gained=anDeriveExamPct(D, AN.t2);
+    anRenderItems(AN.t2, D);
+    anRenderConcepts(AN.t2);
+    anRenderFix(AN.t2);
+    anRenderExams(D);          /* re-render: KR-20, and any scores just derived */
+    anRenderTiming(AN.t2, D);
+    if(gained){ anRenderRisk(D); anRenderPredictors(D); }
+  }, function(e){
+    if(btn){ btn.disabled=false; btn.textContent='Analyse questions'; }
+    anSet('an-fix', anEmpty('Could not load the answer rows: '+esc(String(e&&e.message?e.message:e))));
+  });
+}
+
+/* Per-student exam percentages worked out from the per-question rows,
+   for courses where no score was typed in. Uses each student's own
+   points-possible where the course records it, and the exam's declared
+   total otherwise. Never overwrites a score the instructor entered. */
+function anDeriveExamPct(D, T){
+  var agg={}, gained=false;
+  T.uniq.forEach(function(a){
+    if(a.grp.indexOf('exam:')!==0){ return; }
+    var eid=a.grp.slice(5);
+    if(!agg[eid]){ agg[eid]={}; }
+    if(!agg[eid][a.sid]){ agg[eid][a.sid]={ e:0, p:0 }; }
+    agg[eid][a.sid].e += a.pts;
+    agg[eid][a.sid].p += (a.poss||0);
+  });
+  Object.keys(agg).forEach(function(eid){
+    if(D.examPct[eid] && Object.keys(D.examPct[eid]).length){ return; }   /* typed-in scores win */
+    var tp=0;
+    for(var i=0;i<D.exams.length;i++){ if(D.exams[i].id===eid){ tp=Number(D.exams[i].total_points)||0; } }
+    var out={}, n=0;
+    Object.keys(agg[eid]).forEach(function(sid){
+      var g=agg[eid][sid];
+      var denom=(g.p>0)?g.p:tp;
+      if(denom>0){ out[sid]=Math.min(1, g.e/denom); n++; }
+    });
+    if(n){ D.examPct[eid]=out; gained=true; }
+  });
+  return gained;
+}
+
+/* ---- tier 3: arenas -------------------------------------------------
+   The adapter hands back a score per student per arena, already on the
+   0..1 scale the gradebook uses, plus a per-case breakdown where the
+   course stores one row per case. Courses that store one row per PLAY
+   have no case detail, and the panel says so rather than inventing it. */
 function anLoadArenas(btn){
   var D=AN.t1; if(!D){ return; }
   if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
   anSet('an-arena', loadingCard());
-  var all=[], PAGE=1000;
-  function page(from){
-    return sb.from('im_attempt').select('user_id,arena_slug,case_index,is_correct,attempt_no,created_at')
-      .eq('course_id',D.cid).order('user_id',{ascending:true}).range(from, from+PAGE-1)
-      .then(function(res){
-        if(res && res.error){ return { data:all, error:res.error }; }
-        var got=res.data||[];
-        all=all.concat(got);
-        if(got.length<PAGE){ return { data:all }; }
-        if(from>500000){ return { data:all }; }
-        return page(from+PAGE);
-      });
-  }
-  page(0).then(function(res){
+  AN_CFG.fetchArenas(D.cid, D).then(function(A){
     if(btn){ btn.disabled=false; btn.textContent='Analyse arenas'; }
-    if(res.error){ anSet('an-arena', anEmpty('Could not load the arena rows: '+esc(res.error.message))); return; }
-    var rows=res.data||[];
-    if(!rows.length){ anSet('an-arena', anEmpty('No arena attempts in this course yet.')); return; }
-    var enrolled={}; D.students.forEach(function(s){ enrolled[s.student_id]=true; });
-    var perArena={}, perCase={}, perStu={};
-    rows.forEach(function(r){
-      if(!enrolled[r.user_id]){ return; }      /* ignore anyone not on this roster */
-      var a=r.arena_slug; if(!a){ return; }
-      if(!perArena[a]){ perArena[a]={}; }
-      if(!perArena[a][r.user_id]){ perArena[a][r.user_id]={ c:0, n:0 }; }
-      var g=perArena[a][r.user_id]; g.n++; if(r.is_correct){ g.c++; }
-      var ck=a+'#'+(r.case_index===null||r.case_index===undefined?'?':r.case_index);
-      if(!perCase[ck]){ perCase[ck]={ arena:a, idx:r.case_index, c:0, n:0 }; }
-      perCase[ck].n++; if(r.is_correct){ perCase[ck].c++; }
-      if(!perStu[r.user_id]){ perStu[r.user_id]={ c:0, n:0 }; }
-      perStu[r.user_id].n++; if(r.is_correct){ perStu[r.user_id].c++; }
-    });
-    var arenaByStu={};
-    Object.keys(perStu).forEach(function(s){ arenaByStu[s]=perStu[s].n?perStu[s].c/perStu[s].n:0; });
-    AN.t3={ perArena:perArena, perCase:perCase, arenaByStu:arenaByStu };
-
+    if(A && A.error){ anSet('an-arena', anEmpty('Could not load the arena rows: '+esc(A.error))); return; }
+    if(!Object.keys(A.scores).length){ anSet('an-arena', anEmpty('No arena attempts in this course yet.')); return; }
+    AN.t3=A;
     var dueSet=dueSetOf(D.dueArenas);
-    var dlBy={}; D.arenaDl.forEach(function(d){ dlBy[d.arena_slug]=d.closes_at; });
-    var slugs=Object.keys(perArena);
-    D.arenaDl.forEach(function(d){ if(slugs.indexOf(d.arena_slug)<0){ slugs.push(d.arena_slug); } });
+    var dlBy={}; (D.arenaDl||[]).forEach(function(d){ dlBy[d.arena_slug]=d.closes_at; });
+    var slugs=Object.keys(A.scores);
+    (D.arenaDl||[]).forEach(function(d){ if(slugs.indexOf(d.arena_slug)<0){ slugs.push(d.arena_slug); } });
     slugs.sort(function(a,b){
       var da=dlBy[a]?new Date(dlBy[a]).getTime():Infinity, db=dlBy[b]?new Date(dlBy[b]).getTime():Infinity;
       return da-db;
     });
     var tbody='';
     slugs.forEach(function(a){
-      var players=perArena[a]?Object.keys(perArena[a]):[];
-      var scores=players.map(function(s){ var g=perArena[a][s]; return g.n?g.c/g.n:0; });
-      var cases=players.map(function(s){ return perArena[a][s].n; });
+      var byStu=A.scores[a]||{};
+      var players=Object.keys(byStu);
+      var scores=players.map(function(s){ return byStu[s]; });
+      var plays=A.plays&&A.plays[a] ? players.map(function(s){ return A.plays[a][s]||0; }) : [];
       var due=!!dueSet[a];
       var missing=due?(D.nStu-players.length):null;
-      tbody+='<tr><td><b>'+esc((typeof ARENA_TITLE!=='undefined' && ARENA_TITLE[a])?ARENA_TITLE[a]:a)+'</b>'+
+      tbody+='<tr><td><b>'+esc(AN_CFG.arenaName(a))+'</b>'+
         (due?'':' <span class="an-flag ok">not due</span>')+'</td>'+
         '<td class="num">'+(dlBy[a]?new Date(dlBy[a]).toLocaleDateString(undefined,{month:'short',day:'numeric'}):AN_DASH)+'</td>'+
         '<td class="num">'+players.length+' / '+D.nStu+'</td>'+
@@ -4126,23 +4249,25 @@ function anLoadArenas(btn){
         '<td class="num">'+anP(anMean(scores),1)+'</td>'+
         '<td class="num">'+anP(anMedian(scores),1)+'</td>'+
         '<td class="num">'+(anSD(scores)===null?AN_DASH:anP(anSD(scores),1))+'</td>'+
-        '<td class="num">'+(cases.length?anNum(anMean(cases),1):AN_DASH)+'</td>'+
+        '<td class="num">'+(plays.length?anNum(anMean(plays),1):AN_DASH)+'</td>'+
         '<td>'+anSparkBand(anBand(scores), a)+'</td></tr>';
     });
-    /* the cases the class gets wrong most often */
-    var hard=Object.keys(perCase).map(function(k){ return perCase[k]; })
-      .filter(function(c){ return c.n>=10; })
-      .sort(function(a,b){ return (a.c/a.n)-(b.c/b.n); }).slice(0,12);
     var hardRows='';
-    hard.forEach(function(c){
-      hardRows+='<tr><td>'+esc((typeof ARENA_TITLE!=='undefined' && ARENA_TITLE[c.arena])?ARENA_TITLE[c.arena]:c.arena)+'</td>'+
-        '<td class="num">'+(c.idx===null||c.idx===undefined?AN_DASH:('#'+c.idx))+'</td>'+
-        '<td class="num">'+c.n+'</td><td class="num">'+anP(c.c/c.n,0)+'</td></tr>';
-    });
+    if(A.perCase && A.perCase.length){
+      A.perCase.filter(function(c){ return c.n>=10; })
+        .sort(function(a,b){ return (a.c/a.n)-(b.c/b.n); }).slice(0,12)
+        .forEach(function(c){
+          hardRows+='<tr><td>'+esc(AN_CFG.arenaName(c.arena))+'</td>'+
+            '<td class="num">'+(c.idx===null||c.idx===undefined?AN_DASH:('#'+c.idx))+'</td>'+
+            '<td class="num">'+c.n+'</td><td class="num">'+anP(c.c/c.n,0)+'</td></tr>';
+        });
+    }
     anSet('an-arena',
       '<div class="an-scroll"><table class="an-tbl"><thead><tr>'+
-      '<th>Arena</th><th class="num">Due</th><th class="num">Played</th><th class="num">Missing</th>'+
-      '<th class="num">Mean</th><th class="num">Median</th><th class="num">SD</th><th class="num">Cases each</th><th>Spread</th>'+
+      '<th>'+anLbl('arenaCol','Arena')+'</th><th class="num">Due</th>'+
+      '<th class="num">'+anLbl('arenaPlayed','Played')+'</th><th class="num">Missing</th>'+
+      '<th class="num">Mean</th><th class="num">Median</th><th class="num">SD</th>'+
+      '<th class="num">'+(A.playsLabel||'Plays each')+'</th><th>Spread</th>'+
       '</tr></thead><tbody>'+tbody+'</tbody></table></div>'+
       (hardRows?('<div style="margin-top:26px;border-top:1px solid var(--border);padding-top:20px;">'+
         '<h4 style="font-size:14.5px;color:var(--text-bright);margin-bottom:3px;">Hardest cases</h4>'+
@@ -4151,14 +4276,43 @@ function anLoadArenas(btn){
         '<div class="an-scroll"><table class="an-tbl"><thead><tr><th>Arena</th><th class="num">Case</th>'+
         '<th class="num">Seen by</th><th class="num">Got it right</th></tr></thead><tbody>'+hardRows+
         '</tbody></table></div></div>'):'')+
-      '<div class="an-caveat">A student’s arena score is the share of that arena’s cases they answered correctly, '+
-      'which is what the gradebook uses. <b>Cases each</b> is the average number of cases played, so a low mean on a low '+
-      'case count usually means students are abandoning the arena rather than failing it.</div>');
+      '<div class="an-caveat">'+esc(A.note||'')+' '+
+      anLbl('arenaScaleNote','A student’s arena score is on the same 0–100 scale the gradebook uses.')+'</div>');
     anRenderPredictors(D);   /* arena score can now join the correlations */
   }, function(e){
     if(btn){ btn.disabled=false; btn.textContent='Analyse arenas'; }
     anSet('an-arena', anEmpty('Could not load the arena rows: '+esc(String(e&&e.message?e.message:e))));
   });
+}
+
+/* ---- attendance (only where the course has it) --------------------- */
+function anLoadAttendance(D){
+  AN_CFG.fetchAttendance(D.cid).then(function(A){
+    if(A && A.error){ anSet('an-att', anEmpty(esc(A.error))); return; }
+    if(!A.sessions.length){ anSet('an-att', anEmpty('No attendance sessions in this course.')); return; }
+    var bySess={};
+    A.checkins.forEach(function(x){ if(!bySess[x.session_id]){ bySess[x.session_id]=[]; } bySess[x.session_id].push(x); });
+    var rows='';
+    A.sessions.forEach(function(s){
+      var list=bySess[s.id]||[];
+      var present=list.filter(function(x){ return x.present; }).length;
+      var qs=list.filter(function(x){ return x.quiz_score!==null && x.quiz_score!==undefined; })
+                 .map(function(x){ return Number(x.quiz_score); });
+      var when=s.open_at||s.created_at;
+      var closed=dueBefore(s.close_at, Date.now());
+      rows+='<tr><td><b>'+esc(s.title||'Session')+'</b>'+(closed?'':' <span class="an-flag ok">open</span>')+'</td>'+
+        '<td class="num">'+(when?new Date(when).toLocaleDateString(undefined,{month:'short',day:'numeric'}):AN_DASH)+'</td>'+
+        '<td class="num">'+present+' / '+D.nStu+'</td>'+
+        '<td class="num">'+(D.nStu?anP(present/D.nStu,0):AN_DASH)+'</td>'+
+        '<td class="num">'+(Number(s.quiz_points)>0?(qs.length?anP(anMean(qs),1):'no answers'):AN_DASH)+'</td></tr>';
+    });
+    anSet('an-att', '<div class="an-scroll"><table class="an-tbl"><thead><tr>'+
+      '<th>Session</th><th class="num">Date</th><th class="num">Present</th><th class="num">Rate</th>'+
+      '<th class="num">Pop-quiz mean</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+      (A.checkins.length===0?'<div class="an-caveat">No student has ever checked in to any of these sessions. A closed '+
+        'session with no check-ins at all is left out of the letter grade, on the assumption it was a cancelled class or '+
+        'a test of the feature rather than an assessment the class missed.</div>':''));
+  }, function(e){ anSet('an-att', anEmpty('Could not load attendance: '+esc(String(e&&e.message?e.message:e)))); });
 }
 
 /* ====================================================================
