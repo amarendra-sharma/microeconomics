@@ -1,0 +1,1 @@
+instructor.vrm: "VRM1_Constraint_Twist_Sample" (c) 2022 pixiv Inc. VRM licence 1.0 (https://vrm.dev/licenses/1.0/): commercial use by corporations, modification and redistribution allowed, credit not required.
