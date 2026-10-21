@@ -483,14 +483,14 @@
 <script src="im-quiz.js?v=retry1"></script>
 <script src="im-backend.js?v=retry1"></script>
 <script src="sheetwise-core.js?v=sw4"></script>
-<script src="sw-portal.js?v=sw4"></script>
+<script src="sw-portal.js?v=sw5"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 /* ====================================================================
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-09-assignwt1';
+var SA_BUILD = 'intro-micro-portal-2026-10-selfprint';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -10348,16 +10348,5 @@ try { console.log('%cIntro Micro build: ' + SA_BUILD + ' | tree renderer present
 })();
 </script>
 <script src="macronations-enhance.js" defer></script>
-<script>
-/* MacroNations AI instructor (Asha). Test courses only for now; ECON 160-B1/B2 are added to these lists when the instructor decides. */
-window.AI_INSTRUCTOR_CONFIG = { supabaseUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co', functionUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co/functions/v1/im-ai-instructor' };
-window.AI_INSTRUCTOR_WIDGET = {
-  courseIds: ['6a16dfae-5d8f-4037-b141-3a4c8f08e27a', 'cc9a679a-223c-4e5f-8472-8fff71330014'],       // Test course, Test course 2
-  talkCourseIds: ['6a16dfae-5d8f-4037-b141-3a4c8f08e27a', 'cc9a679a-223c-4e5f-8472-8fff71330014'],
-  functionUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co/functions/v1/im-ai-instructor'
-};
-</script>
-<script type="module" src="ai-instructor/widget.js?v=20261021c"></script>
-<script type="module" src="ai-instructor/teach-panel.js?v=20261021c"></script>
 </body>
 </html>

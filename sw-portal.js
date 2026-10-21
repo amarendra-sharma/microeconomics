@@ -16,7 +16,7 @@
    ========================================================================== */
 (function () {
   'use strict';
-  var SW_BUILD = 'sw-portal-3.0';
+  var SW_BUILD = 'sw-portal-3.2';
   // Scan libraries: served next to index.html first (same origin, no CDN or
   // worker cross-origin issues); CDN only as a fallback.
   var LIBS = {
@@ -183,8 +183,11 @@
       sb.from('im_paper_sheet').select('*').eq('exam_id', S.examId).neq('status', 'void').order('student_label', { ascending: true }),
       sb.from('im_gradebook_v').select('student_id,email,full_name').eq('course_id', S.courseId),
       sb.from('im_enrollment').select('user_id,status').eq('course_id', S.courseId),
-      sb.from('im_exam').select('id,title,kind,item_ids,random_per_student,random_recipe,shuffle_questions,is_manual,total_points').eq('course_id', S.courseId)
+      sb.from('im_exam').select('id,title,kind,item_ids,random_per_student,random_recipe,shuffle_questions,is_manual,total_points').eq('course_id', S.courseId),
+      sb.from('im_paper_setting').select('student_print').eq('exam_id', S.examId).then(function (x) { return x; }, function (e) { return { error: e }; })
     ]).then(function (r) {
+      S.selfPrintReady = !r[4].error;
+      S.selfPrint = S.selfPrintReady ? !(r[4].data && r[4].data[0] && r[4].data[0].student_print === false) : false;
       if (r[0].error) { throw new Error(/relation|does not exist|schema cache/i.test(r[0].error.message) ? 'Bubble sheets aren\u2019t installed yet. Run im_77_paper_sheets.sql in the Supabase SQL editor, then reopen.' : r[0].error.message); }
       S.sheets = r[0].data || [];
       var active = null;
@@ -241,12 +244,30 @@
       '<div class="inline-actions"><button class="btn btn-primary btn-sm" id="swIssue"' + (S.sources.length ? '' : ' disabled') + '>' + (live.length ? 'Re-issue' : 'Issue') + ' for ' + S.roster.length + ' students</button></div>' +
       '<div class="msg" id="swIssueMsg" style="display:none;margin-top:10px;"></div></div>';
 
-    html += '<div class="card"><div style="font-weight:700;margin-bottom:10px;">Print</div><div id="swPrintBox"></div>' +
+    html += '<div class="card"><div style="font-weight:700;margin-bottom:10px;">Print</div>' +
+      '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;">' +
+      (S.selfPrintReady
+        ? '<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;"><input type="checkbox" id="swSelfPrint"' + (S.selfPrint ? ' checked' : '') + '> <span><b>Let students print their own answer sheet</b> from their Exams page. Each student gets only their own named sheet (same QR code as yours), so self-printed sheets scan and grade like the ones you print. Re-issuing makes every earlier copy unusable, including self-printed ones.</span></label>'
+        : '<div style="font-size:12.5px;color:var(--text-muted);">Student self-printing isn\u2019t installed yet. Run <b>im_80_paper_student_print.sql</b> in the Supabase SQL editor, then reopen.</div>') +
+      '<div class="msg" id="swSelfMsg" style="display:none;margin-top:8px;"></div></div>' +
+      '<div id="swPrintBox"></div>' +
       '<div class="msg" id="swPrintMsg" style="display:none;margin-top:10px;"></div></div>';
     el('swBody').innerHTML = html;
     el('swMode').addEventListener('change', function () { el('swVersRow').style.display = el('swMode').value === 'versions' ? 'flex' : 'none'; });
     el('swIssue').addEventListener('click', issueSheets);
+    if (el('swSelfPrint')) { el('swSelfPrint').addEventListener('change', saveSelfPrint); }
     renderPrintBox(mode, live);
+  }
+
+  function saveSelfPrint() {
+    var cb = el('swSelfPrint'), on = !!cb.checked;
+    cb.disabled = true; say('swSelfMsg', 'Saving\u2026');
+    sb.from('im_paper_setting').upsert({ exam_id: S.examId, course_id: S.courseId, student_print: on, updated_at: new Date().toISOString() }, { onConflict: 'exam_id' }).then(function (r) {
+      cb.disabled = false;
+      if (r.error) { cb.checked = !on; say('swSelfMsg', r.error.message, 'err'); return; }
+      S.selfPrint = on;
+      say('swSelfMsg', on ? 'On. Students with a named sheet now see \u201cPrint my answer sheet\u201d on their Exams page.' : 'Off. Students no longer see the print button for this exam.', 'ok');
+    }, function (e) { cb.disabled = false; cb.checked = !on; say('swSelfMsg', (e && e.message) || String(e), 'err'); });
   }
 
   function renderPrintBox(mode, live) {
@@ -400,7 +421,7 @@
     S.sheets.forEach(function (s) { if (s.status === 'graded' && s.student_id) { gradedFor[s.student_id] = true; } });
     var targets = S.roster.filter(function (st) { return !gradedFor[st.id]; });
     var toVoid = S.sheets.filter(function (s) { return s.status !== 'graded' && s.status !== 'void'; });
-    if (toVoid.length && !confirm('This replaces ' + toVoid.length + ' ungraded sheet(s). Anything already printed will stop scanning. Continue?')) { return; }
+    if (toVoid.length && !confirm('This replaces ' + toVoid.length + ' ungraded sheet(s). Anything already printed will stop scanning' + (S.selfPrint ? ' \u2014 including sheets students printed themselves (they will need to print again)' : '') + '. Continue?')) { return; }
     el('swIssue').disabled = true;
     say('swIssueMsg', 'Building\u2026');
 
@@ -460,7 +481,8 @@
         renderSetup();
         say('swIssueMsg', 'Issued ' + res.n + ' answer sheets' + (res.mode === 'versions' ? ' and ' + res.K + ' booklet versions' : '') + ' \u00b7 ' + res.pts + ' points' + (res.patched ? ' (exam total updated)' : '') + '.' +
           (res.skipped ? ' ' + res.skipped + ' written question(s) were left off.' : '') +
-          (res.ptsVary ? ' Warning: point totals differ between versions/students \u2014 check the recipe.' : ''), res.ptsVary ? 'err' : 'ok');
+          (res.ptsVary ? ' Warning: point totals differ between versions/students \u2014 check the recipe.' : '') +
+          (S.selfPrint ? ' Students can now print their own blank sheet from their Exams page (switch under Print).' : ''), res.ptsVary ? 'err' : 'ok');
       });
     }).catch(function (err) {
       el('swIssue').disabled = false;
@@ -507,7 +529,7 @@
     var L = layoutFor(sheet), out = [];
     for (var p = 0; p < L.pages.length; p++) {
       out.push('<div class="sw-sheet">' + SheetwiseCore.renderPageSVG(L.pages[p], {
-        title: S.title, studentName: sheet.student_id ? sheet.student_label : '',
+        title: sheet._title || (S && S.title) || 'Paper exam', studentName: sheet.student_id ? sheet.student_label : '',
         studentLine2: sheet.student_id ? '' : (sheet.student_label || 'Spare') + ' \u2014 write your name',
         code: sheet.code, pageCount: L.pageCount }) + '</div>');
     }
@@ -1483,10 +1505,22 @@
     if (!host || typeof sb === 'undefined') { return; }
     var box = document.getElementById('swStuPaper');
     if (!box) { box = document.createElement('div'); box.id = 'swStuPaper'; host.appendChild(box); }
-    sb.rpc('im_paper_my_list').then(function (r) {
-      if (r.error || !r.data || !r.data.length) { box.innerHTML = ''; return; }
+    var safe = function (name) { return sb.rpc(name).then(function (r) { return (r && !r.error && r.data) ? r.data : []; }, function () { return []; }); };
+    Promise.all([safe('im_paper_my_sheets'), safe('im_paper_my_list')]).then(function (res) {
+      var toPrint = res[0] || [], reviews = res[1] || [];
+      if (!toPrint.length && !reviews.length) { box.innerHTML = ''; return; }
       box.innerHTML = '<div style="font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.07em;margin:18px 0 8px;">Paper exams</div>' +
-        r.data.map(function (x) {
+        '<div class="msg" id="swPrintMsg" style="display:none;"></div>' +
+        toPrint.map(function (x, i) {
+          return '<div class="card" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">' +
+            '<div style="flex:1;min-width:240px;"><div style="font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.07em;">' + h(x.course_title || '') + ' \u00b7 paper exam</div>' +
+            '<div style="font-size:18px;color:var(--text-bright);font-family:Instrument Serif,serif;">' + h(x.exam_title) + '</div>' +
+            '<div style="font-size:12.5px;color:var(--text-muted);margin-top:3px;">Your bubble answer sheet is ready. Print it and bring it to the exam. It carries your name and a code that links it to you, so use only your own sheet.' +
+            (x.issued_at ? ' <span style="color:var(--text-subtle);">Issued ' + h(fmtDT(x.issued_at)) + '.</span>' : '') + '</div></div>' +
+            '<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;"><span class="tag violet">Answer sheet</span>' +
+            '<button class="btn btn-primary btn-sm" data-swmine="' + i + '">Print my answer sheet</button></div></div>';
+        }).join('') +
+        reviews.map(function (x) {
           var tag = x.is_open ? '<span class="tag green">Review open' + (x.closes_at ? ' until ' + h(fmtDT(x.closes_at)) : '') + '</span>' : '<span class="tag dim">Review closed</span>';
           return '<div class="card" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">' +
             '<div><div style="font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.07em;">' + h(x.course_title || '') + ' \u00b7 paper</div>' +
@@ -1498,7 +1532,27 @@
       Array.prototype.forEach.call(box.querySelectorAll('[data-swstu]'), function (b) {
         b.addEventListener('click', function () { openStudentReview(host, b.getAttribute('data-swstu')); });
       });
+      Array.prototype.forEach.call(box.querySelectorAll('[data-swmine]'), function (b) {
+        b.addEventListener('click', function () { printMySheet(toPrint[Number(b.getAttribute('data-swmine'))]); });
+      });
     }, function () { box.innerHTML = ''; });
+  }
+
+  /* A student's own blank sheet: same drawing (and QR code) as the instructor's print run,
+     built from the layout-only data im_paper_my_sheets returns (no seeds, no answers). */
+  function printMySheet(x) {
+    if (!x) { return; }
+    if (typeof SheetwiseCore === 'undefined') { say('swPrintMsg', 'The answer-sheet engine did not load. Hard-refresh the page and try again.', 'err'); return; }
+    var sheet = { code: x.code, student_id: 'me', student_label: x.student_label || '', items: x.items, page_count: x.page_count || 1, _title: x.exam_title };
+    var two = false;
+    try { two = layoutFor(sheet).pages.length > 1; } catch (e) { say('swPrintMsg', 'This answer sheet could not be drawn: ' + (e.message || e), 'err'); return; }
+    var note = '<b>Your answer sheet \u2014 ' + h(x.exam_title) + '</b>. ' +
+      'Print on US Letter paper at <b>100% / Actual size</b> (turn off \u201cFit to page\u201d); black-and-white is fine. ' +
+      (two ? 'It has 2 pages: print <b>2-sided</b> on one sheet of paper. ' : 'Print 1-sided. ') +
+      'Leave it blank until the exam, and don\u2019t write on the QR code or the black corner squares. ' +
+      (isVersioned(sheet) ? 'At the exam, fill in the <b>booklet version</b> letter shown on your question booklet. ' : '') +
+      'If you forget it, ask your instructor for a spare sheet.';
+    openPrintWindow(x.exam_title + ' \u2014 my answer sheet', note, function () { return sheetPagesHTML(sheet); });
   }
 
   function openStudentReview(host, sheetId) {
