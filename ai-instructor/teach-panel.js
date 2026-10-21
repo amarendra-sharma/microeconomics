@@ -150,12 +150,25 @@ async function render(host) {
     rvsol = check('Let the AI also see the correct answers and explanations (only when the AI policy is "full")'); rvsol.cb.checked = s.review_show_solutions !== false;
     cs.append(rven.wrap, rvsol.wrap);
   }
+  const hasScope = 'scope_mode' in s;
+  let scopeCb, textCb; const kindCbs = {};
+  if (hasScope) {
+    cs.appendChild(el('h4', { text: 'What students may use the AI instructor for' }));
+    cs.appendChild(el('div', { style: 'font-size:12.5px;opacity:.85', text: 'Use these to keep the AI instructor on your course and keep costs down. Changes apply to the next question a student asks.' }));
+    scopeCb = check('Only help with this course: politely decline anything outside the course subject'); scopeCb.cb.checked = s.scope_mode !== 'open';
+    textCb = check('Explain textbook material and help with practice problems'); textCb.cb.checked = s.use_textbook !== false;
+    cs.append(scopeCb.wrap, textCb.wrap);
+    cs.appendChild(el('div', { style: 'font-size:12.5px;margin-top:6px', text: 'Graded work students may go over with the AI (needs the review switch above):' }));
+    const kinds = Array.isArray(s.review_kinds) ? s.review_kinds : ['exams', 'quizzes', 'assignments', 'arenas'];
+    [['exams', 'Exams (including paper exams with the graded answer sheet)'], ['quizzes', 'Chapter quizzes'], ['assignments', 'Assignments'], ['arenas', 'Arenas']].forEach(([k, label]) => { kindCbs[k] = check(label); kindCbs[k].cb.checked = kinds.includes(k); cs.appendChild(kindCbs[k].wrap); });
+  }
   const ssave = btn('Save settings');
   cs.append(ssave, smsg);
   ssave.onclick = async () => {
     try {
       const b = { action: 'set_settings', course_id: cid, enabled: en.cb.checked, retention_days: +ret.value, student_daily_tokens: +tok.value, course_monthly_usd: +usd.value };
       if (hasReview) { b.review_enabled = rven.cb.checked; b.review_show_solutions = rvsol.cb.checked; }
+      if (hasScope) { b.scope_mode = scopeCb.cb.checked ? 'course_only' : 'open'; b.use_textbook = textCb.cb.checked; b.review_kinds = Object.keys(kindCbs).filter((k) => kindCbs[k].cb.checked); }
       await call(b); smsg.say('Saved.', 'ok');
     } catch (e) { smsg.say(e.message, 'bad'); }
   };
