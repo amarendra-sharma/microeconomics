@@ -268,6 +268,56 @@
 .pm-legend{font-size:11.5px;color:var(--text-subtle);margin-top:6px;text-align:center;}
 .gt-wrap{margin:14px 0;padding:10px;border:1px solid var(--border);border-radius:8px;overflow-x:auto;}
 </style>
+<script>
+/* MacroNations visit tracking (shared across courses, build pvname-2026-10).
+   Logs ONE visit per browser session into page_views (MacroNation Tournament
+   project) with a client-made row id, then tags that row with the student's
+   name/email once they sign in (window.mnTagVisit). Fire-and-forget. */
+(function () {
+  var URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
+  var KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
+  var COURSE = 'microeconomics';
+  function get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+  function put(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+  function hdr() { return { 'Content-Type': 'application/json', 'apikey': KEY, 'Authorization': 'Bearer ' + KEY }; }
+  function uuid() {
+    try { if (window.crypto && crypto.randomUUID) { return crypto.randomUUID(); } } catch (e) {}
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+    });
+  }
+  var pending = null;
+  function flush() {
+    if (!pending || get('mn_pv_tagged')) { return; }
+    var id = get('mn_pv_id'); if (!id) { return; }
+    put('mn_pv_tagged', '1');
+    var p = pending; pending = null;
+    fetch(URL + '/rest/v1/rpc/mn_tag_page_view', { method: 'POST', headers: hdr(),
+      body: JSON.stringify({ p_id: id, p_user_id: p.u, p_name: p.n, p_email: p.e }) }).catch(function () {});
+  }
+  window.mnTagVisit = function (userId, name, email) {
+    try {
+      if (!email) { return; }
+      pending = { u: userId ? String(userId) : null, n: name ? String(name) : null, e: String(email) };
+      flush();
+    } catch (e) {}
+  };
+  try {
+    var sid = null, q = null;
+    try { q = new URLSearchParams(window.location.search).get('mn_sid'); } catch (e) {}
+    if (q) { sid = q; put('mn_sid', q); } else { sid = get('mn_sid'); }
+    if (!sid) { sid = Math.random().toString(36).slice(2) + Date.now().toString(36); put('mn_sid', sid); }
+    if (get('mn_pv_logged')) { return; }
+    put('mn_pv_logged', '1');
+    var id = uuid();
+    fetch(URL + '/rest/v1/page_views', { method: 'POST', headers: hdr(),
+      body: JSON.stringify({ id: id, session_id: sid,
+        referrer: document.referrer ? document.referrer.slice(0, 500) : null,
+        visited_at: new Date().toISOString(), course: COURSE, event_type: 'visit' })
+    }).then(function (r) { if (r && r.ok) { put('mn_pv_id', id); flush(); } }, function () {});
+  } catch (e) {}
+})();
+</script>
 </head>
 <body>
 
@@ -490,7 +540,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-10-selfprint';
+var SA_BUILD = 'intro-micro-portal-2026-10-pvname';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -958,6 +1008,7 @@ function onSignedIn(user){
   }).then(function(res){
     var prof = res.data ? res.data : { role:'student' };
     State.profile=prof; State.role = prof.role ? prof.role : 'student';
+    try{ if(window.mnTagVisit){ window.mnTagVisit(user.id, prof.full_name||'', user.email); } }catch(_e){}
     loadStaffThenEnter(user);
   });
 }
@@ -10301,63 +10352,6 @@ sb.auth.onAuthStateChange(function(event, session){
 });
 try { console.log('%cIntro Micro build: ' + SA_BUILD + ' | tree renderer present: ' + (typeof renderTreeFigure !== 'undefined') + ' | matrix renderer present: ' + (typeof renderMatrixFigure !== 'undefined'), 'color:#7c6df2;font-weight:bold'); } catch(e){}
 </script>
-<!-- =====================================================================
-     Microeconomics — visit tracking for MacroNations Analytics.
-     Logs one "visit" per page load into the shared page_views table, tagged
-     course:'microeconomics', so "Microeconomics Visits (app)" populates in the
-     super-admin Analytics → Traffic by Course panel, like Game Theory and
-     Econometrics. Fire-and-forget; never blocks the page. Same shared Supabase
-     project, so no new keys are needed.
-     ===================================================================== -->
-<script>
-(function () {
-  var SUPA_URL  = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-  var SUPA_ANON = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
-  try {
-    // Reuse the portal session id (passed as ?mn_sid=... when a student clicks
-    // the course card) so the visit ties to the same funnel; else make one.
-    var sid = null;
-    try { sid = sessionStorage.getItem('mn_sid'); } catch (e) {}
-    var q = null;
-    try { q = new URLSearchParams(window.location.search).get('mn_sid'); } catch (e) {}
-    if (q) { sid = q; try { sessionStorage.setItem('mn_sid', sid); } catch (e) {} }
-    if (!sid) {
-      sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
-      try { sessionStorage.setItem('mn_sid', sid); } catch (e) {}
-    }
-    var _pvDone=false; try{ _pvDone=!!sessionStorage.getItem('mn_pv_logged'); }catch(e){}
-    if(_pvDone){ return; }
-    try{ sessionStorage.setItem('mn_pv_logged','1'); }catch(e){}
-    fetch(SUPA_URL + '/rest/v1/page_views', {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'apikey':        SUPA_ANON,
-        'Authorization': 'Bearer ' + SUPA_ANON
-      },
-      body: JSON.stringify({
-        session_id: sid,
-        user_id:    null,
-        referrer:   document.referrer ? document.referrer.slice(0, 500) : null,
-        visited_at: new Date().toISOString(),
-        course:     'microeconomics',
-        event_type: 'visit'
-      })
-    }).catch(function () {});
-  } catch (e) {}
-})();
-</script>
 <script src="macronations-enhance.js" defer></script>
-<script>
-/* MacroNations AI instructor (Asha). Test courses only for now; ECON 160-B1/B2 are added to these lists when the instructor decides. */
-window.AI_INSTRUCTOR_CONFIG = { supabaseUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co', functionUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co/functions/v1/im-ai-instructor' };
-window.AI_INSTRUCTOR_WIDGET = {
-  courseIds: ['6a16dfae-5d8f-4037-b141-3a4c8f08e27a', 'cc9a679a-223c-4e5f-8472-8fff71330014'],       // Test course, Test course 2
-  talkCourseIds: ['6a16dfae-5d8f-4037-b141-3a4c8f08e27a', 'cc9a679a-223c-4e5f-8472-8fff71330014'],
-  functionUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co/functions/v1/im-ai-instructor'
-};
-</script>
-<script type="module" src="ai-instructor/widget.js?v=20261021c"></script>
-<script type="module" src="ai-instructor/teach-panel.js?v=20261021d"></script>
 </body>
 </html>
