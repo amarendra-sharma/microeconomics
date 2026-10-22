@@ -262,3 +262,18 @@
     }
   });
 })();
+
+/* MacroNations AI instructor (Asha). Loaded from here, not from index.html, so replacing index.html cannot remove it.
+   Test courses only for now; ECON 160-B1/B2 are added to these lists when the instructor decides. */
+(function () {
+  try {
+    if (window.__aiInstructorHook) return; window.__aiInstructorHook = true;
+    var fn = 'https://rtaiivegcqqmdchpguzn.supabase.co/functions/v1/im-ai-instructor';
+    var test = ['6a16dfae-5d8f-4037-b141-3a4c8f08e27a', 'cc9a679a-223c-4e5f-8472-8fff71330014'];   // Test course, Test course 2
+    window.AI_INSTRUCTOR_CONFIG = { supabaseUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co', functionUrl: fn };
+    window.AI_INSTRUCTOR_WIDGET = { courseIds: test, talkCourseIds: test, functionUrl: fn };
+    ['widget.js', 'teach-panel.js'].forEach(function (f) {
+      var s = document.createElement('script'); s.type = 'module'; s.src = 'ai-instructor/' + f + '?v=20261021d'; document.head.appendChild(s);
+    });
+  } catch (e) {}
+})();
