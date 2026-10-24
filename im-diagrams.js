@@ -29,7 +29,8 @@
 
   var C = {
     axis:   "#334155",
-    grid:   "#e2e8f0",
+    grid:   "#e9edf3",
+    guide:  "#475569",
     demand: "#0f3d9e",   /* navy */
     supply: "#b87408",   /* gold */
     alt:    "#7c3aed",   /* violet for a second/shifted curve */
@@ -44,13 +45,49 @@
 
   /* ---- geometry: a plot box inside the svg viewBox --------------------- */
   function makePlot(opts) {
-    var W = opts.w || 420, H = opts.h || 320;
-    var m = { l: 46, r: 18, t: 18, b: 42 };
+    var W = opts.w || 440, H = opts.h || 330;
+    var m = { l: 52, r: 20, t: 18, b: 50 };
     var qmax = opts.qmax || 10, pmax = opts.pmax || 10;
     var x0 = m.l, x1 = W - m.r, y0 = H - m.b, y1 = m.t;
     function X(q) { return x0 + (q / qmax) * (x1 - x0); }
     function Y(p) { return y0 - (p / pmax) * (y0 - y1); }
-    return { W: W, H: H, m: m, qmax: qmax, pmax: pmax, X: X, Y: Y, x0: x0, x1: x1, y0: y0, y1: y1 };
+    /* mustX / mustY are the values a student may be asked to read off this
+       diagram. The tick step is chosen so each of them lands ON a gridline,
+       which is the whole point: no question should need a guess between two
+       labels. extraX / extraY collect values marked while drawing, so their
+       labels can be written after the curves. */
+    return { W: W, H: H, m: m, qmax: qmax, pmax: pmax, X: X, Y: Y,
+             x0: x0, x1: x1, y0: y0, y1: y1,
+             mustX: (opts.mustX || []), mustY: (opts.mustY || []),
+             extraX: [], extraY: [] };
+  }
+
+  /* A tick step that is a round number, keeps the count sensible, and divides
+     every value the question turns on. */
+  function chooseStep(max, must) {
+    if (!(max > 0)) { return 1; }
+    var mags = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
+    var i, j, hits, st, n, fallback = null;
+    for (i = 0; i < mags.length; i++) {
+      st = mags[i];
+      n = Math.floor(max / st + 1e-9);
+      if (n < 3 || n > 14) { continue; }
+      if (fallback === null) { fallback = st; }
+      hits = true;
+      for (j = 0; j < (must || []).length; j++) {
+        var v = must[j];
+        if (v === null || v === undefined || !isFinite(v)) { continue; }
+        if (Math.abs(v / st - Math.round(v / st)) > 1e-6) { hits = false; break; }
+      }
+      if (hits) { return st; }
+    }
+    return fallback || (max / 5);
+  }
+
+  function tickList(max, must) {
+    var st = chooseStep(max, must), out = [], v;
+    for (v = 0; v <= max + 1e-9; v += st) { out.push(Math.round(v * 1e6) / 1e6); }
+    return out;
   }
 
   function esc(s) {
@@ -75,16 +112,38 @@
       (stroke ? " stroke='" + stroke + "' stroke-width='1'" : "") + " />";
   }
 
-  /* axes with arrowheads + titles */
+  /* axes with a numbered scale, a hairline grid, arrowheads and titles */
   function axes(P, xlab, ylab) {
-    var s = "";
+    var s = "", i, v;
+    P.ticksX = tickList(P.qmax, P.mustX);
+    P.ticksY = tickList(P.pmax, P.mustY);
+    /* grid first, so everything else draws over it */
+    for (i = 0; i < P.ticksX.length; i++) {
+      v = P.ticksX[i];
+      if (v <= 0) { continue; }
+      s += line(P.X(v), P.y0, P.X(v), P.y1, C.grid, 1);
+    }
+    for (i = 0; i < P.ticksY.length; i++) {
+      v = P.ticksY[i];
+      if (v <= 0) { continue; }
+      s += line(P.x0, P.Y(v), P.x1, P.Y(v), C.grid, 1);
+    }
     s += line(P.x0, P.y0, P.x1, P.y0, C.axis, 1.5);          /* x axis */
     s += line(P.x0, P.y0, P.x0, P.y1, C.axis, 1.5);          /* y axis */
+    /* tick marks only — the numbers are drawn last, so a tick that would sit
+       under a marked value's label can be dropped instead of colliding */
+    for (i = 0; i < P.ticksX.length; i++) {
+      s += line(P.X(P.ticksX[i]), P.y0, P.X(P.ticksX[i]), P.y0 + 4, C.axis, 1);
+    }
+    for (i = 0; i < P.ticksY.length; i++) {
+      if (P.ticksY[i] <= 0) { continue; }
+      s += line(P.x0 - 4, P.Y(P.ticksY[i]), P.x0, P.Y(P.ticksY[i]), C.axis, 1);
+    }
     /* arrowheads */
     s += "<polygon points='" + P.x1 + "," + P.y0 + " " + (P.x1 - 6) + "," + (P.y0 - 4) + " " + (P.x1 - 6) + "," + (P.y0 + 4) + "' fill='" + C.axis + "'/>";
     s += "<polygon points='" + P.x0 + "," + P.y1 + " " + (P.x0 - 4) + "," + (P.y1 + 6) + " " + (P.x0 + 4) + "," + (P.y1 + 6) + "' fill='" + C.axis + "'/>";
-    s += txt(P.x1, P.y0 + 26, xlab || "Quantity", { anchor: "end", fill: C.muted, size: 12, weight: 600 });
-    s += txt(P.x0 - 30, P.y1 + 4, ylab || "Price", { fill: C.muted, size: 12, weight: 600 });
+    s += txt(P.x1, P.y0 + 34, xlab || "Quantity", { anchor: "end", fill: C.muted, size: 12, weight: 600 });
+    s += txt(P.x0 - 36, P.y1 - 6, ylab || "Price", { fill: C.muted, size: 12, weight: 600 });
     return s;
   }
 
@@ -143,20 +202,87 @@
     return { q1: A.q, p1: A.p, q2: B.q, p2: B.p };
   }
 
-  /* dashed drop-lines from an (q,p) point to both axes + tick labels */
+  /* Dashed guides from (q,p) to BOTH axes, plus the value written on each axis.
+     The guides are darker than the grid so the eye follows them to the number.
+     A label is registered rather than drawn here, so it lands on top of the
+     curves; pass qlab/plab false to leave an axis unlabelled (a question whose
+     answer IS that number), in which case the grid is what the student reads. */
   function markPoint(P, q, p, opts) {
     opts = opts || {};
     var s = "";
-    s += line(P.X(q), P.Y(p), P.X(q), P.y0, C.muted, 1, "4 3");
-    s += line(P.X(q), P.Y(p), P.x0, P.Y(p), C.muted, 1, "4 3");
+    s += line(P.X(q), P.Y(p), P.X(q), P.y0, C.guide, 1.2, "5 3");
+    s += line(P.X(q), P.Y(p), P.x0, P.Y(p), C.guide, 1.2, "5 3");
     s += "<circle cx='" + P.X(q) + "' cy='" + P.Y(p) + "' r='3.5' fill='" + C.ink + "'/>";
-    if (opts.qlab !== false) { s += txt(P.X(q), P.y0 + 14, opts.qlab || fmt(q), { anchor: "middle", size: 11, fill: C.muted }); }
-    if (opts.plab !== false) { s += txt(P.x0 - 6, P.Y(p) + 4, opts.plab || fmt(p), { anchor: "end", size: 11, fill: C.muted }); }
+    /* A number goes on the axis. A symbol like Q* is the NAME of the answer,
+       not the answer, so it is written beside the point instead — blanking the
+       gridline number there would take away the very thing being read. */
+    var sym = [];
+    if (opts.qlab !== false) {
+      if (isNumericLabel(opts.qlab, q)) { P.extraX.push({ v: q, text: (opts.qlab || fmt(q)) }); }
+      else { sym.push(opts.qlab); P.mustX.push(q); }
+    } else { P.mustX.push(q); }
+    if (opts.plab !== false) {
+      if (isNumericLabel(opts.plab, p)) { P.extraY.push({ v: p, text: (opts.plab || fmt(p)) }); }
+      else { sym.push(opts.plab); P.mustY.push(p); }
+    } else { P.mustY.push(p); }
+    if (sym.length) {
+      s += txt(P.X(q) + 7, P.Y(p) - 7, sym.join(", "), { fill: C.ink, size: 11, weight: 700 });
+    }
     return s;
   }
+
+  /* Axis numbers, drawn last: every gridline is numbered, and where a marked
+     value falls near a gridline its own (bold) number replaces that tick's, so
+     the two never print on top of each other. */
+  function axisNumbers(P) {
+    var s = "", i, j, v, px, py, clash;
+    var ex = dedupe(P.extraX, function (a) { return P.X(a.v); }, 1.5);
+    var ey = dedupe(P.extraY, function (a) { return P.Y(a.v); }, 1.5);
+    for (i = 0; i < (P.ticksX || []).length; i++) {
+      v = P.ticksX[i]; px = P.X(v); clash = false;
+      for (j = 0; j < ex.length; j++) { if (Math.abs(P.X(ex[j].v) - px) < 19) { clash = true; } }
+      if (!clash) { s += txt(px, P.y0 + 15, fmt(v), { anchor: "middle", size: 10.5, fill: C.muted }); }
+    }
+    for (i = 0; i < (P.ticksY || []).length; i++) {
+      v = P.ticksY[i];
+      if (v <= 0) { continue; }
+      py = P.Y(v); clash = false;
+      for (j = 0; j < ey.length; j++) { if (Math.abs(P.Y(ey[j].v) - py) < 11) { clash = true; } }
+      if (!clash) { s += txt(P.x0 - 7, py + 3.5, fmt(v), { anchor: "end", size: 10.5, fill: C.muted }); }
+    }
+    for (i = 0; i < ex.length; i++) {
+      if (!isFinite(ex[i].v) || ex[i].v < -1e-9 || ex[i].v > P.qmax + 1e-9) { continue; }
+      px = P.X(ex[i].v);
+      s += line(px, P.y0, px, P.y0 + 5, C.ink, 1.4);
+      s += txt(px, P.y0 + 16, ex[i].text, { anchor: "middle", size: 11, fill: C.ink, weight: 700 });
+    }
+    for (i = 0; i < ey.length; i++) {
+      if (!isFinite(ey[i].v) || ey[i].v < -1e-9 || ey[i].v > P.pmax + 1e-9) { continue; }
+      py = P.Y(ey[i].v);
+      s += line(P.x0 - 5, py, P.x0, py, C.ink, 1.4);
+      s += txt(P.x0 - 7, py + 3.5, ey[i].text, { anchor: "end", size: 11, fill: C.ink, weight: 700 });
+    }
+    return s;
+  }
+
+  /* keep one label per position: two curves can mark the same price */
+  function dedupe(list, pos, tol) {
+    var out = [], i, j, dup;
+    for (i = 0; i < (list || []).length; i++) {
+      dup = false;
+      for (j = 0; j < out.length; j++) { if (Math.abs(pos(out[j]) - pos(list[i])) < tol) { dup = true; } }
+      if (!dup) { out.push(list[i]); }
+    }
+    return out;
+  }
   function fmt(n) { return (Math.round(n * 100) / 100).toString(); }
+  function isNumericLabel(lab, v) {
+    if (lab === undefined || lab === null) { return true; }
+    return /^-?[0-9.,$%\s]+$/.test(String(lab));
+  }
 
   function svgWrap(P, inner, title) {
+    if (P.ticksX || P.ticksY) { inner += axisNumbers(P); }
     return "<svg viewBox='0 0 " + P.W + " " + P.H + "' xmlns='http://www.w3.org/2000/svg' " +
       "role='img' aria-label='" + esc(title || "economic diagram") + "' style='max-width:100%;height:auto;'>" +
       "<rect x='0' y='0' width='" + P.W + "' height='" + P.H + "' fill='#ffffff'/>" +
@@ -168,11 +294,12 @@
   /* linear supply & demand. spec: {dA,dB (demand p=dA+dB q, dB<0),
      sA,sB (supply), qmax,pmax, showEq, shade:'surplus'|'none'} */
   function supplyDemand(spec) {
-    var P = makePlot(spec);
-    var s = axes(P, spec.xlab, spec.ylab);
     /* equilibrium: dA+dB q = sA+sB q -> q* */
     var qe = (spec.sA - spec.dA) / (spec.dB - spec.sB);
     var pe = spec.dA + spec.dB * qe;
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax, pmax: spec.pmax,
+                       mustX: [qe], mustY: [pe] });
+    var s = axes(P, spec.xlab, spec.ylab);
 
     if (spec.shade === "surplus" && qe > 0) {
       /* consumer surplus: triangle (0,pe)-(0,dA)-(qe,pe) ; producer: (0,pe)-(0,sA)-(qe,pe) */
@@ -197,8 +324,6 @@
 
   /* a shift. spec: base demand/supply + which:'demand'|'supply', shiftBy (added to intercept) */
   function shiftDiagram(spec) {
-    var P = makePlot(spec);
-    var s = axes(P, spec.xlab, spec.ylab);
     var dA = spec.dA, dB = spec.dB, sA = spec.sA, sB = spec.sB;
     /* original equilibrium */
     var qe1 = (sA - dA) / (dB - sB), pe1 = dA + dB * qe1;
@@ -206,6 +331,9 @@
     if (spec.which === "demand") { dA2 = dA + spec.shiftBy; }
     else { sA2 = sA + spec.shiftBy; }
     var qe2 = (sA2 - dA2) / (dB - sB), pe2 = dA2 + dB * qe2;
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax, pmax: spec.pmax,
+                       mustX: [qe1, qe2], mustY: [pe1, pe2] });
+    var s = axes(P, spec.xlab, spec.ylab);
 
     /* original curves (lighter) */
     s += linearCurve(P, dA, dB, spec.which === "demand" ? "#0f3d9e88" : C.demand, spec.which === "demand" ? "D\u2081" : "D");
@@ -218,17 +346,22 @@
       if (qe1 > 0 && qe1 < P.qmax) { s += markPoint(P, qe1, pe1, { qlab: fmt(qe1), plab: fmt(pe1) }); }
       if (qe2 > 0 && qe2 < P.qmax) { s += markPoint(P, qe2, pe2, { qlab: fmt(qe2), plab: fmt(pe2) }); }
     } else {
-      if (qe1 > 0) { s += "<circle cx='" + P.X(qe1) + "' cy='" + P.Y(pe1) + "' r='3' fill='" + C.ink + "'/>"; }
-      if (qe2 > 0) { s += "<circle cx='" + P.X(qe2) + "' cy='" + P.Y(pe2) + "' r='3' fill='" + C.alt + "'/>"; }
+      /* the numbers are the answer here, so they are not printed — but the
+         guides still run to the axes and every gridline is numbered, so both
+         equilibria can be read off rather than guessed at */
+      if (qe1 > 0 && qe1 < P.qmax) { s += markPoint(P, qe1, pe1, { qlab: false, plab: false }); }
+      if (qe2 > 0 && qe2 < P.qmax) { s += markPoint(P, qe2, pe2, { qlab: false, plab: false }); }
     }
     return svgWrap(P, s, "curve shift");
   }
 
   /* price control. spec: sd params + control:'ceiling'|'floor', level:p */
   function priceControl(spec) {
-    var P = makePlot(spec);
-    var s = axes(P, spec.xlab, spec.ylab);
     var qe = (spec.sA - spec.dA) / (spec.dB - spec.sB), pe = spec.dA + spec.dB * qe;
+    var qdC = (spec.level - spec.dA) / spec.dB, qsC = (spec.level - spec.sA) / spec.sB;
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax, pmax: spec.pmax,
+                       mustX: [qdC, qsC, qe], mustY: [spec.level, pe] });
+    var s = axes(P, spec.xlab, spec.ylab);
     s += linearCurve(P, spec.dA, spec.dB, C.demand, "D");
     s += linearCurve(P, spec.sA, spec.sB, C.supply, "S");
     /* control line */
@@ -239,8 +372,12 @@
     var qd = (lv - spec.dA) / spec.dB;
     var qs = (lv - spec.sA) / spec.sB;
     if (!spec.hideValues) {
-      s += markPoint(P, qd, lv, { plab: false, qlab: "Qd" });
-      s += markPoint(P, qs, lv, { plab: false, qlab: "Qs" });
+      /* the controlled price is given in the question, so it is labelled; the
+         two quantities get guides and their values on the quantity axis */
+      s += markPoint(P, qd, lv, { plab: fmt(lv), qlab: fmt(qd) });
+      s += markPoint(P, qs, lv, { plab: false, qlab: fmt(qs) });
+      s += txt(P.X(qd) + 6, P.Y(lv) - 6, "Qd", { fill: C.muted, size: 11, weight: 700 });
+      s += txt(P.X(qs) + 6, P.Y(lv) - 6, "Qs", { fill: C.muted, size: 11, weight: 700 });
       /* shortage/surplus bracket along the price line */
       var gapStroke = C.dwlStroke;
       s += line(P.X(Math.min(qd, qs)), P.Y(lv), P.X(Math.max(qd, qs)), P.Y(lv), gapStroke, 3);
@@ -253,7 +390,12 @@
 
   /* per-unit tax wedge. spec: sd params + tax:t (shifts supply up by t) */
   function taxDiagram(spec) {
-    var P = makePlot(spec);
+    var sA2x = spec.sA + spec.tax;
+    var qtX = (sA2x - spec.dA) / (spec.dB - spec.sB);
+    var pbX = spec.dA + spec.dB * qtX, psX = pbX - spec.tax;
+    var qeX = (spec.sA - spec.dA) / (spec.dB - spec.sB), peX = spec.dA + spec.dB * qeX;
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax, pmax: spec.pmax,
+                       mustX: [qtX, qeX], mustY: [pbX, psX, peX] });
     var s = axes(P, spec.xlab, spec.ylab);
     var sA2 = spec.sA + spec.tax;
     /* new eq with taxed supply */
@@ -279,18 +421,22 @@
     if (!spec.hideValues) {
       s += markPoint(P, qt, pb, { qlab: fmt(qt), plab: fmt(pb) });
       s += markPoint(P, qt, ps, { qlab: false, plab: fmt(ps) });
+      /* the no-tax equilibrium: half of every tax question compares with it */
+      if (qe > 0 && qe < P.qmax) { s += markPoint(P, qe, pe, { qlab: fmt(qe), plab: fmt(pe) }); }
     }
     return svgWrap(P, s, "tax wedge");
   }
 
   /* single elasticity curve annotated. spec: {a,b,steep(bool)} */
   function elasticity(spec) {
-    var P = makePlot(spec);
+    var mq0 = (spec.qmax || 10) * 0.5, mp0 = spec.a + spec.b * mq0;
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax, pmax: spec.pmax,
+                       mustX: [mq0], mustY: [mp0] });
     var s = axes(P, spec.xlab, spec.ylab);
     s += linearCurve(P, spec.a, spec.b, C.demand, spec.label || "D");
-    /* a small %-change indicator around a mid point */
+    /* a mid point, with its price and quantity readable on the axes */
     var mq = P.qmax * 0.5, mp = spec.a + spec.b * mq;
-    s += markPoint(P, mq, mp, { qlab: false, plab: false });
+    s += markPoint(P, mq, mp, { qlab: fmt(mq), plab: fmt(mp) });
     return svgWrap(P, s, "elasticity");
   }
 
@@ -308,7 +454,12 @@
      axis intercepts (xmax on x-axis, ymax on y-axis). points can be marked
      'inside'(inefficient), 'on'(efficient), 'outside'(unattainable). */
   function ppf(spec) {
-    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.xmax || 10, pmax: spec.ymax || 10 });
+    var mustPX = [], mustPY = [], pi;
+    for (pi = 0; pi < (spec.points || []).length; pi++) {
+      mustPX.push(spec.points[pi].x); mustPY.push(spec.points[pi].y);
+    }
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.xmax || 10, pmax: spec.ymax || 10,
+                       mustX: mustPX, mustY: mustPY });
     var s = axes(P, spec.xlab || "Good X", spec.ylab || "Good Y");
     var bow = (spec.bow != null) ? spec.bow : 0.28;   /* 0 = straight line */
     /* build the frontier as a polyline from (0,ymax) to (xmax,0), bowed out.
@@ -334,10 +485,16 @@
     if (spec.points) {
       spec.points.forEach(function (pt) {
         var col = pt.state === "outside" ? C.dwlStroke : pt.state === "inside" ? C.muted : C.supply;
+        /* guides to both axes: these questions are about the combination of
+           goods at the point, which has to be readable without counting pixels */
+        s += line(P.X(pt.x), P.Y(pt.y), P.X(pt.x), P.y0, C.guide, 1.2, "5 3");
+        s += line(P.X(pt.x), P.Y(pt.y), P.x0, P.Y(pt.y), C.guide, 1.2, "5 3");
         s += "<circle cx='" + P.X(pt.x) + "' cy='" + P.Y(pt.y) + "' r='4' fill='" + col + "'/>";
         if (pt.label) {
           s += txt(P.X(pt.x) + 7, P.Y(pt.y) - 5, pt.label, { fill: col, weight: 700, size: 12 });
         }
+        P.extraX.push({ v: pt.x, text: fmt(pt.x) });
+        P.extraY.push({ v: pt.y, text: fmt(pt.y) });
       });
     }
     return svgWrap(P, s, "production possibilities frontier");
@@ -348,7 +505,8 @@
      price (optional horizontal line), markMin } . We derive ATC from a simple
      convex cost model so MC intersects ATC at ATC's minimum (a known result). */
   function costCurves(spec) {
-    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax || 12, pmax: spec.cmax || 24 });
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax || 12, pmax: spec.cmax || 24,
+                       mustY: (spec.price != null ? [spec.price] : []) });
     var s = axes(P, spec.xlab || "Quantity", spec.ylab || "Cost / Price");
     /* Cubic total-cost model gives U-shaped MC, AVC, ATC (textbook shape):
          VC(q) = a*q - b*q^2 + c*q^3   (variable cost)
@@ -404,7 +562,10 @@
         if (val < best) { best = val; qMinAtc = qq; }
       }
       if (qMinAtc != null && best <= P.pmax) {
-        s += "<circle cx='" + P.X(qMinAtc) + "' cy='" + P.Y(best) + "' r='3.5' fill='" + C.ink + "'/>";
+        /* "MC crosses ATC at its minimum" is only visible if that output can be
+           read off the quantity axis */
+        s += markPoint(P, qMinAtc, best, { qlab: fmt(Math.round(qMinAtc * 10) / 10), plab: fmt(Math.round(best * 10) / 10) });
+        s += txt(P.X(qMinAtc) + 7, P.Y(best) - 6, "min ATC", { fill: C.ink, size: 10.5, weight: 700 });
       }
     }
     /* optional price line + profit/loss rectangle (competitive-firm questions).
@@ -412,8 +573,9 @@
        price and ATC(q*): green if profit (P>ATC), red if loss (P<ATC). */
     if (spec.price != null) {
       var Pr = spec.price;
-      s += line(P.X(0), P.Y(Pr), P.X(P.qmax), P.Y(Pr), C.muted, 1.5, "5 4");
+      s += line(P.X(0), P.Y(Pr), P.X(P.qmax), P.Y(Pr), C.guide, 1.5, "5 4");
       s += txt(P.X(P.qmax) - 4, P.Y(Pr) - 5, "P = MR", { anchor: "end", fill: C.muted, weight: 700, size: 12 });
+      P.extraY.push({ v: Pr, text: fmt(Pr) });
       if (spec.showProfit) {
         /* find q* where MC(q) = price, scanning the rising part of MC */
         var qStar = null;
@@ -431,9 +593,10 @@
             "' height='" + (yBot - yTop) + "' fill='" + fill + "' stroke='" + stroke + "' stroke-dasharray='3 3'/>";
           s += txt(P.X(qStar * 0.42), (yTop + yBot) / 2 + 4, isProfit ? "Profit" : "Loss",
             { fill: stroke, weight: 700, size: 11 });
-          /* dashed vertical at q* */
-          s += line(P.X(qStar), P.Y(Pr), P.X(qStar), P.y0, C.muted, 1, "4 3");
-          s += txt(P.X(qStar), P.y0 + 14, "q*", { anchor: "middle", fill: C.muted, size: 11 });
+          /* q* where P = MC, with its value on the quantity axis */
+          s += line(P.X(qStar), P.Y(Pr), P.X(qStar), P.y0, C.guide, 1.2, "5 3");
+          s += txt(P.X(qStar) + 6, P.Y(Pr) + 14, "q*", { fill: C.ink, size: 11, weight: 700 });
+          P.extraX.push({ v: qStar, text: fmt(Math.round(qStar * 10) / 10) });
         }
       }
     }
@@ -457,7 +620,8 @@
     /* competitive q where D=MC: a-b*q = mc0+mcSlope*q -> q=(a-mc0)/(b+mcSlope) */
     var qc = (a - mc0) / (b + mcSlope);
     var pc = MC(qc);
-    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax || (qc * 1.25), pmax: spec.pmax || (a * 1.1) });
+    var P = makePlot({ w: spec.w, h: spec.h, qmax: spec.qmax || (qc * 1.25), pmax: spec.pmax || (a * 1.1),
+                       mustX: [qm, qc], mustY: [pm, mcm] });
     var s = axes(P, spec.xlab || "Quantity", spec.ylab || "Price");
     /* profit rectangle (Pm - ATC(qm)) x qm, if ATC provided */
     if (spec.showProfit && spec.atc != null) {
@@ -485,15 +649,14 @@
       s += linearCurve(P, mc0, mcSlope, C.supply, "MC", qc * 0.9);
     }
     /* mark monopoly point: Qm on axis, Pm on demand */
-    s += line(P.X(qm), P.y0, P.X(qm), P.Y(pm), C.muted, 1, "4 3");
-    s += line(P.x0, P.Y(pm), P.X(qm), P.Y(pm), C.muted, 1, "4 3");
-    s += "<circle cx='" + P.X(qm) + "' cy='" + P.Y(pm) + "' r='3.5' fill='" + C.ink + "'/>";
-    s += txt(P.X(qm), P.y0 + 14, "Qm", { anchor: "middle", fill: C.muted, size: 11 });
-    s += txt(P.x0 - 8, P.Y(pm) + 4, "Pm", { anchor: "end", fill: C.muted, size: 11 });
+    s += markPoint(P, qm, pm, { qlab: fmt(Math.round(qm * 100) / 100), plab: fmt(Math.round(pm * 100) / 100) });
+    s += txt(P.X(qm) + 7, P.Y(pm) - 6, "Qm, Pm", { fill: C.ink, size: 10.5, weight: 700 });
     /* optionally mark competitive point */
     if (spec.showCompetitive) {
+      s += line(P.X(qc), P.Y(pc), P.X(qc), P.y0, C.guide, 1.2, "5 3");
       s += "<circle cx='" + P.X(qc) + "' cy='" + P.Y(pc) + "' r='3' fill='" + C.surplusStroke + "'/>";
-      s += txt(P.X(qc), P.y0 + 14, "Qc", { anchor: "middle", fill: C.surplusStroke, size: 11 });
+      s += txt(P.X(qc) + 6, P.Y(pc) - 6, "Qc", { fill: C.surplusStroke, size: 11, weight: 700 });
+      P.extraX.push({ v: qc, text: fmt(Math.round(qc * 100) / 100) });
     }
     return svgWrap(P, s, "monopoly");
   }
@@ -568,9 +731,12 @@
      Quota price solves  qd(p) - qs(p) = quota, so the cap exactly binds.
      --------------------------------------------------------------------- */
   function tradeDiagram(spec) {
-    var P = makePlot({ qmax: spec.qmax || 100, pmax: spec.pmax || 10, w: spec.w, h: spec.h });
     var dA = spec.dA, dB = spec.dB, sA = spec.sA, sB = spec.sB;
     var pw = spec.pw;
+    var pdPre = pw + (spec.tariff || 0);
+    var P = makePlot({ qmax: spec.qmax || 100, pmax: spec.pmax || 10, w: spec.w, h: spec.h,
+                       mustX: [(pw - sA) / sB, (pw - dA) / dB, (pdPre - sA) / sB, (pdPre - dA) / dB],
+                       mustY: [pw, pdPre] });
 
     function qd(p) { return (p - dA) / dB; }
     function qs(p) { return (p - sA) / sB; }
