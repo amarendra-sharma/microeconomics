@@ -1140,7 +1140,8 @@
   function refreshSnapshots(onlyIds) {
     if (!S.release || !S.release.released_at) { return Promise.resolve(); }
     var list = S.sheets.filter(function (s) { return s.status === 'graded' && (!onlyIds || onlyIds.indexOf(s.id) >= 0); });
-    return writeSnapshots(list, S.release.mode === 'questions');
+    // Question wording is saved whenever answers or questions are released; the student view hides it unless the mode is 'questions', and the AI instructor uses it to review.
+    return writeSnapshots(list, S.release.mode !== 'score');
   }
   function writeSnapshots(list, withQ) {
     var ids = {};
@@ -1288,7 +1289,7 @@
       if (r.error) { throw new Error(r.error.message); }
       S.release = row;
       var graded = S.sheets.filter(function (s) { return s.status === 'graded'; });
-      return writeSnapshots(graded, mode === 'questions').then(function () { return graded.length; });
+      return writeSnapshots(graded, mode !== 'score').then(function () { return graded.length; });
     }).then(function (n) {
       return loadReviewData().then(function () { renderResultsBody(); say('swResMsg', 'Released to ' + n + ' student' + (n === 1 ? '' : 's') + ' (' + mode + ' mode).', 'ok'); });
     }).catch(function (err) { if (el('swRelSave')) { el('swRelSave').disabled = false; } say('swResMsg', err.message || String(err), 'err'); });
