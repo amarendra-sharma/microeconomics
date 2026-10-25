@@ -64,9 +64,11 @@ function loadKatex() {
 
 function init() {
   const st = () => (typeof window.State !== 'undefined' ? window.State : null);
+  let picked = null;
   const activeCourse = () => {
     const s = st(); if (!s || !s.user) return null;
     const staff = s.role === 'instructor' || s.role === 'professor' || s.role === 'admin' || !!s.isTA;
+    if (!staff && picked && CONFIG.courseIds.indexOf(picked) >= 0) return picked;   // the student chose another of their AI-enabled courses
     return (staff ? [s.teachCourseId, s.payCourseId, s.currentCourseId] : [s.payCourseId, s.currentCourseId]).find((id) => id && CONFIG.courseIds.indexOf(id) >= 0) || null;
   };
   const ready = () => !!(window.sb && activeCourse());
@@ -80,13 +82,14 @@ function init() {
   const reviewBtn = el('button', null, 'Graded-work review'); reviewBtn.type = 'button'; reviewBtn.hidden = true; reviewBtn.title = 'Allow or stop the AI instructor from reviewing your own closed graded work, or ask for a meeting';
   const talkBtn = el('button', null, 'Talk'); talkBtn.type = 'button'; talkBtn.hidden = true; talkBtn.title = 'Speak with the animated AI instructor (voice)';
   head.append(talkBtn, reviewBtn, endBtn, closeBtn);
+  const courseSel = el('select', 'aiw-sel'); courseSel.setAttribute('aria-label', 'Course'); courseSel.hidden = true; courseSel.title = 'Which of your courses the AI instructor is helping with';
   const note = el('div', 'aiw-note', 'AI-generated and can be wrong; check it against your textbook. Practice here is ungraded and never affects your grade.');
   const mode = el('select', 'aiw-sel'); mode.setAttribute('aria-label', 'Teaching mode'); mode.appendChild(Object.assign(el('option', null, 'Ask anything'), { value: '' }));
   const msgs = el('div', 'aiw-msgs'); msgs.setAttribute('role', 'log'); msgs.setAttribute('aria-live', 'polite'); msgs.tabIndex = 0;
   const row = el('div', 'aiw-row'); const input = el('textarea', 'aiw-in'); input.rows = 1; input.maxLength = 2000; input.setAttribute('aria-label', 'Your question'); input.placeholder = 'Type your question';
   const send = el('button', 'aiw-send', 'Send'); send.type = 'button'; row.append(input, send);
   const rv = el('div', 'aiw-review'); rv.hidden = true; rv.setAttribute('aria-label', 'Graded-work review');
-  panel.append(head, note, mode, msgs, rv, row); document.body.append(btn, panel);
+  panel.append(head, courseSel, note, mode, msgs, rv, row); document.body.append(btn, panel);
 
   let backend = null, courseId = null, busy = false, abort = null, katexReady = false;
   const say = (cls, text) => { const m = el('div', 'aiw-m ' + cls, text); msgs.appendChild(m); msgs.scrollTop = msgs.scrollHeight; return m; };
@@ -202,9 +205,33 @@ function init() {
     await loadReview(); renderReview(); const h = rv.querySelector('h3'); if (h) { h.tabIndex = -1; h.focus(); }
   }
   function closeReview() { panel.classList.remove('aiw-reviewing'); rv.hidden = true; input.focus(); }
+
+  // A student enrolled in more than one AI-enabled course picks which one Asha is working in (the portal itself follows one course).
+  let coursesLoaded = false;
+  async function loadCourseChoices() {
+    if (coursesLoaded) return; const s = st();
+    if (!s || !s.user || !window.sb || s.role === 'instructor' || s.role === 'professor' || s.role === 'admin' || s.isTA) return;
+    coursesLoaded = true;
+    try {
+      const en = await window.sb.from('im_enrollment').select('course_id').eq('student_id', s.user.id).eq('status', 'active');
+      const ids = ((en && en.data) || []).map((r) => r.course_id).filter((id) => CONFIG.courseIds.indexOf(id) >= 0);
+      if (ids.length < 2) return;
+      const cr = await window.sb.from('im_course').select('id,title').in('id', ids);
+      const title = {}; ((cr && cr.data) || []).forEach((c) => { title[c.id] = c.title; });
+      courseSel.textContent = '';
+      ids.forEach((id) => courseSel.appendChild(Object.assign(el('option', null, title[id] || 'Course'), { value: id })));
+      courseSel.value = activeCourse() && ids.indexOf(activeCourse()) >= 0 ? activeCourse() : ids[0];
+      courseSel.hidden = false;
+    } catch (_) { coursesLoaded = false; }
+  }
+  courseSel.addEventListener('change', () => {
+    if (abort && busy) abort.abort();
+    picked = courseSel.value; backend = null; msgs.textContent = ''; reviewStatus = null; reviewBtn.hidden = true; closeReview(); if (talk) talk.close();
+    ensureBackend(); loadReview();
+  });
   reviewBtn.onclick = openReview;
   function close() { closeReview(); panel.hidden = true; btn.hidden = !ready(); btn.focus(); }
-  btn.onclick = () => { panel.hidden = false; btn.hidden = true; input.focus(); loadReview(); };
+  btn.onclick = () => { panel.hidden = false; btn.hidden = true; input.focus(); loadCourseChoices().then(loadReview); };
   closeBtn.onclick = close;
   send.onclick = ask;
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
