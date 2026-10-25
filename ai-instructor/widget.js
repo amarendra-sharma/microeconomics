@@ -135,7 +135,7 @@ function init() {
       turnDone: () => { if (bubble && !bubble.textContent.trim() && !bubble.querySelector('.ai-visual')) bubble.remove(); bubble = null; current = null; },
     };
     try {
-      const m = await import('./talk/talk.js?v=20261024a');
+      const m = await import('./talk/talk.js?v=20261025a');
       let beats = 0, keep = null;
       talk = m.openTalk({ backend, getMode: () => mode.value || undefined, baseUrl: CONFIG.talkBase, hooks, onClose: () => { talk = null; current = null; if (keep) clearInterval(keep); talkBtn.focus(); } });
       backend.warm();                                                       // pre-load the course prompt now, so the first question is answered quickly
