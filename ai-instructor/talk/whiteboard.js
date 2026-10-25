@@ -3,6 +3,7 @@
 // then each marked point. Every string is escaped and every number re-checked here; the model never supplies markup.
 import { buildFigure } from '../figure-render.js?v=20261021a';
 import { buildScan } from '../scan-render.js?v=20261021c';
+import { buildMissed } from '../missed-render.js?v=20261024a';
 var CSS = [
 '.mnai-board{order:1;display:flex;flex-direction:column;min-width:0;background:#15302c;color:#f3f1e7;border:7px solid #7b5b3a;border-radius:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.45),0 6px 20px rgba(0,0,0,.4);padding:8px 10px 10px}',
 '.mnai-board[hidden]{display:none}',
@@ -135,6 +136,9 @@ Whiteboard.prototype.add = function (spec, katex, baseline) {
   } else if (spec && spec.kind === 'scan') {
     // The student's own graded sheet: shown at once (it is not a step-by-step drawing) and kept until the next question.
     var sc = buildScan(spec, d, (d.defaultView || window).sb); if (sc) { sc.classList.add('wb-scan'); this.body.appendChild(sc); ok = true; }
+  } else if (spec && spec.kind === 'missed') {
+    // The questions the student missed on their own graded exam: shown at once, kept until the next question.
+    var ms = buildMissed(spec, d); if (ms) { ms.classList.add('wb-scan'); this.body.appendChild(ms); ok = true; }
   } else if (spec && spec.kind === 'equation' && typeof spec.tex === 'string' && spec.tex.length <= 300) {
     var box = d.createElement('div'); box.className = 'wb-eq';
     try { if (!katex) throw new Error('no katex'); katex.render(spec.tex, box, { trust: false, throwOnError: true, displayMode: true, strict: 'error', maxSize: 20, maxExpand: 200 }); } catch (e) { box.textContent = spec.tex; }

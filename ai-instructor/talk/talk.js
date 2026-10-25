@@ -8,7 +8,7 @@ import { createInstructor, InstructorStateMachine } from './index.js?v=20261021a
 import { createVoice } from './voice/index.js?v=20261021a';
 import { LocalVoiceAudio, LocalTtsStandIn } from './local-voice.js?v=20261021a';
 import { InstructorAudio } from './audio.js?v=20261021a';
-import { Whiteboard } from './whiteboard.js?v=20261021c';
+import { Whiteboard } from './whiteboard.js?v=20261024a';
 
 var CSS = [
 '.mnai-talk{position:fixed;inset:0;z-index:99995;background:rgba(5,10,18,.86);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:12px}',
