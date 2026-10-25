@@ -68,7 +68,7 @@ export function cleanMissed(spec) {
       earned: m && fin(m.earned) ? m.earned : null, points: m && fin(m.points) ? m.points : null
     };
   });
-  return { title: str(spec.title, 120), score: fin(spec.score) ? spec.score : null, max: fin(spec.max_score) ? spec.max_score : null, total: fin(spec.total_questions) ? spec.total_questions : null, items: items };
+  return { title: str(spec.title, 120), score: fin(spec.score) ? spec.score : null, max: fin(spec.max_score) ? spec.max_score : null, total: fin(spec.total_questions) ? spec.total_questions : null, index: fin(spec.index) ? spec.index : null, count: fin(spec.count) ? spec.count : null, items: items };
 }
 
 /** Builds the card list. Returns the element or null. */
@@ -80,7 +80,7 @@ export function buildMissed(spec, doc) {
   if (s.score !== null && s.max !== null) { var sc = doc.createElement('span'); sc.textContent = s.score + ' / ' + s.max; h.appendChild(sc); }
   root.appendChild(h);
   var sub = doc.createElement('div'); sub.className = 'mnai-missed-sub';
-  sub.textContent = 'Questions to go over: ' + s.items.length + (s.total ? ' of ' + s.total : ''); root.appendChild(sub);
+  sub.textContent = s.index && s.count ? 'Missed question ' + s.index + ' of ' + s.count : 'Questions to go over: ' + s.items.length + (s.total ? ' of ' + s.total : ''); root.appendChild(sub);
   s.items.forEach(function (m) {
     var card = doc.createElement('div'); card.className = 'mnai-missed-q';
     var n = doc.createElement('b'); n.className = 'n'; n.textContent = 'Question ' + m.q + (m.earned !== null && m.points !== null ? ' — ' + m.earned + ' of ' + m.points + ' points' : ''); card.appendChild(n);

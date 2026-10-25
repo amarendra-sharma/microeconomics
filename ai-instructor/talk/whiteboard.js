@@ -3,7 +3,7 @@
 // then each marked point. Every string is escaped and every number re-checked here; the model never supplies markup.
 import { buildFigure } from '../figure-render.js?v=20261021a';
 import { buildScan } from '../scan-render.js?v=20261021c';
-import { buildMissed } from '../missed-render.js?v=20261025c';
+import { buildMissed } from '../missed-render.js?v=20261025d';
 var CSS = [
 '.mnai-board{order:1;display:flex;flex-direction:column;min-width:0;background:#15302c;color:#f3f1e7;border:7px solid #7b5b3a;border-radius:12px;box-shadow:inset 0 0 40px rgba(0,0,0,.45),0 6px 20px rgba(0,0,0,.4);padding:8px 10px 10px}',
 '.mnai-board[hidden]{display:none}',

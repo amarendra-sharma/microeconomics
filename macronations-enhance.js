@@ -273,7 +273,7 @@
     window.AI_INSTRUCTOR_CONFIG = { supabaseUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co', functionUrl: fn };
     window.AI_INSTRUCTOR_WIDGET = { courseIds: test, talkCourseIds: test, functionUrl: fn };
     ['widget.js', 'teach-panel.js'].forEach(function (f) {
-      var s = document.createElement('script'); s.type = 'module'; s.src = 'ai-instructor/' + f + '?v=20261025c'; document.head.appendChild(s);
+      var s = document.createElement('script'); s.type = 'module'; s.src = 'ai-instructor/' + f + '?v=20261025d'; document.head.appendChild(s);
     });
   } catch (e) {}
 })();

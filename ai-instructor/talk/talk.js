@@ -8,7 +8,7 @@ import { createInstructor, InstructorStateMachine } from './index.js?v=20261021a
 import { createVoice } from './voice/index.js?v=20261021a';
 import { LocalVoiceAudio, LocalTtsStandIn } from './local-voice.js?v=20261021a';
 import { InstructorAudio } from './audio.js?v=20261021a';
-import { Whiteboard } from './whiteboard.js?v=20261025c';
+import { Whiteboard } from './whiteboard.js?v=20261025d';
 
 var CSS = [
 '.mnai-talk{position:fixed;inset:0;z-index:99995;background:rgba(5,10,18,.86);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:12px}',
@@ -63,15 +63,15 @@ export function openTalk(o) {
     dispose: function () { if (piper) piper.dispose(); }
   };
   // Short acknowledgments, synthesized once when the natural voice is ready, played the instant a question is asked.
-  var ackWavs = { general: [], board: [] }, ackN = 0;
+  var ackWavs = { general: [], board: [], go: [] }, ackN = 0;
   function prepAcks() {
-    [['general', 'Okay, let me explain.'], ['general', 'Okay, let me think about that.'], ['general', 'Sure, one moment.'], ['board', 'Sure, let me put that on the board.'], ['board', 'Okay, let me draw that for you.']].reduce(function (p, x) {
+    [['general', 'Okay, let me explain.'], ['general', 'Okay, let me think about that.'], ['general', 'Sure, one moment.'], ['board', 'Sure, let me put that on the board.'], ['board', 'Okay, let me draw that for you.'], ['go', 'Okay.'], ['go', 'Alright.'], ['go', 'Sure.']].reduce(function (p, x) {
       return p.then(function () { if (closed) return null; return naturalTts.synthesize(x[1]); }).then(function (w) { if (w) ackWavs[x[0]].push(w); }, function () { /* optional */ });
     }, Promise.resolve());
   }
   function pickAck(text) {
-    // A plain "yes" / "ok" / "next" is a reply, not a question: no acknowledgment, the answer starts straight away.
-    if ((text || '').length <= 28 && /^\s*(yes|yeah|yep|yup|sure|ok|okay|got it|makes sense|clear|understood|next|go on|continue|go ahead|please|right|alright|thanks|thank you|i see)\b[\s.,!a-z]{0,24}$/i.test(text || '')) return null;
+    // A plain "yes" / "ok" / "next" is a reply, not a question: a one-word acknowledgment right away (so the student knows it was heard), never "Good question".
+    if ((text || '').length <= 28 && /^\s*(yes|yeah|yep|yup|sure|ok|okay|got it|makes sense|clear|understood|next|go on|continue|go ahead|please|right|alright|thanks|thank you|i see)\b[\s.,!a-z]{0,24}$/i.test(text || '')) { return ackWavs.go.length ? ackWavs.go[(ackN++) % ackWavs.go.length] : null; }
     var set = /\b(graph|draw|curve|curves|diagram|plot|illustrate|show me|picture|shift|shifts)\b/i.test(text || '') ? ackWavs.board : ackWavs.general;
     if (!set.length) set = ackWavs.general.length ? ackWavs.general : ackWavs.board; if (!set.length) return null;
     return set[(ackN++) % set.length];
