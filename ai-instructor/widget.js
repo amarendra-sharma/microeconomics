@@ -6,7 +6,7 @@
 // Graded-work review: when the course owner has turned it on, a "Graded-work review" button opens a screen where the STUDENT allows or withdraws permission for the AI to read
 // their own closed work (the model has no way to do this), or asks the TA or professor for a meeting instead.
 import { AiInstructorBackend, BackendError } from './backend-client.js?v=20261021a';
-import { mountVisual } from './graph-render.js?v=20261024a';
+import { mountVisual } from './graph-render.js?v=20261025c';
 
 const CONFIG = Object.assign({
   courseIds: ['2d6832cf-28bf-4b5a-a351-56f3a1aa2252', 'c13c165d-4ae6-4359-82a8-bac7e8323be0'],      // ECON 436 (Fall 2026), Test Course 2026
@@ -138,7 +138,7 @@ function init() {
       turnDone: () => { if (bubble && !bubble.textContent.trim() && !bubble.querySelector('.ai-visual')) bubble.remove(); bubble = null; current = null; },
     };
     try {
-      const m = await import('./talk/talk.js?v=20261025a');
+      const m = await import('./talk/talk.js?v=20261025c');
       let beats = 0, keep = null;
       talk = m.openTalk({ backend, getMode: () => mode.value || undefined, baseUrl: CONFIG.talkBase, hooks, onClose: () => { talk = null; current = null; if (keep) clearInterval(keep); talkBtn.focus(); } });
       backend.warm();                                                       // pre-load the course prompt now, so the first question is answered quickly

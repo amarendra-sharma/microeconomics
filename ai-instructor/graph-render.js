@@ -3,7 +3,7 @@
 // event handlers. KaTeX is vendored in web/vendor/katex and is called with trust:false, so \href, \url, \includegraphics etc. are inert.
 import { buildFigure } from './figure-render.js?v=20261021a';
 import { buildScan } from './scan-render.js?v=20261021c';
-import { buildMissed } from './missed-render.js?v=20261024a';
+import { buildMissed } from './missed-render.js?v=20261025c';
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fin = (v) => typeof v === 'number' && isFinite(v) && Math.abs(v) <= 1e6;
 const COLORS = ['#1f5fbf', '#c2410c', '#15803d', '#7e22ce', '#b45309', '#0e7490'];

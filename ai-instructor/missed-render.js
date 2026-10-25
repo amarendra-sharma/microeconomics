@@ -20,12 +20,49 @@ var fin = function (v) { return typeof v === 'number' && isFinite(v) && Math.abs
 var str = function (v, n) { return String(v == null ? '' : v).replace(/[\u0000-\u0008\u000b-\u001f]/g, ' ').slice(0, n); };
 var norm = function (s) { return String(s || '').trim().toLowerCase(); };
 
+
+// ---- the question's own graph: an SVG string from the server, rebuilt element by element from a short allow-list (no scripts, links, styles or images) ----
+var SVG_NS = 'http://www.w3.org/2000/svg';
+var OK_TAGS = { svg: 1, g: 1, line: 1, path: 1, rect: 1, circle: 1, ellipse: 1, polygon: 1, polyline: 1, text: 1, tspan: 1, title: 1, defs: 1, marker: 1 };
+var OK_ATTRS = { x: 1, y: 1, x1: 1, x2: 1, y1: 1, y2: 1, cx: 1, cy: 1, r: 1, rx: 1, ry: 1, dx: 1, dy: 1, width: 1, height: 1, points: 1, d: 1, transform: 1, fill: 1, stroke: 1, 'stroke-width': 1, 'stroke-dasharray': 1, 'stroke-linecap': 1, 'stroke-linejoin': 1, opacity: 1, 'fill-opacity': 1, 'stroke-opacity': 1, 'font-family': 1, 'font-size': 1, 'font-weight': 1, 'font-style': 1, 'text-anchor': 1, 'dominant-baseline': 1, id: 1, markerWidth: 1, markerHeight: 1, refX: 1, refY: 1, orient: 1, markerUnits: 1, viewBox: 1 };
+function copyNode(src, doc, depth, budget) {
+  if (depth > 12 || budget.n++ > 1500) return null;
+  if (src.nodeType === 3) return doc.createTextNode(String(src.nodeValue || '').slice(0, 200));
+  if (src.nodeType !== 1) return null;
+  var tag = String(src.localName || '').toLowerCase();
+  if (!OK_TAGS[tag]) return null;
+  var out = doc.createElementNS(SVG_NS, tag);
+  for (var i = 0; i < src.attributes.length; i++) {
+    var a = src.attributes[i], name = a.name;
+    if (!OK_ATTRS[name]) continue;
+    var v = String(a.value || '');
+    if (v.length > 4000 || /url\s*\(|javascript:|expression|<|&#/i.test(v)) { if (name === 'fill' || name === 'stroke') { if (!/^url\(#[\w-]+\)$/.test(v)) continue; } else continue; }
+    out.setAttribute(name, v);
+  }
+  for (var c = src.firstChild; c; c = c.nextSibling) { var k = copyNode(c, doc, depth + 1, budget); if (k) out.appendChild(k); }
+  return out;
+}
+export function safeSvg(text, doc) {
+  try {
+    if (typeof text !== 'string' || text.length > 30000 || text.indexOf('<svg') !== 0) return null;
+    var win = doc.defaultView || window, parsed = new win.DOMParser().parseFromString(text, 'image/svg+xml');
+    var root = parsed && parsed.documentElement;
+    if (!root || String(root.localName).toLowerCase() !== 'svg' || parsed.getElementsByTagName('parsererror').length) return null;
+    var out = copyNode(root, doc, 0, { n: 0 });
+    if (!out) return null;
+    out.removeAttribute('width'); out.removeAttribute('height');
+    out.setAttribute('style', 'width:100%;max-width:430px;height:auto;display:block;background:#fff;border:1px solid #d5dbe5;border-radius:6px');
+    out.setAttribute('role', 'img'); out.setAttribute('aria-label', 'Graph for this question');
+    return out;
+  } catch (e) { return null; }
+}
+
 /** Checks a "missed" spec from the server; returns a clean copy or null. */
 export function cleanMissed(spec) {
   if (!spec || spec.kind !== 'missed' || !Array.isArray(spec.items) || !spec.items.length) return null;
   var items = spec.items.slice(0, 60).map(function (m) {
     return {
-      q: str(m && m.q, 8), prompt: m && m.prompt ? str(m.prompt, 700) : '', your: str(m && m.your, 160) || 'blank',
+      q: str(m && m.q, 8), figure: m && typeof m.figure === 'string' && m.figure.length <= 30000 ? m.figure : '', prompt: m && m.prompt ? str(m.prompt, 700) : '', your: str(m && m.your, 160) || 'blank',
       options: Array.isArray(m && m.options) ? m.options.slice(0, 8).map(function (o) { return str(o, 160); }) : [],
       correct: m && m.correct != null ? str(m.correct, 160) : '', explanation: m && m.explanation ? str(m.explanation, 700) : '',
       earned: m && fin(m.earned) ? m.earned : null, points: m && fin(m.points) ? m.points : null
@@ -48,6 +85,7 @@ export function buildMissed(spec, doc) {
     var card = doc.createElement('div'); card.className = 'mnai-missed-q';
     var n = doc.createElement('b'); n.className = 'n'; n.textContent = 'Question ' + m.q + (m.earned !== null && m.points !== null ? ' — ' + m.earned + ' of ' + m.points + ' points' : ''); card.appendChild(n);
     if (m.prompt) { var p = doc.createElement('div'); p.className = 'mnai-missed-p'; p.textContent = m.prompt; card.appendChild(p); }
+    if (m.figure) { var fg = safeSvg(m.figure, doc); if (fg) { card.appendChild(fg); } }
     var you = norm(m.your), key = norm(m.correct);
     if (m.options.length) {
       var ul = doc.createElement('ul'); ul.className = 'mnai-missed-o';
