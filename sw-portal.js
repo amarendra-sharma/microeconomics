@@ -492,12 +492,12 @@
 
   /* ---------------------------------------------------------- printing */
   var PRINT_CSS = '@page{size:letter;margin:0.45in}' +
-    'body.sw-print{background:#fff!important;color:#000!important;font-family:Georgia,"Times New Roman",serif;margin:0}' +
+    'body.sw-print{background:#fff!important;color:#000!important;font-family:Georgia,"Times New Roman",serif;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
     '.sw-noprint{font-family:Helvetica,Arial,sans-serif;padding:10px 14px;background:#fffbe6;border-bottom:1px solid #ccc;font-size:14px}' +
     '@media print{.sw-noprint{display:none}}' +
     '.sw-sheet{page-break-before:always;break-before:page}.sw-sheet:first-of-type{page-break-before:auto;break-before:auto}' +
     '.sw-sheet svg{width:7.6in!important;height:auto!important;display:block;margin:0 auto}' +
-    '.sw-book{page-break-before:always;break-before:page;font-size:11pt;line-height:1.38;color:#000}' +
+    '.sw-book{page-break-before:always;break-before:page;font-size:11pt;line-height:1.38;color:#000}.sw-book:first-of-type{page-break-before:auto;break-before:auto}' +
     '.sw-book h1{font-size:15pt;margin:0 0 2px;color:#000}.sw-book .sub{font-size:9.5pt;color:#333;margin-bottom:10px;font-family:Helvetica,Arial,sans-serif}' +
     '.sw-cover{display:flex;gap:18px;align-items:center;border:2px solid #000;padding:10px 14px;margin-bottom:14px}' +
     '.sw-cover .big{font:800 44pt Helvetica,Arial,sans-serif;border:3px solid #000;width:1.1in;height:1.1in;display:flex;align-items:center;justify-content:center}' +
@@ -520,7 +520,17 @@
       Array.prototype.forEach.call(document.querySelectorAll('style'), function (st) { css += st.textContent + '\n'; });
       var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + h(title) + '</title><style>' + css + '</style><style>' + PRINT_CSS + '</style></head>' +
         '<body class="sw-print"><div class="sw-noprint">' + note + ' <button onclick="window.print()">Print</button></div>' + body + '</body></html>';
-      w.document.open(); w.document.write(html); w.document.close();
+      /* Safari prints a document.write()-built about:blank tab as empty pages:
+         it renders on screen and comes out blank in Print / Save as PDF. Giving
+         the tab a real document via a Blob URL prints correctly in every
+         browser; document.write stays as the fallback. */
+      var burl = null;
+      try { burl = URL.createObjectURL(new Blob([html], { type: 'text/html' })); } catch (e1) { burl = null; }
+      if (burl) {
+        try { w.location.replace(burl); } catch (e2) { burl = null; }
+        if (burl) { setTimeout(function () { try { URL.revokeObjectURL(burl); } catch (e3) {} }, 120000); }
+      }
+      if (!burl) { w.document.open(); w.document.write(html); w.document.close(); }
       say('swPrintMsg', 'Print view opened in a new tab.', 'ok');
     }).catch(function (err) { say('swPrintMsg', err.message || String(err), 'err'); try { w.close(); } catch (e2) {} });
   }
@@ -1140,8 +1150,7 @@
   function refreshSnapshots(onlyIds) {
     if (!S.release || !S.release.released_at) { return Promise.resolve(); }
     var list = S.sheets.filter(function (s) { return s.status === 'graded' && (!onlyIds || onlyIds.indexOf(s.id) >= 0); });
-    // Question wording is saved whenever answers or questions are released; the student view hides it unless the mode is 'questions', and the AI instructor uses it to review.
-    return writeSnapshots(list, S.release.mode !== 'score');
+    return writeSnapshots(list, S.release.mode === 'questions');
   }
   function writeSnapshots(list, withQ) {
     var ids = {};
@@ -1289,7 +1298,7 @@
       if (r.error) { throw new Error(r.error.message); }
       S.release = row;
       var graded = S.sheets.filter(function (s) { return s.status === 'graded'; });
-      return writeSnapshots(graded, mode !== 'score').then(function () { return graded.length; });
+      return writeSnapshots(graded, mode === 'questions').then(function () { return graded.length; });
     }).then(function (n) {
       return loadReviewData().then(function () { renderResultsBody(); say('swResMsg', 'Released to ' + n + ' student' + (n === 1 ? '' : 's') + ' (' + mode + ' mode).', 'ok'); });
     }).catch(function (err) { if (el('swRelSave')) { el('swRelSave').disabled = false; } say('swResMsg', err.message || String(err), 'err'); });

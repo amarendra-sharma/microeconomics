@@ -10169,7 +10169,15 @@ function launchCertificate(o) {
   var html = buildCertificateHTML(o);
   var w = window.open('', '_blank');
   if (!w) { alert('Please allow pop-ups to view your certificate.'); return; }
-  w.document.open(); w.document.write(html); w.document.close();
+  /* Safari prints a document.write()-built about:blank tab as empty pages, so the
+     certificate goes to the tab as a Blob URL; document.write is the fallback. */
+  var burl = null;
+  try { burl = URL.createObjectURL(new Blob([html], { type: 'text/html' })); } catch (e1) { burl = null; }
+  if (burl) {
+    try { w.location.replace(burl); } catch (e2) { burl = null; }
+    if (burl) { setTimeout(function () { try { URL.revokeObjectURL(burl); } catch (e3) {} }, 120000); }
+  }
+  if (!burl) { w.document.open(); w.document.write(html); w.document.close(); }
 }
 
 function crestSVG() {
@@ -10238,7 +10246,7 @@ function buildCertificateHTML(o) {
     '.sig .rl{font-family:Helvetica,Arial,sans-serif;font-size:10.5px;letter-spacing:2px;color:#8a94aa;margin-top:6px;}' +
     '.yr{font-family:Helvetica,Arial,sans-serif;font-size:13px;letter-spacing:3px;color:#8a94aa;align-self:center;}' +
     '.printbtn{position:fixed;top:16px;right:16px;z-index:10;background:#1e3a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-family:Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px rgba(30,58,138,.4);}' +
-    '@media print{.printbtn{display:none;}body{background:#fff;padding:0;}.sheet{box-shadow:none;width:100%;height:100%;}}';
+    '@media print{.printbtn{display:none;}body{background:#fff;padding:0;}.sheet{box-shadow:none;width:100%;height:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}';
 
   var h = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Introduction to Microeconomics Certificate</title><style>' + css + '</style></head><body>' +
     '<button class="printbtn" onclick="window.print()">Print / Save as PDF</button>' +
