@@ -162,6 +162,14 @@ async function render(host) {
     const kinds = Array.isArray(s.review_kinds) ? s.review_kinds : ['exams', 'quizzes', 'assignments', 'arenas'];
     [['exams', 'Exams (including paper exams with the graded answer sheet)'], ['quizzes', 'Chapter quizzes'], ['assignments', 'Assignments'], ['arenas', 'Arenas']].forEach(([k, label]) => { kindCbs[k] = check(label); kindCbs[k].cb.checked = kinds.includes(k); cs.appendChild(kindCbs[k].wrap); });
   }
+  let pmon, pmpause;
+  if ('professor_mode' in s) {
+    cs.appendChild(el('h4', { text: 'Asha as professor' }));
+    cs.appendChild(el('div', { style: 'font-size:12.5px;opacity:.85', text: 'Off by default. When on, you can ask Asha in the chat to run the course for you: change exam open and close times, post announcements (up to 3 a day), finalize AI-proposed exam scores, and report results. She never overwrites a grade you have set, students cannot trigger any of this, and every action is logged and can be undone. The pause switch stops her at once.' }));
+    pmon = check('Let Asha act as the professor in this course'); pmon.cb.checked = !!s.professor_mode;
+    pmpause = check('Pause Asha (kill switch: no actions while checked)'); pmpause.cb.checked = !!s.prof_paused;
+    cs.append(pmon.wrap, pmpause.wrap);
+  }
   const ssave = btn('Save settings');
   cs.append(ssave, smsg);
   ssave.onclick = async () => {
@@ -169,6 +177,7 @@ async function render(host) {
       const b = { action: 'set_settings', course_id: cid, enabled: en.cb.checked, retention_days: +ret.value, student_daily_tokens: +tok.value, course_monthly_usd: +usd.value };
       if (hasReview) { b.review_enabled = rven.cb.checked; b.review_show_solutions = rvsol.cb.checked; }
       if (hasScope) { b.scope_mode = scopeCb.cb.checked ? 'course_only' : 'open'; b.use_textbook = textCb.cb.checked; b.review_kinds = Object.keys(kindCbs).filter((k) => kindCbs[k].cb.checked); }
+      if (pmon) { b.professor_mode = pmon.cb.checked; b.prof_paused = pmpause.cb.checked; }
       await call(b); smsg.say('Saved.', 'ok');
     } catch (e) { smsg.say(e.message, 'bad'); }
   };
