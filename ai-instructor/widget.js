@@ -238,6 +238,29 @@ function init() {
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   endBtn.onclick = async () => { if (abort && busy) abort.abort(); if (backend) { try { await backend.endSession(); } catch (_) { /* ignore */ } } backend = null; msgs.textContent = ''; };
 
+  // ---- live class banner: shows while the professor's class is running; joining records attendance and has the instructor teach each section ----------
+  const clsBox = el('div', 'aiw-class'); clsBox.hidden = true; clsBox.style.cssText = 'padding:8px 10px;margin:6px 0;border:1px solid rgba(24,121,78,.5);border-radius:8px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+  const clsText = el('span'); clsText.style.flex = '1'; const clsBtn = el('button', null, 'Join class'); clsBtn.type = 'button'; clsBox.append(clsText, clsBtn); panel.insertBefore(clsBox, msgs);
+  let joined = false, lastStep = null, lastClass = null, clsBusy = false;
+  const secTitle = (c) => (c && typeof c === 'object' ? c.title : c) || '';
+  async function pollClass() {
+    if (clsBusy || !ready() || document.visibilityState !== 'visible') return; clsBusy = true;
+    try {
+      const b = ensureBackend(); const r = await b.call({ action: 'class_status', course_id: courseId, join: joined });
+      if (!r || !r.live || !r.student) { clsBox.hidden = true; joined = false; lastStep = null; lastClass = null; btn.textContent = 'Ask AI Instructor'; return; }
+      if (lastClass !== r.title) { joined = false; lastStep = null; lastClass = r.title; }
+      clsBox.hidden = false; btn.textContent = 'Live class now: join';
+      clsText.textContent = 'Live class: ' + r.title + ' - section ' + (Number(r.step) + 1) + ' of ' + r.sections + (secTitle(r.current) ? ': ' + secTitle(r.current) : '') + (joined ? (r.present ? ' (you are marked present)' : ' (attendance is being recorded)') : '');
+      clsBtn.hidden = joined;
+      if (joined && lastStep !== r.step && !busy) {
+        const first = lastStep === null; lastStep = r.step;
+        input.value = first ? 'I have joined the live class. Please teach the current section now.' : 'The class has moved on. Please teach the next section now: ' + secTitle(r.current) + '.';
+        ask();
+      }
+    } catch (_) { /* class state is optional */ } finally { clsBusy = false; }
+  }
+  clsBtn.onclick = () => { joined = true; lastStep = null; if (panel.hidden) { panel.hidden = false; btn.hidden = true; } pollClass(); };
+  setInterval(pollClass, 45000); setTimeout(pollClass, 4000);
   setInterval(() => {   // follow the page: show only inside an eligible course while signed in; tidy up on sign-out or course change
     const ok = ready();
     if (!ok) { if (!panel.hidden || backend) { panel.hidden = true; if (abort && busy) abort.abort(); backend = null; msgs.textContent = ''; closeReview(); } reviewStatus = null; reviewBtn.hidden = true; talkBtn.hidden = true; if (talk) talk.close(); btn.hidden = true; return; }

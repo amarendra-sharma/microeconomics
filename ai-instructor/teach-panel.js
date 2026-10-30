@@ -181,6 +181,51 @@ async function render(host) {
     take.onclick = () => { Object.keys(apcb).forEach((k) => { apcb[k].cb.checked = true; }); if (pmon) pmon.cb.checked = true; if (pmpause) pmpause.cb.checked = false; smsg.say('All autopilot jobs ticked. Press Save settings to start.', 'ok'); };
     cs.appendChild(take);
   }
+  if ('professor_mode' in s) {
+    cs.appendChild(el('h4', { text: 'Live class schedule' }));
+    cs.appendChild(el('div', { style: 'font-size:12.5px;opacity:.85', text: 'Asha opens the class at the scheduled time, moves through your sections at an even pace, and closes it at the end. Students see a "Join class" banner in the AI Instructor; joining records attendance (present = joined and stayed at least half the class). Needs Asha as professor switched on above.' }));
+    const sc = el('div', { style: 'display:grid;gap:6px;margin:6px 0' }); cs.appendChild(sc);
+    const smsg2 = msg();
+    const stitle = el('input', { type: 'text', maxlength: 160, placeholder: 'Class title, e.g. Macroeconomics lecture' });
+    const DN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; const dcb = DN.map((d) => { const c = check(d); return c; });
+    const drow = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }); dcb.forEach((c) => drow.appendChild(c.wrap));
+    const stime = el('input', { type: 'time', value: '10:00' }); const smin = el('input', { type: 'number', min: 10, max: 240, value: 75 });
+    const stz = el('input', { type: 'text', value: 'America/New_York', maxlength: 64 });
+    const sout = el('textarea', { rows: 6, maxlength: 3000, placeholder: 'One section per line (up to 20), e.g.\nWhat GDP measures\nNominal vs real GDP\nGDP deflator\nWorked example' });
+    const sauto = check('Start the class automatically at the scheduled time'); sauto.cb.checked = true;
+    sc.append(field('Title', stitle), el('div', { text: 'Days' }), drow, field('Start time', stime), field('Length (minutes)', smin), field('Time zone (IANA name)', stz), field('Sections', sout), sauto.wrap);
+    const ssv = btn('Save class schedule'), sclr = btn('Remove schedule');
+    const sbar = el('div', { style: 'display:flex;gap:8px;margin-top:4px' }); sbar.append(ssv, sclr); cs.append(sbar, smsg2);
+    (async () => { try { const r = await call({ action: 'prof_schedule_get', course_id: cid }); const x = r && r.schedule; if (x) {
+      stitle.value = x.title || ''; (x.days || []).forEach((d) => { if (dcb[d]) dcb[d].cb.checked = true; }); stime.value = String(x.start_local || '10:00').slice(0, 5); smin.value = x.duration_min; stz.value = x.tz || 'America/New_York';
+      sout.value = (x.outline || []).map((o) => (o && o.title) || '').join('\n'); sauto.cb.checked = x.auto !== false; smsg2.say('A schedule is set.', 'ok'); } } catch (e) { /* not available yet */ } })();
+    ssv.onclick = async () => {
+      try {
+        const days = dcb.map((c, i) => (c.cb.checked ? i : -1)).filter((i) => i >= 0);
+        const outline = sout.value.split('\n').map((t) => t.trim()).filter(Boolean);
+        await call({ action: 'prof_schedule_set', course_id: cid, title: stitle.value.trim(), outline, days, start: stime.value, minutes: Math.round(+smin.value), tz: stz.value.trim(), auto: sauto.cb.checked });
+        smsg2.say('Saved. Make sure "Let Asha act as the professor" is on and saved.', 'ok');
+      } catch (e) { smsg2.say(e.message, 'bad'); }
+    };
+    sclr.onclick = async () => { try { await call({ action: 'prof_schedule_clear', course_id: cid }); smsg2.say('Schedule removed.', 'ok'); } catch (e) { smsg2.say(e.message, 'bad'); } };
+
+    cs.appendChild(el('h4', { text: 'Class attendance' }));
+    const att = el('div', { style: 'font-size:13px' }); const abtn = btn('Show attendance'); cs.append(abtn, att);
+    abtn.onclick = async () => {
+      att.textContent = 'Loading...';
+      try {
+        const r = await call({ action: 'prof_attendance', course_id: cid }); att.textContent = '';
+        if (!r.classes.length) { att.textContent = 'No classes yet.'; return; }
+        r.classes.forEach((c) => {
+          const box = el('div', { style: 'margin:8px 0;padding:8px;border:1px solid rgba(128,128,128,.35);border-radius:8px' });
+          box.appendChild(el('div', { style: 'font-weight:600', text: c.title + ' - ' + new Date(c.started_at).toLocaleString() + (c.status === 'live' ? ' (live now)' : '') }));
+          box.appendChild(el('div', { text: c.present + ' present, ' + c.joined + ' joined of ' + r.enrolled + ' enrolled; ' + c.questions + ' question(s) asked' }));
+          if (c.students && c.students.length) box.appendChild(el('div', { style: 'opacity:.85;margin-top:4px', text: c.students.map((x) => x.name + ' ' + x.minutes + ' min' + (x.present ? '' : ' (not present)')).join('; ') }));
+          att.appendChild(box);
+        });
+      } catch (e) { att.textContent = e.message; }
+    };
+  }
   const ssave = btn('Save settings');
   cs.append(ssave, smsg);
   ssave.onclick = async () => {
