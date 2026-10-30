@@ -170,6 +170,17 @@ async function render(host) {
     pmpause = check('Pause Asha (kill switch: no actions while checked)'); pmpause.cb.checked = !!s.prof_paused;
     cs.append(pmon.wrap, pmpause.wrap);
   }
+  let ap, apcb = {}, apnum = {};
+  if (s.autopilot && typeof s.autopilot === 'object') {
+    ap = s.autopilot;
+    cs.appendChild(el('h4', { text: 'Autopilot: let Asha run the course while you are away' }));
+    cs.appendChild(el('div', { style: 'font-size:12.5px;opacity:.85', text: 'Needs "Let Asha act as the professor" above. Asha checks every few minutes and does only the jobs you tick. Everything she does appears in "What Asha did" with an Undo button, and the Pause box stops it all. Final course grades are never changed automatically.' }));
+    [['remind', 'Post reminders before exams, assignments and quizzes close'], ['finalize_exams', 'Finalize AI-graded exam scores after an exam closes'], ['grade_assignments', 'Grade written assignments after the due date (Asha proposes a score and feedback, then releases them)'], ['answer_questions', 'Answer student questions she is confident about (the rest wait for you)']].forEach(([k, label]) => { apcb[k] = check(label); apcb[k].cb.checked = ap[k] === true; cs.appendChild(apcb[k].wrap); });
+    [['remind_hours', 'Remind this many hours before a deadline', 1, 168], ['finalize_delay_min', 'Wait this many minutes after an exam closes before finalizing', 0, 10080], ['grade_delay_min', 'Wait this many minutes after the due date before grading', 0, 10080]].forEach(([k, label, lo, hi]) => { apnum[k] = el('input', { type: 'number', min: lo, max: hi, value: ap[k] }); cs.appendChild(field(label, apnum[k])); });
+    const take = btn('Turn everything on (take over the course)');
+    take.onclick = () => { Object.keys(apcb).forEach((k) => { apcb[k].cb.checked = true; }); if (pmon) pmon.cb.checked = true; if (pmpause) pmpause.cb.checked = false; smsg.say('All autopilot jobs ticked. Press Save settings to start.', 'ok'); };
+    cs.appendChild(take);
+  }
   const ssave = btn('Save settings');
   cs.append(ssave, smsg);
   ssave.onclick = async () => {
@@ -178,6 +189,7 @@ async function render(host) {
       if (hasReview) { b.review_enabled = rven.cb.checked; b.review_show_solutions = rvsol.cb.checked; }
       if (hasScope) { b.scope_mode = scopeCb.cb.checked ? 'course_only' : 'open'; b.use_textbook = textCb.cb.checked; b.review_kinds = Object.keys(kindCbs).filter((k) => kindCbs[k].cb.checked); }
       if (pmon) { b.professor_mode = pmon.cb.checked; b.prof_paused = pmpause.cb.checked; }
+      if (ap) { b.autopilot = {}; Object.keys(apcb).forEach((k) => { b.autopilot[k] = apcb[k].cb.checked; }); Object.keys(apnum).forEach((k) => { b.autopilot[k] = Math.round(+apnum[k].value) || 0; }); }
       await call(b); smsg.say('Saved.', 'ok');
     } catch (e) { smsg.say(e.message, 'bad'); }
   };
