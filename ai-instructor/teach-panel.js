@@ -207,6 +207,33 @@ async function render(host) {
     };
     load();
   }
+  // ---- Asha as professor: what she did, with undo (shown only where professor mode exists) ----
+  if ('professor_mode' in s) {
+    const pc = el('div', { class: 'card' });
+    pc.appendChild(el('h3', { text: 'What Asha did (professor mode)' }));
+    pc.appendChild(el('div', { style: 'font-size:12.5px;opacity:.85', text: 'Every action she takes for you, newest first. Undo restores the earlier value. Grade changes are held one hour before they apply; undo within that hour cancels them.' }));
+    const plist = el('div'), pmsg = msg(), rbtn = btn('Refresh', true); pc.append(rbtn, plist, pmsg); host.appendChild(pc);
+    const LABEL = { exam_window: 'Changed an exam window', announce: 'Posted an announcement', finalize: 'Finalized exam scores', assignment_create: 'Created an assignment', assignment_update: 'Changed an assignment', deadline: 'Set a closing time', feedback_propose: 'Proposed assignment feedback', feedback_finalize: 'Finalized assignment grades', grade_override_queued: 'Queued a grade change (on hold)', grade_override: 'Applied a grade change', answer_question: 'Answered a student question', class_start: 'Started a live class', class_step: 'Moved the live class', class_end: 'Ended the live class', standing_set: 'Changed a standing instruction' };
+    const loadLog = async () => {
+      plist.textContent = '';
+      try {
+        const j = await call({ action: 'prof_log', course_id: cid });
+        if (my !== token) return;
+        const as = j.actions || [];
+        if (!as.length) { plist.textContent = 'Nothing yet.'; return; }
+        as.forEach((a) => {
+          const row = el('p', { text: new Date(a.at).toLocaleString() + ' – ' + (LABEL[a.action] || a.action) + (a.params && a.params.title ? ': ' + a.params.title : '') + (a.trigger && a.trigger !== 'professor' ? ' (' + a.trigger + ')' : '') + (a.status === 'undone' ? ' – undone' : '') + ' ' });
+          if (a.status === 'done' && a.action !== 'class_end') {
+            const b = btn('Undo', true);
+            b.onclick = async () => { b.disabled = true; try { await call({ action: 'prof_undo', course_id: cid, action_id: a.id }); loadLog(); } catch (e) { pmsg.say(e.message, 'bad'); b.disabled = false; } };
+            row.appendChild(b);
+          }
+          plist.appendChild(row);
+        });
+      } catch (e) { pmsg.say(e.message, 'bad'); }
+    };
+    rbtn.onclick = loadLog; loadLog();
+  }
   refresh();
 }
 
