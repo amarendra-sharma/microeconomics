@@ -115,7 +115,7 @@ function init() {
     if (!ready()) { say('aiw-err', 'Please sign in to the course first.'); return; }
     if (!backend || courseId !== activeCourse()) makeBackend();
     input.value = ''; busy = true; send.disabled = true; abort = new AbortController();
-    say('aiw-u', text); const bubble = say('aiw-a', ''); current = bubble;
+    say('aiw-u', text.indexOf('[CLASS-SECTION]') === 0 ? 'Live class: next section' : text); const bubble = say('aiw-a', ''); current = bubble;
     const stop = el('button', null, 'Stop'); stop.type = 'button'; stop.style.cssText = 'margin-left:8px;font-size:12px'; head.insertBefore(stop, endBtn); stop.onclick = () => abort.abort();
     try {
       for await (const chunk of backend.respond({ text, inputMode: 'text', mode: mode.value || undefined, signal: abort.signal })) { bubble.insertBefore(document.createTextNode(chunk), bubble.querySelector('.ai-visual')); msgs.scrollTop = msgs.scrollHeight; }
@@ -133,7 +133,7 @@ function init() {
     ensureBackend(); talkBtn.disabled = true;
     let bubble = null;
     const hooks = {
-      studentSaid: (text) => { say('aiw-u', text); bubble = say('aiw-a', ''); current = bubble; },
+      studentSaid: (text) => { say('aiw-u', String(text).indexOf('[CLASS-SECTION]') === 0 ? 'Live class: next section' : text); bubble = say('aiw-a', ''); current = bubble; },
       assistantDelta: (d) => { if (bubble) { bubble.insertBefore(document.createTextNode(d), bubble.querySelector('.ai-visual')); msgs.scrollTop = msgs.scrollHeight; } },
       turnDone: () => { if (bubble && !bubble.textContent.trim() && !bubble.querySelector('.ai-visual')) bubble.remove(); bubble = null; current = null; },
     };
@@ -141,6 +141,7 @@ function init() {
       const m = await import('./talk/talk.js?v=20261025d');
       let beats = 0, keep = null;
       talk = m.openTalk({ backend, getMode: () => mode.value || undefined, baseUrl: CONFIG.talkBase, hooks, onClose: () => { talk = null; current = null; if (keep) clearInterval(keep); talkBtn.focus(); } });
+      if (!clsBox.hidden) { joined = true; lastStep = null; setTimeout(pollClass, 1500); }   // opening Talk during a live class means attending it by voice
       backend.warm();                                                       // pre-load the course prompt now, so the first question is answered quickly
       keep = setInterval(() => { if (document.visibilityState === 'visible' && ++beats <= 8) backend.warm(); }, 240000);   // the model's short-term memory lasts 5 minutes; refresh it while Talk is open
     } catch (e) { say('aiw-err', 'Talk mode could not start on this device. You can keep using the text chat.'); }
@@ -252,15 +253,15 @@ function init() {
       clsBox.hidden = false; btn.textContent = 'Live class now: join';
       clsText.textContent = 'Live class: ' + r.title + ' - section ' + (Number(r.step) + 1) + ' of ' + r.sections + (secTitle(r.current) ? ': ' + secTitle(r.current) : '') + (joined ? (r.present ? ' (you are marked present)' : ' (attendance is being recorded)') : '');
       clsBtn.hidden = joined;
-      if (joined && lastStep !== r.step && !busy) {
+      if (joined && lastStep !== r.step && !busy && !current) {   // wait until the instructor has finished speaking or writing the previous part
         const first = lastStep === null; lastStep = r.step;
-        input.value = first ? 'I have joined the live class. Please teach the current section now.' : 'The class has moved on. Please teach the next section now: ' + secTitle(r.current) + '.';
-        ask();
+        const cue = '[CLASS-SECTION] ' + (first ? 'The student has joined the class. Teach the current section: ' : 'The class has moved on to the next section: ') + secTitle(r.current) + '.';
+        if (talk) { talk.getVoice().then((v) => v.submitText(cue)).catch(() => { lastStep = null; }); } else { input.value = cue; ask(); }
       }
     } catch (_) { /* class state is optional */ } finally { clsBusy = false; }
   }
   clsBtn.onclick = () => { joined = true; lastStep = null; if (panel.hidden) { panel.hidden = false; btn.hidden = true; } pollClass(); };
-  setInterval(pollClass, 45000); setTimeout(pollClass, 4000);
+  setInterval(pollClass, 20000); setTimeout(pollClass, 4000);
   setInterval(() => {   // follow the page: show only inside an eligible course while signed in; tidy up on sign-out or course change
     const ok = ready();
     if (!ok) { if (!panel.hidden || backend) { panel.hidden = true; if (abort && busy) abort.abort(); backend = null; msgs.textContent = ''; closeReview(); } reviewStatus = null; reviewBtn.hidden = true; talkBtn.hidden = true; if (talk) talk.close(); btn.hidden = true; return; }
