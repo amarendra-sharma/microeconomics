@@ -213,10 +213,10 @@ function init() {
     if (!s || !s.user || !window.sb || s.role === 'instructor' || s.role === 'professor' || s.role === 'admin' || s.isTA) return;
     coursesLoaded = true;
     try {
-      const en = await window.sb.from('im_enrollment').select('course_id').eq('student_id', s.user.id).eq('status', 'active');
+      const en = await window.sb.from(CONFIG.enrollTable || 'im_enrollment').select('course_id').eq('student_id', s.user.id).eq('status', 'active');
       const ids = ((en && en.data) || []).map((r) => r.course_id).filter((id) => CONFIG.courseIds.indexOf(id) >= 0);
       if (ids.length < 2) return;
-      const cr = await window.sb.from('im_course').select('id,title').in('id', ids);
+      const cr = await window.sb.from(CONFIG.courseTable || 'im_course').select('id,title').in('id', ids);
       const title = {}; ((cr && cr.data) || []).forEach((c) => { title[c.id] = c.title; });
       courseSel.textContent = '';
       ids.forEach((id) => courseSel.appendChild(Object.assign(el('option', null, title[id] || 'Course'), { value: id })));
