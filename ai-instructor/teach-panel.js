@@ -182,6 +182,32 @@ async function render(host) {
     cs.appendChild(take);
   }
   if ('professor_mode' in s) {
+    cs.appendChild(el('h4', { text: 'Syllabus and lecture plan' }));
+    const tbox = el('div', { style: 'font-size:12.5px;margin:6px 0', text: 'Loading...' }); cs.appendChild(tbox);
+    (async () => { try {
+      const r = await call({ action: 'prof_term_get', course_id: cid }); tbox.textContent = '';
+      const sy = r && r.syllabus;
+      if (!sy) { tbox.textContent = 'No syllabus yet. Ask Asha to create one (she saves it with the term plan).'; return; }
+      tbox.appendChild(el('div', { style: 'font-weight:600;font-size:13.5px', text: sy.title || 'Syllabus' }));
+      const fmt = (d) => { try { return new Date(d).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return String(d); } };
+      const meta = []; if (sy.ends_at) meta.push('Term ends ' + fmt(sy.ends_at)); if (Number(sy.late_pct_per_day) > 0) meta.push('Late work: -' + sy.late_pct_per_day + '% per day, zero after ' + sy.late_max_days + ' days');
+      if (meta.length) tbox.appendChild(el('div', { style: 'opacity:.8;margin:2px 0 6px', text: meta.join('  |  ') }));
+      const det = el('details', {}); det.appendChild(el('summary', { style: 'cursor:pointer', text: 'Read the full syllabus' }));
+      det.appendChild(el('div', { style: 'white-space:pre-wrap;margin-top:6px;max-height:320px;overflow:auto;border:1px solid rgba(128,128,128,.3);border-radius:8px;padding:8px', text: sy.body || '' })); tbox.appendChild(det);
+      const L = (r && r.lectures) || [];
+      tbox.appendChild(el('div', { style: 'margin-top:8px;font-weight:600', text: 'Planned lectures (' + L.length + ')' }));
+      if (L.length) { const lt = el('div', { style: 'max-height:260px;overflow:auto;margin-top:4px' }); L.forEach((x) => lt.appendChild(el('div', { style: 'padding:2px 0;border-bottom:1px solid rgba(128,128,128,.15)', text: x.seq + '. ' + fmt(x.starts_at) + '  -  ' + x.title + '  [' + x.status + ']' }))); tbox.appendChild(lt); }
+    } catch (e) { tbox.textContent = 'Could not load the syllabus.'; } })();
+    cs.appendChild(el('h4', { text: 'Audit log' }));
+    const aud = btn('Download audit log (CSV)'); const amsg = msg();
+    aud.onclick = async () => { try {
+      const r = await call({ action: 'prof_audit_get', course_id: cid }); const rows = (r && r.actions) || [];
+      const q = (v) => '"' + String(v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)).replace(/"/g, '""') + '"';
+      const csv = ['id,time,by,action,target,status,details'].concat(rows.map((a) => [a.id, a.at, a.by, a.action, a.target, a.status, a.params].map(q).join(','))).join('\n');
+      const u = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); const l = document.createElement('a'); l.href = u; l.download = 'asha-audit-log.csv'; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 2000);
+      amsg.say(rows.length + ' actions exported.', 'ok');
+    } catch (e) { amsg.say('Could not export the audit log.', 'bad'); } };
+    cs.append(aud, amsg);
     cs.appendChild(el('h4', { text: 'Live class schedule' }));
     cs.appendChild(el('div', { style: 'font-size:12.5px;opacity:.85', text: 'Asha opens the class at the scheduled time, moves through your sections at an even pace, and closes it at the end. Students see a "Join class" banner in the AI Instructor; joining records attendance (present = joined and stayed at least half the class). Needs Asha as professor switched on above.' }));
     const sc = el('div', { style: 'display:grid;gap:6px;margin:6px 0' }); cs.appendChild(sc);
