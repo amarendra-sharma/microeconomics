@@ -277,3 +277,50 @@
     });
   } catch (e) {}
 })();
+
+/* Page-lifecycle recorder (diagnostics). Keeps a short ring of page events in localStorage so an unexpected reload can be explained.
+   The note is shown only inside the AI-instructor test courses; everywhere else it records silently and shows nothing. */
+(function () {
+  try {
+    if (window.__aiDiag) return; window.__aiDiag = true;
+    var K = 'aiw_diag', ring = [], test = ['6a16dfae-5d8f-4037-b141-3a4c8f08e27a', 'cc9a679a-223c-4e5f-8472-8fff71330014', '96b76b37-b732-4112-b16b-f08447a8eb82'];
+    var prev = null; try { prev = JSON.parse(localStorage.getItem(K) || 'null'); } catch (e) {}
+    function mem() { try { return Math.round(performance.memory.usedJSHeapSize / 1048576) + 'MB'; } catch (e) { return ''; } }
+    function save(hb) { try { localStorage.setItem(K, JSON.stringify({ ring: ring, hb: hb || Date.now(), mem: mem() })); } catch (e) {} }
+    function log(t, d) { ring.push({ t: Date.now(), e: t, d: String(d == null ? '' : d).slice(0, 160) }); if (ring.length > 30) ring.shift(); save(); }
+    var nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+    log('load', (nav.type || '?') + ' mem=' + mem());
+    window.addEventListener('error', function (e) { log('error', e.message + ' @' + String(e.filename || '').split('/').pop() + ':' + e.lineno); });
+    window.addEventListener('unhandledrejection', function (e) { log('rejection', (e.reason && e.reason.message) || e.reason); });
+    window.addEventListener('pagehide', function (e) { log('pagehide', 'persisted=' + e.persisted); });
+    window.addEventListener('beforeunload', function () { log('beforeunload', ''); });
+    document.addEventListener('visibilitychange', function () { log('visibility', document.visibilityState); });
+    try {
+      var of = window.fetch;
+      window.fetch = function (input, init) {
+        var u = ''; try { u = String(typeof input === 'string' ? input : input.url).replace(/^https?:\/\/[^/]+/, '').split('?')[0]; } catch (e) {}
+        var p = of.apply(this, arguments);
+        if (/auth|ai-instructor/.test(u)) p.then(function (r) { if (!r.ok) log('fetch ' + r.status, u); }, function (er) { log('fetch failed', u + ' ' + ((er && er.message) || '')); });
+        return p;
+      };
+    } catch (e) {}
+    setInterval(function () { save(); }, 5000);
+    // After a reload that followed recent activity, explain it to the instructor, only inside the test courses.
+    var recent = prev && prev.hb && (Date.now() - prev.hb) < 10 * 60 * 1000;
+    if (!recent) return;
+    var tries = 0, t = setInterval(function () {
+      if (++tries > 40) { clearInterval(t); return; }
+      var s = window.State; if (!s || !s.user) return;
+      var inTest = [s.teachCourseId, s.payCourseId, s.currentCourseId].some(function (id) { return id && test.indexOf(id) >= 0; });
+      clearInterval(t); if (!inTest) return;
+      var last = (prev.ring || []).slice(-10).map(function (r) { return new Date(r.t).toLocaleTimeString() + ' ' + r.e + (r.d ? ' ' + r.d : ''); });
+      var gap = Math.round((Date.now() - prev.hb) / 1000);
+      var box = document.createElement('div');
+      box.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:100001;max-width:460px;background:#1b222b;color:#e6e9ee;border:1px solid #f5a623;border-radius:10px;padding:10px 12px;font:12px/1.4 system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.5)';
+      var h = document.createElement('div'); h.style.cssText = 'font-weight:700;margin-bottom:4px'; h.textContent = 'This page reloaded unexpectedly (' + gap + 's after the last activity; memory ' + (prev.mem || '?') + ').';
+      var pre = document.createElement('pre'); pre.style.cssText = 'margin:0;white-space:pre-wrap;max-height:140px;overflow:auto'; pre.textContent = last.join('\n');
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Dismiss'; b.style.cssText = 'margin-top:6px'; b.onclick = function () { box.remove(); };
+      box.append(h, pre, b); document.body.appendChild(box);
+    }, 1000);
+  } catch (e) {}
+})();
