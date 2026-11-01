@@ -158,14 +158,14 @@ function init() {
     try {
       const b = ensureBackend(); const cid = courseId;
       const s = await b.call({ action: 'review_status', course_id: cid });
-      reviewStatus = s; reviewCourse = cid; reviewBtn.hidden = !(s && s.review_enabled);
+      reviewStatus = s; reviewCourse = cid; reviewBtn.hidden = !(s && (s.review_enabled || s.can_appeal)); reviewBtn.textContent = s && s.review_enabled ? 'Graded-work review' : 'Appeals and meetings';
       return s;
     } catch (_) { reviewBtn.hidden = true; return null; }
   }
   function renderReview(msg) {
     const s = reviewStatus; rv.textContent = '';
     if (!s) { rv.append(el('p', null, 'Could not load this screen. Please try again.')); return; }
-    rv.append(el('h3', null, 'Review my graded work with the AI instructor'));
+    rv.append(el('h3', null, s.review_enabled ? 'Review my graded work with the AI instructor' : 'Appeals and meetings'));
     const box = el('div', 'aiw-box'); box.append(el('p', null, s.consent_text));
     const state = el('p', 'aiw-state ' + (s.granted ? 'aiw-on' : 'aiw-off'), s.granted ? 'You have allowed this. You can turn it off at any time.' : 'Not allowed. The AI instructor cannot see your graded work.');
     state.setAttribute('role', 'status'); box.append(state);
@@ -175,7 +175,7 @@ function init() {
       try { const r = await ensureBackend().call({ action: 'review_consent', course_id: reviewCourse, granted: !s.granted }); await loadReview(); renderReview(r.granted ? 'Allowed. You can now ask the AI instructor to go over an exam, quiz, arena or assignment once its deadline has passed.' : 'Turned off. The AI instructor can no longer see your graded work.'); }
       catch (e) { toggle.disabled = false; renderReview(e instanceof BackendError ? e.message : 'Could not save that. Please try again.'); }
     };
-    box.append(toggle); rv.append(box);
+    box.append(toggle); if (s.review_enabled) rv.append(box);
     if (msg) { const m = el('p', 'aiw-state', msg); m.setAttribute('role', 'status'); rv.append(m); }
     if (s.granted && s.recent_access && s.recent_access.length) {
       const b2 = el('div', 'aiw-box'); b2.append(el('p', null, 'Recently opened by the AI instructor (newest first):'));
@@ -199,7 +199,25 @@ function init() {
     mt.append(whoL, who, topicL, topic, noteL, note2, go, out);
     const open = (s.my_requests || []).filter((r) => r.status === 'open');
     if (open.length) { mt.append(el('p', null, 'Your open requests:')); const ul = el('ul'); open.forEach((r) => ul.append(el('li', null, (r.with === 'ta' ? 'TA' : 'Professor') + ': ' + r.topic))); mt.append(ul); }
+    const answered = (s.my_requests || []).filter((r) => r.status === 'done' && r.resolution).slice(0, 5);
+    if (answered.length) { mt.append(el('p', null, 'Answers to your requests:')); const ul2 = el('ul'); answered.forEach((r) => ul2.append(el('li', null, r.topic.replace(/^Grade appeal: /, 'Appeal: ') + ' \u2013 ' + r.resolution))); mt.append(ul2); }
     rv.append(mt);
+    if (s.can_appeal) {
+      const ap = el('div', 'aiw-box'); ap.append(el('h3', null, 'Think a grade is wrong?'));
+      ap.append(el('p', null, 'Send a grade appeal to the professor. Say which item and what you think is wrong. A person reviews it; the AI instructor does not decide appeals and cannot change grades.'));
+      const kind = el('select'); kind.id = 'aiw-ap-kind'; [['exam', 'An exam'], ['quiz', 'A chapter quiz'], ['assignment', 'An assignment'], ['arena', 'An arena'], ['final_grade', 'My course grade'], ['other', 'Something else']].forEach(([v, l]) => kind.append(Object.assign(el('option', null, l), { value: v })));
+      const kindL = el('label', null, 'What is it about?'); kindL.htmlFor = 'aiw-ap-kind';
+      const ttl = el('input'); ttl.id = 'aiw-ap-title'; ttl.maxLength = 160; ttl.placeholder = 'For example: Midterm, question 4'; const ttlL = el('label', null, 'Which one?'); ttlL.htmlFor = 'aiw-ap-title';
+      const why = el('textarea'); why.id = 'aiw-ap-why'; why.rows = 3; why.maxLength = 500; why.placeholder = 'What do you think is wrong?'; const whyL = el('label', null, 'What is wrong?'); whyL.htmlFor = 'aiw-ap-why';
+      const send = el('button', 'aiw-btn2', 'Send appeal'); send.type = 'button'; const aout = el('p', 'aiw-state'); aout.setAttribute('role', 'status');
+      send.onclick = async () => {
+        if (why.value.trim().length < 10) { aout.textContent = 'Please explain what you think is wrong, in at least a sentence.'; aout.className = 'aiw-state aiw-off'; why.focus(); return; }
+        send.disabled = true;
+        try { await ensureBackend().call({ action: 'request_appeal', course_id: reviewCourse, item_kind: kind.value, item_title: ttl.value.trim() || undefined, note: why.value.trim() }); await loadReview(); renderReview('Your appeal was sent to the professor. They will reply here.'); }
+        catch (e) { send.disabled = false; aout.textContent = e instanceof BackendError ? e.message : 'Could not send that. Please try again.'; aout.className = 'aiw-state aiw-off'; }
+      };
+      ap.append(kindL, kind, ttlL, ttl, whyL, why, send, aout); rv.append(ap);
+    }
     const back = el('button', 'aiw-btn2 aiw-quiet', 'Back to chat'); back.type = 'button'; back.onclick = closeReview; rv.append(back);
     if (msg) rv.scrollTop = 0;
   }

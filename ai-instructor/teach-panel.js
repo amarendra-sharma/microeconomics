@@ -246,7 +246,18 @@ async function render(host) {
           const box = el('div', { style: 'margin:8px 0;padding:8px;border:1px solid rgba(128,128,128,.35);border-radius:8px' });
           box.appendChild(el('div', { style: 'font-weight:600', text: c.title + ' - ' + new Date(c.started_at).toLocaleString() + (c.status === 'live' ? ' (live now)' : '') }));
           box.appendChild(el('div', { text: c.present + ' present, ' + c.joined + ' joined of ' + r.enrolled + ' enrolled; ' + c.questions + ' question(s) asked' }));
-          if (c.students && c.students.length) box.appendChild(el('div', { style: 'opacity:.85;margin-top:4px', text: c.students.map((x) => x.name + ' ' + x.minutes + ' min' + (x.present ? '' : ' (not present)')).join('; ') }));
+          if (c.students && c.students.length) {
+            const lst = el('div', { style: 'opacity:.9;margin-top:4px' });
+            c.students.forEach((x) => {
+              const line = el('div', { style: 'margin:2px 0', text: x.name + ' ' + x.minutes + ' min' + (x.present ? '' : ' (not present)') + (x.muted ? ' [muted]' : '') + (x.removed ? ' [removed]' : '') + ' ' });
+              if (c.status === 'live' && x.id) {
+                const act = (label, mode) => { const b = btn(label, true); b.style.marginTop = '0'; b.onclick = async () => { b.disabled = true; try { await call({ action: 'prof_class_mute', course_id: cid, student: x.id, mode }); abtn.click(); } catch (e) { att.textContent = e.message; } }; line.appendChild(b); };
+                act(x.muted ? 'Unmute' : 'Mute questions', x.muted ? 'unmute' : 'mute'); act(x.removed ? 'Let back in' : 'Remove from class', x.removed ? 'restore' : 'remove');
+              }
+              lst.appendChild(line);
+            });
+            box.appendChild(lst);
+          }
           att.appendChild(box);
         });
       } catch (e) { att.textContent = e.message; }
@@ -268,7 +279,7 @@ async function render(host) {
   // ---- Meeting requests ----
   if (hasReview) {
     const rc = el('div', { class: 'card' });
-    rc.appendChild(el('h3', { text: 'Meeting requests from students' }));
+    rc.appendChild(el('h3', { text: 'Requests and grade appeals from students' }));
     const list = el('div'), rmsg = msg(); rc.append(list, rmsg); host.appendChild(rc);
     const load = async () => {
       list.textContent = '';
@@ -278,17 +289,51 @@ async function render(host) {
         const rs = j.requests || [];
         if (!rs.length) { list.textContent = 'No requests.'; return; }
         rs.forEach((r) => {
-          const row = el('p', { text: (r.status === 'open' ? 'OPEN – ' : 'Done – ') + r.student + ' would like to meet ' + (r.with === 'ta' ? 'the TA' : 'the professor') + ': ' + r.topic + (r.note ? ' (' + r.note + ')' : '') + ' – ' + new Date(r.created_at).toLocaleString() + ' ' });
+          const appeal = r.kind === 'appeal';
+          const row = el('p', { text: (r.status === 'open' ? 'OPEN – ' : 'Done – ') + (appeal ? 'GRADE APPEAL from ' + r.student + ': ' : r.student + ' would like to meet ' + (r.with === 'ta' ? 'the TA' : 'the professor') + ': ') + r.topic.replace(/^Grade appeal: /, '') + (r.note ? ' (' + r.note + ')' : '') + ' – ' + new Date(r.created_at).toLocaleString() + (r.resolution ? ' – Reply sent: ' + r.resolution : '') + ' ' });
           if (r.status === 'open') {
-            const b = btn('Mark done', true);
-            b.onclick = async () => { b.disabled = true; try { await call({ action: 'complete_review_request', course_id: cid, request_id: r.id }); load(); } catch (e) { rmsg.say(e.message, 'bad'); b.disabled = false; } };
-            row.appendChild(b);
+            const reply = el('input', { type: 'text', placeholder: appeal ? 'Your answer to the student (shown to them)' : 'Optional note to the student', style: 'display:block;width:100%;max-width:520px;margin-top:6px' }); reply.maxLength = 1000;
+            const b = btn(appeal ? 'Close appeal with this answer' : 'Mark done', true);
+            b.onclick = async () => {
+              if (appeal && reply.value.trim().length < 5) { rmsg.say('Write your answer to the student first. Recording an appeal does not change any grade; change grades separately.', 'bad'); return; }
+              b.disabled = true; try { await call({ action: 'complete_review_request', course_id: cid, request_id: r.id, resolution: reply.value.trim() || undefined }); load(); } catch (e) { rmsg.say(e.message, 'bad'); b.disabled = false; }
+            };
+            row.append(reply, b);
           }
           list.appendChild(row);
         });
       } catch (e) { rmsg.say(e.message, 'bad'); }
     };
     load();
+  }
+  // ---- Waiting for you (professor mode) and AI usage ----
+  if ('professor_mode' in s) {
+    const wc = el('div', { class: 'card' }); wc.appendChild(el('h3', { text: 'Waiting for you' }));
+    const wbody = el('div', { style: 'font-size:13px' }); wc.appendChild(wbody); host.appendChild(wc);
+    (async () => {
+      try {
+        const j = await call({ action: 'prof_inbox_get', course_id: cid }); if (my !== token) return;
+        const appeals = (j.requests || []).filter((r) => r.kind === 'appeal').length, meets = (j.requests || []).length - appeals;
+        wbody.appendChild(el('p', { text: appeals + ' grade appeal(s), ' + meets + ' meeting request(s), ' + (j.questions || []).length + ' open student question(s), ' + (j.held_grade_changes || 0) + ' held grade change(s). Ask Asha: "What is waiting for me?"' }));
+        (j.questions || []).forEach((q) => wbody.appendChild(el('p', { style: 'opacity:.85;margin:2px 0', text: 'Question' + (q.during_class ? ' (during class)' : '') + ': ' + q.question })));
+      } catch (e) { wbody.textContent = e.message; }
+    })();
+    const uc = el('div', { class: 'card' }); uc.appendChild(el('h3', { text: 'AI usage and cost' }));
+    const ubody = el('div', { style: 'font-size:13px' }); const ubtn = btn('Show usage'); uc.append(ubtn, ubody); host.appendChild(uc);
+    ubtn.onclick = async () => {
+      ubody.textContent = 'Loading...';
+      try {
+        const u = await call({ action: 'prof_usage_get', course_id: cid }); ubody.textContent = '';
+        ubody.appendChild(el('p', { text: 'This month: $' + Number(u.month_cost_usd || 0).toFixed(2) + ' of the $' + Number(u.budget_usd || 0).toFixed(0) + ' monthly cap. All time: $' + Number(u.total_cost_usd || 0).toFixed(2) + ' over ' + (u.turns || 0) + ' replies, ' + (u.enrolled || 0) + ' student(s) enrolled.' }));
+        const rows = [['Name', 'Replies', 'Cost (USD)']].concat((u.people || []).map((p) => [p.name, p.turns, Number(p.cost_usd).toFixed(4)]));
+        const daily = [['Day', 'Replies', 'Cost (USD)']].concat((u.daily || []).map((d) => [d.day, d.turns, Number(d.cost_usd).toFixed(4)]));
+        const csv = (a) => a.map((r) => r.map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
+        const dl = btn('Download usage (CSV)', true);
+        dl.onclick = () => { const blob = new Blob([csv(rows) + '\n\n' + csv(daily)], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ai-usage.csv'; document.body.appendChild(a); a.click(); a.remove(); };
+        ubody.appendChild(dl);
+        (u.people || []).slice(0, 10).forEach((p) => ubody.appendChild(el('div', { text: p.name + ': ' + p.turns + ' replies, $' + Number(p.cost_usd).toFixed(3) })));
+      } catch (e) { ubody.textContent = e.message; }
+    };
   }
   // ---- Asha as professor: what she did, with undo (shown only where professor mode exists) ----
   if ('professor_mode' in s) {
