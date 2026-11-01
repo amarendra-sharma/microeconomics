@@ -8,6 +8,8 @@
 import { AiInstructorBackend, BackendError } from './backend-client.js?v=20261021a';
 import { mountVisual } from './graph-render.js?v=20261025d';
 
+// A list containing '*' means every course (used for Macroeconomics: Asha is on for all current and future courses; the server still checks each course's own settings).
+const inList = (list, id) => !!id && (list.indexOf('*') >= 0 || list.indexOf(id) >= 0);
 const CONFIG = Object.assign({
   courseIds: ['2d6832cf-28bf-4b5a-a351-56f3a1aa2252', 'c13c165d-4ae6-4359-82a8-bac7e8323be0'],      // ECON 436 (Fall 2026), Test Course 2026
   functionUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co/functions/v1/it-ai-instructor',
@@ -68,8 +70,8 @@ function init() {
   const activeCourse = () => {
     const s = st(); if (!s || !s.user) return null;
     const staff = s.role === 'instructor' || s.role === 'professor' || s.role === 'admin' || !!s.isTA;
-    if (!staff && picked && CONFIG.courseIds.indexOf(picked) >= 0) return picked;   // the student chose another of their AI-enabled courses
-    return (staff ? [s.teachCourseId, s.payCourseId, s.currentCourseId] : [s.payCourseId, s.currentCourseId]).find((id) => id && CONFIG.courseIds.indexOf(id) >= 0) || null;
+    if (!staff && picked && inList(CONFIG.courseIds, picked)) return picked;   // the student chose another of their AI-enabled courses
+    return (staff ? [s.teachCourseId, s.payCourseId, s.currentCourseId] : [s.payCourseId, s.currentCourseId]).find((id) => id && inList(CONFIG.courseIds, id)) || null;
   };
   const ready = () => !!(window.sb && activeCourse());
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
@@ -127,7 +129,7 @@ function init() {
   }
   // ---- Talk mode (animated instructor + voice), loaded only when the student presses Talk --------------------------------------------------------
   let talk = null;
-  const talkAllowed = () => !!(courseId || activeCourse()) && CONFIG.talkCourseIds.indexOf(activeCourse()) >= 0 && !!(window.speechSynthesis || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+  const talkAllowed = () => !!(courseId || activeCourse()) && inList(CONFIG.talkCourseIds, activeCourse()) && !!(window.speechSynthesis || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
   talkBtn.addEventListener('click', async () => {
     if (talk || !ready()) return;
     ensureBackend(); talkBtn.disabled = true;
@@ -215,7 +217,7 @@ function init() {
     coursesLoaded = true;
     try {
       const en = await window.sb.from(CONFIG.enrollTable || 'im_enrollment').select('course_id').eq('student_id', s.user.id).eq('status', 'active');
-      const ids = ((en && en.data) || []).map((r) => r.course_id).filter((id) => CONFIG.courseIds.indexOf(id) >= 0);
+      const ids = ((en && en.data) || []).map((r) => r.course_id).filter((id) => inList(CONFIG.courseIds, id));
       if (ids.length < 2) return;
       const cr = await window.sb.from(CONFIG.courseTable || 'im_course').select('id,title').in('id', ids);
       const title = {}; ((cr && cr.data) || []).forEach((c) => { title[c.id] = c.title; });
