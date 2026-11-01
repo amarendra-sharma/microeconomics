@@ -319,7 +319,9 @@ async function render(host) {
       } catch (e) { wbody.textContent = e.message; }
     })();
     const uc = el('div', { class: 'card' }); uc.appendChild(el('h3', { text: 'AI usage and cost' }));
-    const ubody = el('div', { style: 'font-size:13px' }); const ubtn = btn('Show usage'); uc.append(ubtn, ubody); host.appendChild(uc);
+    const ubody = el('div', { style: 'font-size:13px' }); const ubtn = btn('Show usage'); uc.append(ubtn, ubody);
+    // visible to the platform administrator only: the card is added only if the server allows the usage call
+    call({ action: 'prof_usage_get', course_id: cid }).then(() => { if (my === token) host.appendChild(uc); }).catch(() => {});
     ubtn.onclick = async () => {
       ubody.textContent = 'Loading...';
       try {
