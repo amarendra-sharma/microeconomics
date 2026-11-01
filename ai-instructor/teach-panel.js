@@ -140,7 +140,7 @@ async function render(host) {
   const tok = el('input', { type: 'number', min: 1000, max: 1000000, value: s.student_daily_tokens });
   const usd = el('input', { type: 'number', min: 0, step: 0.5, value: s.course_monthly_usd });
   cs.append(en.wrap, field('Keep conversations for (days; 0 = delete when the session ends)', ret),
-    field('Daily token limit per student', tok), field('Monthly spending cap for this course (USD)', usd));
+    field('Daily token limit per student', tok), ...('course_monthly_usd' in s ? [field('Monthly spending cap for this course (USD)', usd)] : []));
   const hasReview = 'review_enabled' in s;
   let rven, rvsol;
   if (hasReview) {
@@ -267,7 +267,8 @@ async function render(host) {
   cs.append(ssave, smsg);
   ssave.onclick = async () => {
     try {
-      const b = { action: 'set_settings', course_id: cid, enabled: en.cb.checked, retention_days: +ret.value, student_daily_tokens: +tok.value, course_monthly_usd: +usd.value };
+      const b = { action: 'set_settings', course_id: cid, enabled: en.cb.checked, retention_days: +ret.value, student_daily_tokens: +tok.value };
+      if ('course_monthly_usd' in s) b.course_monthly_usd = +usd.value;
       if (hasReview) { b.review_enabled = rven.cb.checked; b.review_show_solutions = rvsol.cb.checked; }
       if (hasScope) { b.scope_mode = scopeCb.cb.checked ? 'course_only' : 'open'; b.use_textbook = textCb.cb.checked; b.review_kinds = Object.keys(kindCbs).filter((k) => kindCbs[k].cb.checked); }
       if (pmon) { b.professor_mode = pmon.cb.checked; b.prof_paused = pmpause.cb.checked; }
