@@ -262,12 +262,23 @@ function init() {
   // ---- live class banner: shows while the professor's class is running; joining records attendance and has the instructor teach each section ----------
   const clsBox = el('div', 'aiw-class'); clsBox.hidden = true; clsBox.style.cssText = 'padding:8px 10px;margin:6px 0;border:1px solid rgba(24,121,78,.5);border-radius:8px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
   const clsText = el('span'); clsText.style.flex = '1'; const clsBtn = el('button', null, 'Join class'); clsBtn.type = 'button'; clsBox.append(clsText, clsBtn); panel.insertBefore(clsBox, msgs);
-  let joined = false, lastStep = null, lastClass = null, clsBusy = false;
+  let joined = false, lastStep = null, lastClass = null, clsBusy = false, classCid = null, myAi = null;
+  const diag = (m) => { try { const a = JSON.parse(localStorage.getItem('aiw_diag') || '[]'); a.push({ t: Date.now(), e: String(m).slice(0, 200) }); localStorage.setItem('aiw_diag', JSON.stringify(a.slice(-30))); } catch (_) { /* optional */ } };
+  async function enrolledAi() {   // the student's active AI-enabled courses, so a live class in any of them is found even if the portal is on another one
+    if (myAi) return myAi; const s = st(); if (!s || !s.user || !window.sb) return [];
+    const en = await window.sb.from(CONFIG.enrollTable || 'im_enrollment').select('course_id').eq('student_id', s.user.id).eq('status', 'active');
+    myAi = ((en && en.data) || []).map((r) => r.course_id).filter((id) => inList(CONFIG.courseIds, id)); return myAi;
+  }
   const secTitle = (c) => (c && typeof c === 'object' ? c.title : c) || '';
   async function pollClass() {
     if (clsBusy || !ready() || document.visibilityState !== 'visible') return; clsBusy = true;
     try {
-      const b = ensureBackend(); const r = await b.call({ action: 'class_status', course_id: courseId, join: joined });
+      const b = ensureBackend(); const ids = [courseId]; let r = null;
+      try { (await enrolledAi()).forEach((i) => { if (ids.indexOf(i) < 0) ids.push(i); }); } catch (e) { diag('enrolledAi ' + (e && e.message)); }
+      for (const id of ids) {
+        const x = await b.call({ action: 'class_status', course_id: id, join: joined && id === classCid });
+        if (x && x.live && x.student) { r = x; classCid = id; break; }
+      }
       if (!r || !r.live || !r.student) { clsBox.hidden = true; joined = false; lastStep = null; lastClass = null; btn.textContent = 'Ask AI Instructor'; return; }
       if (lastClass !== r.title) { joined = false; lastStep = null; lastClass = r.title; }
       clsBox.hidden = false; btn.textContent = 'Live class now: join';
@@ -278,9 +289,9 @@ function init() {
         const cue = '[CLASS-SECTION] ' + (first ? 'The student has joined the class. Teach the current section: ' : 'The class has moved on to the next section: ') + secTitle(r.current) + '.';
         if (talk) { talk.getVoice().then((v) => v.submitText(cue)).catch(() => { lastStep = null; }); } else { input.value = cue; ask(); }
       }
-    } catch (_) { /* class state is optional */ } finally { clsBusy = false; }
+    } catch (e) { diag('class_status ' + (e && (e.code || e.message) || e)); /* class state is optional */ } finally { clsBusy = false; }
   }
-  clsBtn.onclick = () => { joined = true; lastStep = null; if (panel.hidden) { panel.hidden = false; btn.hidden = true; } pollClass(); };
+  clsBtn.onclick = () => { joined = true; lastStep = null; if (classCid && classCid !== activeCourse()) { picked = classCid; backend = null; msgs.textContent = ''; reviewStatus = null; reviewBtn.hidden = true; closeReview(); if (talk) talk.close(); } if (panel.hidden) { panel.hidden = false; btn.hidden = true; } pollClass(); };
   setInterval(pollClass, 20000); setTimeout(pollClass, 4000);
   setInterval(() => {   // follow the page: show only inside an eligible course while signed in; tidy up on sign-out or course change
     const ok = ready();
