@@ -16,7 +16,7 @@
    ========================================================================== */
 (function () {
   'use strict';
-  var SW_BUILD = 'sw-portal-3.2';
+  var SW_BUILD = 'sw-portal-3.3';
   // Scan libraries: served next to index.html first (same origin, no CDN or
   // worker cross-origin issues); CDN only as a fallback.
   var LIBS = {
@@ -213,8 +213,16 @@
   }
 
   /* ========================================================== TAB 1: setup */
+  // Enrolled students with no live (non-void) sheet: late enrollees, or anyone
+  // added to the roster after the sheets were issued.
+  function missingStudents() {
+    var have = {};
+    S.sheets.forEach(function (s) { if (s.status !== 'void' && s.student_id) { have[String(s.student_id)] = true; } });
+    return S.roster.filter(function (st) { return !have[String(st.id)]; });
+  }
   function renderSetup() {
     var live = S.sheets.filter(function (s) { return s.status !== 'void'; });
+    var missing = live.length ? missingStudents() : [];
     var graded = live.filter(function (s) { return s.status === 'graded'; }).length;
     var spares = live.filter(function (s) { return !s.student_id; }).length;
     var mode = examMode();
@@ -227,6 +235,15 @@
       '<div style="font-weight:700;margin-bottom:4px;">' + (live.length ? live.length + ' answer sheets issued' + (mode === 'versions' ? ' \u00b7 ' + live[0].items.versions.length + ' booklet versions' : ' \u00b7 one booklet per student') : 'Nothing issued yet') + '</div>' +
       '<div style="font-size:12.5px;color:var(--text-muted);">' + (live.length ? (live.length - spares) + ' named \u00b7 ' + spares + ' spare \u00b7 ' + graded + ' graded' : 'Pick where the questions come from, then issue.') + '</div></div>';
 
+    if (missing.length) {
+      html += '<div class="card" style="margin-bottom:14px;border-left:4px solid var(--warn,#d97706);">' +
+        '<div style="font-weight:700;margin-bottom:4px;">' + missing.length + ' enrolled student' + (missing.length === 1 ? ' has' : 's have') + ' no answer sheet yet</div>' +
+        '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px;">' + missing.slice(0, 8).map(function (st) { return h(st.name); }).join(', ') + (missing.length > 8 ? ', \u2026' : '') +
+        '. Usually students who joined after you issued. This adds sheets for them only; nobody else\u2019s sheet changes, and copies already printed keep working.' +
+        (mode === 'versions' ? ' They use the same booklet versions as everyone else.' : ' Each gets a new booklet from the question source picked below; print it from the button that appears.') + '</div>' +
+        '<button class="btn btn-primary btn-sm" id="swIssueNew">Issue for ' + missing.length + ' new student' + (missing.length === 1 ? '' : 's') + '</button>' +
+        '<div class="msg" id="swIssueNewMsg" style="display:none;margin-top:10px;"></div></div>';
+    }
     html += '<div class="card" style="margin-bottom:14px;">' +
       '<div style="font-weight:700;margin-bottom:10px;">Issue</div>' +
       (S.sources.length ? '' : '<div class="msg err" style="display:block;margin-bottom:10px;">No question source yet. Use \u201cAssemble exam\u201d to build the questions (leave it unpublished so students can\u2019t take it online), then come back here.</div>') +
@@ -255,6 +272,7 @@
     el('swBody').innerHTML = html;
     el('swMode').addEventListener('change', function () { el('swVersRow').style.display = el('swMode').value === 'versions' ? 'flex' : 'none'; });
     el('swIssue').addEventListener('click', issueSheets);
+    if (el('swIssueNew')) { el('swIssueNew').addEventListener('click', issueMissing); }
     if (el('swSelfPrint')) { el('swSelfPrint').addEventListener('change', saveSelfPrint); }
     renderPrintBox(mode, live);
   }
@@ -421,7 +439,7 @@
     S.sheets.forEach(function (s) { if (s.status === 'graded' && s.student_id) { gradedFor[s.student_id] = true; } });
     var targets = S.roster.filter(function (st) { return !gradedFor[st.id]; });
     var toVoid = S.sheets.filter(function (s) { return s.status !== 'graded' && s.status !== 'void'; });
-    if (toVoid.length && !confirm('This replaces ' + toVoid.length + ' ungraded sheet(s). Anything already printed will stop scanning' + (S.selfPrint ? ' \u2014 including sheets students printed themselves (they will need to print again)' : '') + '. Continue?')) { return; }
+    if (toVoid.length && !confirm('This replaces ' + toVoid.length + ' ungraded sheet(s). Anything already printed will stop scanning' + (missingStudents().length ? ' (to add only the ' + missingStudents().length + ' student(s) without a sheet, Cancel and use \u201cIssue for new students\u201d instead)' : '') + (S.selfPrint ? ' \u2014 including sheets students printed themselves (they will need to print again)' : '') + '. Continue?')) { return; }
     el('swIssue').disabled = true;
     say('swIssueMsg', 'Building\u2026');
 
@@ -487,6 +505,72 @@
     }).catch(function (err) {
       el('swIssue').disabled = false;
       say('swIssueMsg', err && err.message ? err.message : String(err), 'err');
+    });
+  }
+
+  // Add sheets for students who have none, without touching anyone else's.
+  // Versions mode: same payload (booklet versions) as the live sheets.
+  // Per-student mode: a fresh booklet each, from the selected question source.
+  function issueMissing() {
+    var missing = missingStudents();
+    if (!missing.length) { say('swIssueNewMsg', 'Everyone enrolled already has a sheet.', 'ok'); return; }
+    var live = S.sheets.filter(function (s) { return s.status !== 'void'; });
+    var mode = examMode(), btn = el('swIssueNew');
+    btn.disabled = true; say('swIssueNewMsg', 'Adding\u2026');
+    var build;
+    if (mode === 'versions') {
+      var tpl = null; live.forEach(function (s) { if (!tpl && isVersioned(s)) { tpl = s; } });
+      if (!tpl) { btn.disabled = false; say('swIssueNewMsg', 'No booklet-version sheet to copy from \u2014 use Re-issue instead.', 'err'); return; }
+      build = Promise.resolve(missing.map(function (st) {
+        return { code: newCode(), exam_id: S.examId, course_id: S.courseId, student_id: st.id, student_label: st.name,
+          items: tpl.items, page_count: tpl.page_count || 1, layout_version: tpl.layout_version || SheetwiseCore.VERSION, status: 'printed' };
+      }));
+    } else {
+      var src = null, srcId = el('swSrc') ? el('swSrc').value : null;
+      S.sources.forEach(function (e) { if (String(e.id) === String(srcId)) { src = e; } });
+      if (!src) { btn.disabled = false; say('swIssueNewMsg', 'Pick the question source in the Issue box below first.', 'err'); return; }
+      var shuffleQ = el('swShuffleQ') ? el('swShuffleQ').checked : true;
+      build = (src.random_per_student
+        ? fetchRecipePools(src.random_recipe || []).then(function (pools) { return { pools: pools }; })
+        : fetchItems((src.item_ids || []).map(String)).then(function (map) {
+          var rows = (src.item_ids || []).map(function (id) { return map[String(id)]; }).filter(Boolean);
+          if (!rows.length) { throw new Error('That exam\u2019s questions could not be read.'); }
+          return { rows: rows };
+        })).then(function (P) {
+          return missing.map(function (st) {
+            var rowsFor = P.rows;
+            if (!rowsFor) { rowsFor = []; P.pools.forEach(function (sl) { var pool = shuffle(sl.pool.slice()); for (var k = 0; k < Math.min(sl.n, pool.length); k++) { rowsFor.push(pool[k]); } }); }
+            var b = buildSet(rowsFor, shuffleQ);
+            if (!b.items.length) { throw new Error('None of the questions can go on a bubble sheet (all written).'); }
+            var L2 = SheetwiseCore.layout(b.items.map(function (it) { return { n: it.q, kind: it.kind, nopts: it.nopts }; }));
+            return { code: newCode(), exam_id: S.examId, course_id: S.courseId, student_id: st.id, student_label: st.name,
+              items: b.items, page_count: L2.pageCount, layout_version: SheetwiseCore.VERSION, status: 'printed' };
+          });
+        });
+    }
+    var added = [];
+    build.then(function (rows) {
+      added = rows.map(function (r) { return r.code; });
+      return runSeq(chunk(rows, 20), function (part) {
+        return sb.from('im_paper_sheet').insert(part).then(function (r) { if (r.error) { throw new Error(r.error.message); } });
+      });
+    }).then(function () {
+      return loadBase().then(function () {
+        renderSetup();
+        var fresh = S.sheets.filter(function (s) { return added.indexOf(s.code) >= 0; });
+        say('swIssueMsg', 'Added ' + fresh.length + ' answer sheet' + (fresh.length === 1 ? '' : 's') + ' for: ' + fresh.map(function (s) { return s.student_label; }).join(', ') + '. Everyone else\u2019s sheet is unchanged.' +
+          (S.selfPrint ? ' They can print it from their Exams page now.' : ''), 'ok');
+        var m = el('swIssueMsg');
+        if (m && fresh.length) {
+          var b2 = document.createElement('button'); b2.className = 'btn btn-ghost btn-sm'; b2.style.marginLeft = '8px';
+          b2.textContent = mode === 'versions' ? 'Print their answer sheets' : 'Print their booklets + sheets';
+          b2.addEventListener('click', function () { if (mode === 'versions') { printSheets(fresh); } else { printPerStudent(fresh); } });
+          m.appendChild(b2);
+        }
+      });
+    }).catch(function (err) {
+      if (btn) { btn.disabled = false; }
+      say('swIssueNewMsg', err && err.message ? err.message : String(err), 'err');
     });
   }
 
