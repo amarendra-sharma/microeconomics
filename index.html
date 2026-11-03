@@ -1347,6 +1347,12 @@ function openCourseModal(courseId){
       : '<div class="field"><label>Access type</label><div style="font-size:13px;color:var(--text-muted);padding:6px 0;">'+
         (v.requires_payment?'Requires paid subscription':'Free pilot')+
         ' <span style="color:var(--text-subtle);">\u2014 only a platform administrator can change this.</span></div></div>')+
+    // Institutional billing: a university or department pays for this section (partner portal).
+    (!isNew
+      ? '<div class="field"><label>Institution paying for your students?</label><div style="font-size:13px;color:var(--text-muted);padding:4px 0;">'+
+        '<a href="https://partners.macronations.com/?billing&product=im&course='+encodeURIComponent(courseId)+'&title='+encodeURIComponent(v.title||'')+'&term='+encodeURIComponent(v.term||'')+'" target="_blank" rel="noopener">Request institutional billing</a>'+
+        ' <span style="color:var(--text-subtle);">\u2014 MacroNations invoices your university or department and students get access without paying.</span></div></div>'
+      : '')+
     '<div class="field"><label>Let students review their graded work</label>'+
     '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;">'+
       '<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cmRevQ" '+(v.review_quizzes?'checked':'')+'> Quizzes</label>'+
