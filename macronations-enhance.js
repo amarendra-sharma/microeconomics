@@ -271,9 +271,27 @@
     var fn = 'https://rtaiivegcqqmdchpguzn.supabase.co/functions/v1/im-ai-instructor';
     var test = ['6a16dfae-5d8f-4037-b141-3a4c8f08e27a', 'cc9a679a-223c-4e5f-8472-8fff71330014', '96b76b37-b732-4112-b16b-f08447a8eb82'];   // Test course, Test course 2, Test Course 1
     window.AI_INSTRUCTOR_CONFIG = { supabaseUrl: 'https://rtaiivegcqqmdchpguzn.supabase.co', functionUrl: fn };
-    window.AI_INSTRUCTOR_WIDGET = { courseIds: test, talkCourseIds: test, functionUrl: fn };
+    // Asha is on for every course whose im_ai_settings row is enabled (new instructor-led courses are enabled automatically).
+    // The list is read from the database after sign-in and merged into this array in place; the test ids stay as a fallback.
+    var enabled = test.slice();
+    window.AI_INSTRUCTOR_WIDGET = { courseIds: enabled, talkCourseIds: test.slice(), functionUrl: fn };
+    (function loadEnabled() {
+      var tries = 0;
+      function go() {
+        tries++;
+        try {
+          if (window.sb && window.State && window.State.user) {
+            window.sb.rpc('im_ai_enabled_courses').then(function (r) {
+              if (r && Array.isArray(r.data)) { r.data.forEach(function (id) { if (enabled.indexOf(id) < 0) { enabled.push(id); } }); tries = 99; }   // one successful load is enough
+            }, function () {});
+          }
+        } catch (e) {}
+        if (tries < 40) { setTimeout(go, tries < 10 ? 3000 : 30000); }
+      }
+      setTimeout(go, 2500);
+    })();
     ['widget.js', 'teach-panel.js'].forEach(function (f) {
-      var s = document.createElement('script'); s.type = 'module'; s.src = 'ai-instructor/' + f + '?v=20261102a'; document.head.appendChild(s);
+      var s = document.createElement('script'); s.type = 'module'; s.src = 'ai-instructor/' + f + '?v=20261103a'; document.head.appendChild(s);
     });
   } catch (e) {}
 })();
