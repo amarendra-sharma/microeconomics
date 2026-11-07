@@ -46,6 +46,7 @@ var MNProctor = (function () {
 
   var S = {
     active: false, violations: 0, events: [], maxBeforeSubmit: 4, lastFlagAt: 0,
+    awayTimer: null, startedAt: 0,
     banner: null, handlers: {}, exam: null, user: null,
     cam: { stream: null, video: null, canvas: null, faceDetector: null, faceTimer: null, thumb: null, ready: false },
     audio: { ctx: null, analyser: null, data: null, timer: null, speakingSince: 0, lastVoiceFlag: 0 },
@@ -68,6 +69,7 @@ var MNProctor = (function () {
     SB = opts.sb;
     if(opts.bucket){ BUCKET = opts.bucket; }
     if(opts.table){ TABLE = opts.table; }
+    if(opts.maxBeforeSubmit){ S.maxBeforeSubmit = Number(opts.maxBeforeSubmit); }
     if(opts.profilesTable){ PROFILES = opts.profilesTable; }
     if(typeof opts.maxBeforeSubmit === 'number'){ S.maxBeforeSubmit = opts.maxBeforeSubmit; }
   }
@@ -162,7 +164,7 @@ var MNProctor = (function () {
     S.exam = exam; S.user = user;
     window.__mnpUserId = user ? user.id : null;
     if(!proctored()){ return; }
-    S.active=true; S.violations=0; S.events=[]; S.lastFlagAt=0;
+    S.active=true; S.violations=0; S.events=[]; S.lastFlagAt=0; S.startedAt=Date.now();
     goFullscreen();
     var b=document.createElement('div'); b.id='mnpBanner';
     b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1430;color:#cdbcff;border-bottom:1px solid #3a2f60;font:600 12px/1.4 system-ui,sans-serif;padding:7px 14px;display:flex;justify-content:space-between;align-items:center;';
@@ -171,7 +173,29 @@ var MNProctor = (function () {
     document.body.appendChild(b); S.banner=b;
 
     S.handlers.vis=function(){ if(document.hidden){ flag('left the exam tab / minimized'); } };
-    S.handlers.blur=function(){ if(S.active){ flag('exam window lost focus'); } };
+    // A raw window blur is a WEAK signal. It also fires while the page is still
+    // fully visible and the student has gone nowhere: camera/mic permission
+    // prompts, OS notifications, password managers, native dropdowns, clicks on
+    // a second monitor, the screen dimming. Counting those immediately was
+    // auto-submitting honest students.
+    //
+    // Every blur is still recorded for the integrity log, but it only becomes a
+    // COUNTED violation if the student does not come back within AWAY_MS. A real
+    // tab switch or minimise is caught immediately by visibilitychange above.
+    S.handlers.blur=function(){
+      if(!S.active){ return; }
+      note('focus left the exam window (brief)');
+      if(S.awayTimer){ clearTimeout(S.awayTimer); }
+      S.awayTimer=setTimeout(function(){
+        S.awayTimer=null;
+        if(S.active && !document.hasFocus() && !document.hidden){
+          flag('away from the exam window');
+        }
+      }, 8000);
+    };
+    S.handlers.focus=function(){
+      if(S.awayTimer){ clearTimeout(S.awayTimer); S.awayTimer=null; }
+    };
     S.handlers.fs=function(){ if(S.active && !document.fullscreenElement){ flag('exited fullscreen'); askFullscreen(); } };
     S.handlers.copy=function(ev){ ev.preventDefault(); flag('copy blocked'); };
     S.handlers.paste=function(ev){ ev.preventDefault(); flag('paste blocked'); };
@@ -179,6 +203,7 @@ var MNProctor = (function () {
     S.handlers.beforeunload=function(ev){ if(S.active){ ev.preventDefault(); ev.returnValue=''; return ''; } };
     document.addEventListener('visibilitychange', S.handlers.vis);
     window.addEventListener('blur', S.handlers.blur);
+    window.addEventListener('focus', S.handlers.focus);
     window.addEventListener('beforeunload', S.handlers.beforeunload);
     document.addEventListener('fullscreenchange', S.handlers.fs);
     document.addEventListener('copy', S.handlers.copy);
@@ -200,23 +225,37 @@ var MNProctor = (function () {
     $('mnpResume').addEventListener('click', function(){ goFullscreen(); if(d.parentNode){ document.body.removeChild(d); } });
   }
 
+  // Recorded in the integrity log but NOT counted toward auto-submit. Used for
+  // signals that are real but ambiguous, so the instructor still sees them.
+  function note(reason){
+    if(!S.active){ return; }
+    S.events.push({ t:new Date().toISOString(), reason:reason, counted:false });
+  }
+
   function flag(reason){
     if(!S.active){ return; }
     var now=Date.now();
-    S.events.push({ t:new Date().toISOString(), reason:reason });
+    S.events.push({ t:new Date().toISOString(), reason:reason, counted:true });
     // Voice flags capture a short VIDEO CLIP (to see/hear live-help cheating);
     // all other flags keep the cheap photo snapshot.
     if(S.cam.ready){
       if(reason && reason.indexOf('voice')===0){ recordClip(reason); }
       else { snapshot(reason); }
     }
-    if(S.lastFlagAt && (now - S.lastFlagAt) < 1200){ return; } // debounce one incident
+    // One real action can fire blur AND visibilitychange a few seconds apart.
+    // A 1.2s window was too tight and charged students twice for one incident.
+    if(S.lastFlagAt && (now - S.lastFlagAt) < 6000){ return; }
     S.lastFlagAt=now;
     S.violations++;
     var c=$('mnpCount'); if(c){ c.textContent='Activity flagged'; }
     if(S.violations < S.maxBeforeSubmit){
       if(S.banner){ S.banner.style.background='#3a1420'; S.banner.firstChild.textContent='\u26A0 Warning: leaving the exam is recorded. Continuing to do so will submit your exam automatically.'; }
       toast('\u26A0 Warning: stay in the exam window. Repeated violations will end and submit your exam.');
+    } else if((now - S.startedAt) < 60000){
+      // Never auto-submit in the first minute. Permission prompts and window
+      // juggling cluster at the start; ending an exam there is almost always
+      // wrong. The incidents are still recorded.
+      toast('\u26A0 Warning: stay in the exam window.');
     } else {
       flagSubmit();
     }
@@ -369,6 +408,8 @@ var MNProctor = (function () {
     stopCamera();
     document.removeEventListener('visibilitychange', S.handlers.vis);
     window.removeEventListener('blur', S.handlers.blur);
+    if(S.handlers.focus){ window.removeEventListener('focus', S.handlers.focus); }
+    if(S.awayTimer){ clearTimeout(S.awayTimer); S.awayTimer=null; }
     window.removeEventListener('beforeunload', S.handlers.beforeunload);
     document.removeEventListener('fullscreenchange', S.handlers.fs);
     document.removeEventListener('copy', S.handlers.copy);
