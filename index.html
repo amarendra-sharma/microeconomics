@@ -267,6 +267,17 @@
 .pm-p2{color:var(--gold,#c9920a);font-weight:600;}
 .pm-legend{font-size:11.5px;color:var(--text-subtle);margin-top:6px;text-align:center;}
 .gt-wrap{margin:14px 0;padding:10px;border:1px solid var(--border);border-radius:8px;overflow-x:auto;}
+.gsec{border:1px solid var(--border);border-radius:12px;background:var(--surface);margin-bottom:12px;overflow:hidden;}
+.gsec-h{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;background:none;border:0;cursor:pointer;text-align:left;font-family:inherit;font-size:15px;font-weight:600;color:var(--text-bright);}
+.gsec-h:hover{background:var(--surface-strong);}
+.gsec-ico{color:var(--text-subtle);font-size:11px;transition:transform .15s ease;}
+.gsec.open .gsec-ico{transform:rotate(90deg);}
+.gsec-t{flex:1;}
+.gsec-n{font-size:12px;font-weight:500;color:var(--text-muted);}
+.gsec-n.hot{color:var(--amber);}
+.gsec-b{padding:0 14px 14px;}
+.gsec-b[hidden]{display:none;}
+.gsec-b > h3{display:none;}
 </style>
 <script>
 /* MacroNations visit tracking (shared across courses, build pvname-2026-10).
@@ -5634,21 +5645,74 @@ var ExamRecipe=null;
 /* ====================================================================
    GRADE WRITTEN  (AI-assisted, instructor-reviewed)
    ==================================================================== */
+/* Five collapsible sections. A grader comes here for the written answers, so
+   those two queues sit at the top and open; student work, arena attempts and
+   the AI key sit below, closed, and do not query the database at all until
+   they are opened. Each section remembers its own open/closed state. */
+var GRADE_LOADED = {};
+function gradeSections(){
+  return [
+    ['gradingBody',       'Written exam answers to grade', true,  loadPendingWritten],
+    ['quizWrittenCard',   'Written quiz answers to grade', true,  loadPendingQuizWritten],
+    ['workBrowser',       'Review student work',           false, renderWorkBrowser],
+    ['arenaAttemptsCard', 'Arena attempts',                false, renderArenaAttempts],
+    ['graderKeyCard',     'AI grading assistant',          false, renderGraderKeyCard]
+  ];
+}
+function gSecOpen(id, dflt){
+  try { var v = localStorage.getItem('imGSec.' + id); if(v === '1'){ return true; } if(v === '0'){ return false; } } catch(e){}
+  return dflt;
+}
+function gSecRemember(id, open){ try { localStorage.setItem('imGSec.' + id, open ? '1' : '0'); } catch(e){} }
+/* Header badge: a number becomes "7 waiting" (amber) or "none"; a string prints as given. */
+function gSecNote(id, v, word){
+  var el = $('n_' + id); if(!el){ return; }
+  if(typeof v === 'number'){ el.textContent = v > 0 ? (v + ' ' + (word || 'waiting')) : 'none'; el.className = 'gsec-n' + (v > 0 ? ' hot' : ''); }
+  else { el.textContent = v || ''; el.className = 'gsec-n'; }
+}
+function gSecToggle(id, want){
+  var sec = document.querySelector('.gsec[data-sec="' + id + '"]'); if(!sec){ return; }
+  var head = sec.querySelector('.gsec-h'), body = $(id); if(!head || !body){ return; }
+  var open = (want === undefined) ? body.hasAttribute('hidden') : !!want;
+  if(open){ body.removeAttribute('hidden'); } else { body.setAttribute('hidden',''); }
+  sec.className = open ? 'gsec open' : 'gsec';
+  head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  gSecRemember(id, open);
+  if(open && !GRADE_LOADED[id]){
+    GRADE_LOADED[id] = true;
+    var secs = gradeSections();
+    for(var i = 0; i < secs.length; i++){ if(secs[i][0] === id){ secs[i][3](); return; } }
+  }
+}
 function renderGrading(host){
   if(!needCourse(host)){ return; }
-  host.innerHTML =
-    '<div class="inline-actions" style="margin-bottom:12px;justify-content:flex-end;"><button class="btn btn-ghost btn-sm" id="itemStatsBtn">Item analysis</button></div>' +
-    '<div class="card" id="graderKeyCard" style="margin-bottom:16px;"></div>' +
-    '<div class="card" id="workBrowser" style="margin-bottom:16px;"></div>' +
-    '<div class="card" id="arenaAttemptsCard" style="margin-bottom:16px;"></div>' +
-    '<div class="card" id="quizWrittenCard" style="margin-bottom:16px;"></div>' +
-    '<div id="gradingBody">' + loadingCard() + '</div>';
+  GRADE_LOADED = {};
+  var secs = gradeSections(), i, s, open;
+  var html = '<div class="inline-actions" style="margin-bottom:12px;justify-content:flex-end;">' +
+    '<button class="btn btn-ghost btn-sm" id="gsecAll">Open all</button>' +
+    '<button class="btn btn-ghost btn-sm" id="itemStatsBtn">Item analysis</button></div>';
+  for(i = 0; i < secs.length; i++){
+    s = secs[i]; open = gSecOpen(s[0], s[2]);
+    html +=
+      '<section class="gsec' + (open ? ' open' : '') + '" data-sec="' + s[0] + '">' +
+        '<button type="button" class="gsec-h" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="' + s[0] + '">' +
+          '<span class="gsec-ico">\u25B8</span><span class="gsec-t">' + s[1] + '</span>' +
+          '<span class="gsec-n" id="n_' + s[0] + '"></span>' +
+        '</button>' +
+        '<div class="gsec-b" id="' + s[0] + '"' + (open ? '' : ' hidden') + '></div>' +
+      '</section>';
+  }
+  host.innerHTML = html;
   if($('itemStatsBtn')){ $('itemStatsBtn').addEventListener('click', function(){ openItemStats(State.teachCourseId); }); }
-  renderGraderKeyCard();
-  renderWorkBrowser();
-  renderArenaAttempts();
-  loadPendingWritten();
-  loadPendingQuizWritten();
+  if($('gsecAll')){ $('gsecAll').addEventListener('click', function(){
+    var all = gradeSections(); for(var j = 0; j < all.length; j++){ gSecToggle(all[j][0], true); }
+  }); }
+  Array.prototype.forEach.call(host.querySelectorAll('.gsec-h'), function(b){
+    b.addEventListener('click', function(){ gSecToggle(b.getAttribute('aria-controls')); });
+  });
+  for(i = 0; i < secs.length; i++){
+    if(gSecOpen(secs[i][0], secs[i][2])){ GRADE_LOADED[secs[i][0]] = true; secs[i][3](); }
+  }
 }
 
 
@@ -5671,6 +5735,7 @@ function renderArenaAttempts(){
     var enroll=r[0].data?r[0].data:[];
     var att=r[1].data?r[1].data:[];
     if(r[1].error){ body.innerHTML='<div class="card empty">Arena attempt data isn\u2019t available yet. If this persists, migration im_40 (im_arena_attempt_rollup) may need to be deployed.</div>'; return; }
+    gSecNote('arenaAttemptsCard', att.length, 'attempts');
     if(att.length===0){ body.innerHTML='<div class="card empty">No graded arena attempts yet in this course.</div>'; return; }
     // name map by user_id
     var nameOf={};
@@ -6005,6 +6070,7 @@ function loadPendingQuizWritten(){
         var it={ attempt_id:r.id, student_id:r.student_id, chapter:gen.chapter, prompt:gen.prompt, points:gen.points||1, model:(gen.answer!==undefined&&gen.answer!==null?String(gen.answer):(gen.rationale||'')), submitted:r.submitted_value };
         QW_ITEMS[r.id]=it; items.push(it);
       });
+      gSecNote('quizWrittenCard', items.length);
       if(items.length===0){ body.innerHTML='<div class="card empty">No ungraded written quiz answers right now.</div>'; return; }
       var sids=[]; items.forEach(function(it){ if(sids.indexOf(it.student_id)<0){ sids.push(it.student_id); } });
       sb.from('im_person').select('user_id,email,full_name').in('user_id',sids).then(function(pr){
@@ -6242,12 +6308,13 @@ function renderGraderKeyCard(){
   var card = $('graderKeyCard'); if(!card){ return; }
   sb.rpc('im_has_grader_key').then(function(res){
     var hasKey = !!(res && res.data);
+    gSecNote('graderKeyCard', hasKey ? 'key saved' : 'no key yet');
     var status = hasKey
       ? '<span class="tag green">API key saved</span>'
       : '<span class="tag dim">No API key</span>';
     card.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">' +
-        '<div><div style="font-size:16px;color:var(--text-bright);">AI grading assistant ' + status + '</div>' +
+        '<div><div style="font-size:16px;color:var(--text-bright);">' + status + '</div>' +
         '<div style="font-size:12.5px;color:var(--text-muted);margin-top:3px;">Uses <b>your own</b> API key. Choose <b>Anthropic</b> (paid, pennies per exam) or <b>Google Gemini</b> (has a free tier). The key is stored securely and never shown again; AI proposes scores you review and finalize.</div></div>' +
         '<button class="btn btn-ghost btn-sm" id="gkEdit">' + (hasKey?'Update key':'Add API key') + '</button>' +
       '</div>' +
@@ -6354,7 +6421,7 @@ function loadPendingWritten(){
       var raw=at.data?at.data:[];
       // only attempts that actually have an exam_id and a submitted answer recorded
       var examAttempts=raw.filter(function(a){ return a.exam_id; });
-      if(examAttempts.length===0){ body.innerHTML='<div class="card empty">No ungraded exam answers in this course yet. (If a student just submitted, give it a moment, then reopen this tab.)</div>'; return; }
+      if(examAttempts.length===0){ gSecNote('gradingBody',0); body.innerHTML='<div class="card empty">No ungraded exam answers in this course yet. (If a student just submitted, give it a moment, then reopen this tab.)</div>'; return; }
       var itemIds=[]; examAttempts.forEach(function(a){ if(itemIds.indexOf(a.item_id)<0){ itemIds.push(a.item_id); } });
       sb.from('im_assessment_item').select('id,prompt,points,item_type').in('id',itemIds).then(function(it){
         var items=it.data?it.data:[];
@@ -6362,6 +6429,7 @@ function loadPendingWritten(){
         // keep only free_response attempts
         var attempts=examAttempts.filter(function(a){ var x=itemById[a.item_id]; return x && x.item_type==='free_response'; });
         if(attempts.length===0){
+          gSecNote('gradingBody',0);
           var nNumeric=examAttempts.length;
           body.innerHTML='<div class="card empty">No <b>written</b> answers are waiting here. There '+(nNumeric===1?'is':'are')+' '+nNumeric+' ungraded exam answer'+(nNumeric===1?'':'s')+' in this course, but they are auto-graded types (multiple-choice or numeric), not short-answer. Only free-response questions appear on this tab. If you expected written answers, confirm the exam actually includes free-response items (Exams &rarr; the item shows a "written" tag).</div>';
           return;
@@ -6371,6 +6439,7 @@ function loadPendingWritten(){
         sb.from('im_exam').select('id,title').in('id',exIds).then(function(ex){
           var examTitle={}; (ex.data||[]).forEach(function(e){ examTitle[e.id]=e.title; });
           var finish=function(nameById){
+            gSecNote('gradingBody', attempts.length);
             var pendingAI=attempts.filter(function(a){ return !a.ai_graded_at; }).length;
             var head='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">' +
               '<div style="font-size:13px;color:var(--text-muted);">' + attempts.length + ' written ' + (attempts.length===1?'answer':'answers') + ' awaiting review' + (pendingAI>0?(' \u00b7 ' + pendingAI + ' not yet AI-graded'):'') + '</div>' +
@@ -6422,7 +6491,7 @@ function loadPendingWritten(){
           if(sids.length===0){ finish({}); }
           else {
             sb.from('im_person').select('user_id,email,full_name').in('user_id',sids).then(function(pr){
-              var nameById={}; (pr.data||[]).forEach(function(p){ nameById[p.id]=p.full_name||p.email||p.id; });
+              var nameById={}; (pr.data||[]).forEach(function(p){ nameById[p.user_id]=p.full_name||p.email||p.user_id; });
               finish(nameById);
             });
           }
