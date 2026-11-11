@@ -16,7 +16,7 @@
    ========================================================================== */
 (function () {
   'use strict';
-  var SW_BUILD = 'sw-portal-3.3';
+  var SW_BUILD = 'sw-portal-3.4';
   // Scan libraries: served next to index.html first (same origin, no CDN or
   // worker cross-origin issues); CDN only as a fallback.
   var LIBS = {
@@ -876,28 +876,55 @@
     var s = o.code ? sheetByCode(o.code) : null;
     if (!o.read) { return o.warning || 'needs its code'; }
     var n = 0; for (var q in o.groups) { if (o.groups[q].needsReview) { n++; } }
-    return (s ? s.student_label : o.code) + (o.rotation ? ' (upside down)' : '') + ' \u2713' + (n ? ' \u00b7 ' + n + ' to check' : '');
+    return (s ? s.student_label : o.code) + (o.repaired ? ' (recovered: ' + o.repaired + ')' : (o.rotation ? ' (upside down)' : '')) + ' \u2713' + (n ? ' \u00b7 ' + n + ' to check' : '');
   }
   function thumb(cv) {
     var t = document.createElement('canvas'), s = 260 / cv.width; t.width = 260; t.height = Math.round(cv.height * s);
     t.getContext('2d').drawImage(cv, 0, 0, t.width, t.height); return t.toDataURL('image/jpeg', 0.6);
   }
 
+  // One entry per physical sheet. Two scans carrying the same code are NEVER merged
+  // (photocopied spare sheets, or a student writing on someone else's sheet): each
+  // copy becomes its own entry and must be matched to a student before it is saved.
+  function makeEntry(s, key, pgs) {
+    var e = { sheet: s, key: key, pages: {}, answers: {} };
+    pgs.forEach(function (p) {
+      e.pages[p.page] = p;
+      for (var q in p.groups) { if (Object.prototype.hasOwnProperty.call(p.groups, q)) { e.answers[q] = p.groups[q]; } }
+    });
+    return e;
+  }
+  function studentOf(e) { return e.copies ? (e.assignTo || null) : (e.sheet.student_id || e.assignTo || null); }
+  function rosterName(id) { var st = S.rosterById && S.rosterById[id]; return st ? st.name : ''; }
+  function gradedFor(sid) {
+    for (var i = 0; i < S.sheets.length; i++) { if (S.sheets[i].student_id === sid && S.sheets[i].status === 'graded') { return S.sheets[i]; } }
+    return null;
+  }
   function collate() {
-    var bySheet = {}, orphans = [], skipped = [];
+    var groups = {}, order = [], orphans = [], skipped = [];
     S.scan.pages.forEach(function (p, idx) {
       p._idx = idx;
       if (!p.ok) { skipped.push(p); return; }
       if (!p.read) { orphans.push(p); return; }
-      var s = sheetByCode(p.code);
-      var e = bySheet[p.code] || (bySheet[p.code] = { sheet: s, pages: {}, answers: {} });
-      e.pages[p.page] = p;
-      for (var q in p.groups) { if (Object.prototype.hasOwnProperty.call(p.groups, q)) { e.answers[q] = p.groups[q]; } }
+      if (!groups[p.code]) { groups[p.code] = []; order.push(p.code); }
+      groups[p.code].push(p);
     });
-    var list = Object.keys(bySheet).map(function (k) { return bySheet[k]; });
+    var list = [];
+    order.forEach(function (code) {
+      var pgs = groups[code], s = sheetByCode(code), byPage = {}, dup = false;
+      pgs.forEach(function (p) { (byPage[p.page] || (byPage[p.page] = [])).push(p); if (byPage[p.page].length > 1) { dup = true; } });
+      if (!dup) { list.push(makeEntry(s, code, pgs)); return; }
+      if ((s.page_count || 1) === 1) {
+        byPage[1].forEach(function (p, i) { var e = makeEntry(s, code + '#' + (i + 1), [p]); e.copyN = i + 1; e.copies = byPage[1].length; list.push(e); });
+      } else {
+        var ce = makeEntry(s, code, pgs);
+        ce.conflict = Object.keys(byPage).filter(function (k) { return byPage[k].length > 1; }).map(function (k) { return { page: Number(k), pages: byPage[k] }; });
+        list.push(ce);
+      }
+    });
     var assign = S.scan.assign || {};
     list.forEach(function (e) {
-      if (assign[e.sheet.code]) { e.assignTo = assign[e.sheet.code]; }
+      if (assign[e.key]) { e.assignTo = assign[e.key]; }
       e.missingPages = [];
       for (var i = 1; i <= (e.sheet.page_count || 1); i++) { if (!e.pages[i]) { e.missingPages.push(i); } }
       e.review = [];
@@ -911,22 +938,35 @@
     });
     return { sheets: list, orphans: orphans, skipped: skipped };
   }
+  function entryLabel(e) {
+    var sid = studentOf(e);
+    if (e.copies) { return (sid ? rosterName(sid) : 'Unmatched copy') + ' (copy ' + e.copyN + ' of ' + e.copies + ')'; }
+    return e.sheet.student_label || (sid ? rosterName(sid) : '') || e.sheet.code;
+  }
 
   function renderScanState() {
     var C = collate(); S.scan.collated = C;
-    var nReview = 0, nMissing = 0, nSpareUnassigned = 0;
-    C.sheets.forEach(function (e) { nReview += e.review.length; if (e.missingPages.length) { nMissing++; } if (!e.sheet.student_id && !e.assignTo) { nSpareUnassigned++; } });
+    var nReview = 0, nMissing = 0, nSpareUnassigned = 0, nConflict = 0, graded = [];
+    C.sheets.forEach(function (e) {
+      nReview += e.review.length; if (e.missingPages.length) { nMissing++; }
+      if (e.conflict) { nConflict++; return; }
+      var sid = studentOf(e); if (!sid) { nSpareUnassigned++; } else if (gradedFor(sid)) { graded.push(e); }
+    });
     var sum = el('swScanSummary'); if (!sum) { return; }
     if (!S.scan.pages.length) { sum.innerHTML = ''; el('swReview').innerHTML = ''; return; }
     var bad = C.skipped.filter(function (p) { return (p.found || 0) >= 2 || (p.error && /orientation|contrast|Read error/i.test(p.error)); });
-    var blockers = nReview + nMissing + nSpareUnassigned + C.orphans.length;
+    var blockers = nReview + nMissing + nSpareUnassigned + nConflict + C.orphans.length;
+    var nSave = C.sheets.filter(function (e) { var sid = studentOf(e); return !e.conflict && sid && (S.scan.regrade || !gradedFor(sid)); }).length;
     sum.innerHTML = '<div class="card" style="margin-bottom:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;">' +
       stat(C.sheets.length, 'answer sheets read') + stat(nReview, 'marks to check', nReview) + stat(C.orphans.length, 'pages need a code', C.orphans.length) +
-      stat(bad.length, 'unreadable sheets', bad.length) + stat(nSpareUnassigned, 'spares to assign', nSpareUnassigned) + stat(C.skipped.length - bad.length, 'other pages skipped') +
-      '<div style="flex:1"></div><button class="btn btn-primary" id="swGrade"' + (C.sheets.length ? '' : ' disabled') + '>Grade &amp; save ' + C.sheets.length + ' sheet' + (C.sheets.length === 1 ? '' : 's') + '</button>' +
+      stat(bad.length, 'unreadable sheets', bad.length) + stat(nSpareUnassigned, 'sheets to match to a student', nSpareUnassigned) + stat(nConflict, 'duplicate pages', nConflict) + stat(graded.length, 'already graded', 0) + stat(C.skipped.length - bad.length, 'other pages skipped') +
+      '<div style="flex:1"></div><button class="btn btn-primary" id="swGrade"' + (nSave > 0 ? '' : ' disabled') + '>Grade &amp; save ' + Math.max(0, nSave) + ' sheet' + (nSave === 1 ? '' : 's') + '</button>' +
+      (graded.length ? '<div style="width:100%;font-size:12.5px;color:var(--text-muted);"><label style="cursor:pointer;"><input type="checkbox" id="swRegradeOn"' + (S.scan.regrade ? ' checked' : '') + '> Also re-grade the ' + graded.length + ' student' + (graded.length === 1 ? ' who is' : 's who are') + ' already graded</label> \u2014 off by default so a second upload never overwrites saved grades. Answers you corrected by hand are always kept.' +
+        '<div style="margin-top:4px;color:var(--text-subtle);">' + graded.map(function (e) { return h(rosterName(studentOf(e)) || e.sheet.student_label || ''); }).join(', ') + '</div></div>' : '') +
       '<div class="msg" id="swGradeMsg" style="display:none;width:100%;"></div></div>';
+    if (el('swRegradeOn')) { el('swRegradeOn').addEventListener('change', function () { S.scan.regrade = el('swRegradeOn').checked; renderScanState(); }); }
     el('swGrade').addEventListener('click', function () {
-      if (blockers && !confirm('There are still ' + blockers + ' item(s) to resolve. Unresolved marks count as blank; sheets with no booklet version or no student are skipped. Continue?')) { return; }
+      if (blockers && !confirm('There are still ' + blockers + ' item(s) to resolve. Unresolved marks count as blank; sheets with no booklet version, no student or duplicate pages are skipped. Continue?')) { return; }
       gradeAndSave(C);
     });
     var rv = [];
@@ -946,18 +986,36 @@
         '<select data-orphanpg="' + p._idx + '" style="width:90px"><option value="1">page 1</option><option value="2">page 2</option><option value="3">page 3</option></select> ' +
         '<button class="btn btn-ghost btn-sm" data-orphango="' + p._idx + '">Read</button> <button class="btn btn-ghost btn-sm" data-orphandrop="' + p._idx + '">Ignore page</button></div></div>');
     });
+    var assignedTo = {};
+    C.sheets.forEach(function (e) { var sid = studentOf(e); if (sid && !e.conflict) { assignedTo[sid] = (assignedTo[sid] || 0) + 1; } });
     C.sheets.forEach(function (e) {
-      var s = e.sheet, head = '<b>' + h(s.student_label || '') + '</b> <span class="tag dim">' + h(s.code) + '</span>';
-      if (!s.student_id) {
+      var s = e.sheet, head = '<b>' + h(entryLabel(e)) + '</b> <span class="tag dim">' + h(s.code) + '</span>';
+      var sel = '<select data-assign="' + h(e.key) + '" style="min-width:240px;"><option value="">\u2014 choose student \u2014</option>' + S.roster.map(function (st) {
+            return '<option value="' + h(st.id) + '"' + (e.assignTo === st.id ? ' selected' : '') + '>' + h(st.name) + (st.email ? ' \u00b7 ' + h(st.email) : '') + '</option>'; }).join('') + '</select>';
+      var nameImg = '<img src="' + (e.pages[1] ? e.pages[1].preview : '') + '" style="width:300px;border:1px solid var(--border);border-radius:6px;background:#fff;object-fit:cover;object-position:top;height:120px">';
+      if (e.conflict) {
+        e.conflict.forEach(function (c) {
+          rv.push('<div class="card" style="margin-bottom:10px;border-left:4px solid var(--danger,#e11d48);"><div style="margin-bottom:8px;">' + head + ' \u2014 <b>page ' + c.page + ' was scanned ' + c.pages.length + ' times.</b> Keep one and ignore the others; this sheet is not saved until then.</div>' +
+            '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + c.pages.map(function (p) { return '<div style="font-size:11.5px;"><img src="' + p.preview + '" style="width:220px;height:110px;object-fit:cover;object-position:top;border:1px solid var(--border);border-radius:6px;background:#fff"><div>' + h(p.source || '') + ' <button class="btn btn-ghost btn-sm" data-orphandrop="' + p._idx + '">Ignore this one</button></div></div>'; }).join('') + '</div></div>');
+        });
+        return;
+      }
+      if (e.copies) {
+        rv.push('<div class="card" style="margin-bottom:10px;border-left:4px solid var(--warn,#d97706);"><div style="margin-bottom:8px;">' + head + ' \u2014 <b>this sheet code was scanned ' + e.copies + ' times</b>' +
+          (s.student_id ? ' (it was printed for ' + h(s.student_label || rosterName(s.student_id)) + ')' : ' (a photocopied spare?)') + '. Each copy is graded separately: read the name and pick who wrote this one.</div>' +
+          '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' + nameImg + sel + '</div></div>');
+      } else if (!s.student_id) {
         rv.push('<div class="card" style="margin-bottom:10px;"><div style="margin-bottom:8px;">' + head + ' \u2014 spare sheet: who wrote it?</div>' +
-          '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;"><img src="' + (e.pages[1] ? e.pages[1].preview : '') + '" style="width:300px;border:1px solid var(--border);border-radius:6px;background:#fff;object-fit:cover;object-position:top;height:120px">' +
-          '<select data-assign="' + h(s.code) + '" style="min-width:240px;"><option value="">\u2014 choose student \u2014</option>' + S.roster.map(function (st) {
-            return '<option value="' + h(st.id) + '"' + (e.assignTo === st.id ? ' selected' : '') + '>' + h(st.name) + (st.email ? ' \u00b7 ' + h(st.email) : '') + '</option>'; }).join('') + '</select></div></div>');
+          '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' + nameImg + sel + '</div></div>');
+      }
+      var sid0 = studentOf(e);
+      if (sid0 && assignedTo[sid0] > 1) {
+        rv.push('<div class="card" style="margin-bottom:10px;color:var(--danger,#e11d48);">' + head + ' \u2014 ' + h(rosterName(sid0) || 'This student') + ' is matched to ' + assignedTo[sid0] + ' sheets in this upload. Each student can have only one; fix the choice above.</div>');
       }
       if (e.missingPages.length) {
         rv.push('<div class="card" style="margin-bottom:10px;">' + head + ' \u2014 <span style="color:var(--danger,#e11d48)">page ' + e.missingPages.join(', ') + ' not scanned yet.</span> Add it, or grade anyway (its questions count as blank).</div>');
       }
-      e.review.forEach(function (a) { rv.push(reviewCard(e, a)); });
+      if (!e.conflict) { e.review.forEach(function (a) { rv.push(reviewCard(e, a)); }); }
     });
     if (C.skipped.length - bad.length > 0) {
       rv.push('<details class="card" style="margin-bottom:10px;"><summary style="cursor:pointer;">' + (C.skipped.length - bad.length) + ' page(s) skipped as not answer sheets</summary><div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">' +
@@ -968,9 +1026,9 @@
   }
   function stat(n, label, warn) { return '<div><div style="font-size:22px;font-weight:800;' + (warn ? 'color:var(--warn,#d97706)' : '') + '">' + n + '</div><div style="font-size:11.5px;color:var(--text-muted)">' + label + '</div></div>'; }
 
-  var STATUS_TXT = { outside: 'Mark outside the bubble', faint: 'Faint mark', multiple: 'More than one bubble filled', unclear: 'Possible erasure', gap: 'Gap between digits', invalid: 'Not a valid number', blank: 'Left blank' };
+  var STATUS_TXT = { offpage: 'Cut off in the scan \u2014 check the paper', outside: 'Mark outside the bubble', faint: 'Faint mark', multiple: 'More than one bubble filled', unclear: 'Possible erasure', gap: 'Gap between digits', invalid: 'Not a valid number', blank: 'Left blank' };
   function reviewCard(e, a) {
-    var s = e.sheet, key = h(s.code) + ':' + a.q, ctl;
+    var s = e.sheet, key = h(e.key) + ':' + a.q, ctl;
     if (a.kind === 'num') {
       ctl = '<input type="text" data-fixnum="' + key + '" value="' + h(a.value == null ? '' : a.value) + '" placeholder="number" style="width:120px"> ' +
         '<button class="btn btn-primary btn-sm" data-fixnumgo="' + key + '">Use this</button> <button class="btn btn-ghost btn-sm" data-fix="' + key + '" data-v="">Blank</button>';
@@ -983,12 +1041,12 @@
     var title = a.q === 'V' ? 'Booklet version \u2014 check the letter on their booklet' : 'Q' + a.q;
     return '<div class="card" style="margin-bottom:10px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">' +
       '<img src="' + (a.crop || '') + '" style="max-height:' + (a.kind === 'num' ? 240 : 60) + 'px;max-width:420px;border:1px solid var(--border);border-radius:6px;background:#fff">' +
-      '<div style="flex:1;min-width:220px;"><div style="margin-bottom:4px;"><b>' + h(s.student_label || '') + '</b> \u00b7 ' + title + ' <span class="tag amber">' + h(STATUS_TXT[a.status] || a.status) + '</span></div>' +
+      '<div style="flex:1;min-width:220px;"><div style="margin-bottom:4px;"><b>' + h(entryLabel(e)) + '</b> \u00b7 ' + title + ' <span class="tag amber">' + h(STATUS_TXT[a.status] || a.status) + '</span></div>' +
       '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Read as: <b>' + h(a.display || '(nothing)') + '</b></div>' + ctl + '</div></div>';
   }
   function findAnswer(key) {
     var i = key.lastIndexOf(':'), code = key.slice(0, i), q = key.slice(i + 1), C = S.scan.collated;
-    for (var j = 0; j < C.sheets.length; j++) { if (C.sheets[j].sheet.code === code) { return C.sheets[j].answers[q]; } }
+    for (var j = 0; j < C.sheets.length; j++) { if (C.sheets[j].key === code) { return C.sheets[j].answers[q]; } }
     return null;
   }
   function wireReview() {
@@ -1095,12 +1153,12 @@
     return new Blob([arr], { type: 'image/jpeg' });
   }
   function scanPath(sheet, pageNo) { return String(S.courseId) + '/' + String(S.examId) + '/' + String(sheet.id) + '/p' + pageNo + '.jpg'; }
-  function uploadScans(e) {
+  function uploadScans(e, row) {
     var paths = [], fails = 0;
     var nums = Object.keys(e.pages).map(Number).sort(function (a, b) { return a - b; });
     return runSeq(nums, function (n) {
       var p = e.pages[n]; if (!p || !p.archive) { return null; }
-      var path = scanPath(e.sheet, n);
+      var path = scanPath(row || e.sheet, n);
       return sb.storage.from(BUCKET).upload(path, dataUrlToBlob(p.archive), { upsert: true, contentType: 'image/jpeg' }).then(function (r) {
         if (r && r.error) { fails++; S.lastUploadError = r.error.message; } else { paths.push(path); }
       }, function (err) { fails++; S.lastUploadError = err && err.message; });
@@ -1151,21 +1209,78 @@
 
   /* --------------------------------------------------------- saving */
   function gradeAndSave(C) {
-    var noVersion = 0;
+    var noVersion = 0, skippedGraded = 0, conflicts = 0, regrade = !!S.scan.regrade;
     var todo = C.sheets.filter(function (e) {
-      if (!e.sheet.student_id && !e.assignTo) { return false; }
+      if (e.conflict) { conflicts++; return false; }
+      var sid = studentOf(e); if (!sid) { return false; }
       if (isVersioned(e.sheet) && e.version == null) { noVersion++; return false; }
+      if (!regrade && gradedFor(sid)) { skippedGraded++; return false; }
       return true;
     });
-    if (!todo.length) { say('swGradeMsg', noVersion ? 'Pick the booklet version for the flagged sheets first.' : 'Nothing to save \u2014 assign the spare sheets to students first.', 'err'); return; }
+    var bySid = {}, twice = [];
+    todo.forEach(function (e) { var k = studentOf(e); bySid[k] = (bySid[k] || 0) + 1; if (bySid[k] === 2) { twice.push(rosterName(k) || k); } });
+    if (twice.length) { say('swGradeMsg', 'Nothing saved: ' + twice.join(', ') + (twice.length === 1 ? ' is' : ' are') + ' matched to more than one sheet. Each student can have only one \u2014 fix the choices above.', 'err'); return; }
+    if (!todo.length) { say('swGradeMsg', skippedGraded ? 'Nothing new to save \u2014 everyone here is already graded (tick \u201cAlso re-grade\u201d to replace their grades).' : noVersion ? 'Pick the booklet version for the flagged sheets first.' : 'Nothing to save \u2014 match the spare / copied sheets to students first.', 'err'); return; }
+    // Which stored sheet each scan is saved on: the student's own sheet if this is it, an unused
+    // spare, otherwise a new sheet record for that student (so two people never share one row).
+    var used = {};
+    todo.forEach(function (e) { var sid = studentOf(e); if (e.sheet.student_id === sid && !used[e.sheet.id]) { e.row = e.sheet; e.ownRow = true; used[e.sheet.id] = true; } });
+    todo.forEach(function (e) {
+      if (e.row) { return; }
+      var sid = studentOf(e), s = e.sheet;
+      if (!s.student_id && s.status !== 'graded' && !used[s.id]) { e.row = s; used[s.id] = true; return; }
+      // The student's own sheet, when it carries exactly the same questions (always true for booklet versions).
+      for (var i = 0; i < S.sheets.length; i++) {
+        var r = S.sheets[i];
+        if (r.student_id === sid && r.status !== 'void' && !used[r.id] && (regrade || r.status !== 'graded') && JSON.stringify(r.items) === JSON.stringify(s.items)) { e.row = r; e.ownRow = true; used[r.id] = true; return; }
+      }
+      e.row = null;
+    });
+    // Spare or new sheet record: the student's other live sheets are retired first (one live sheet per student).
+    var voids = [];
+    todo.forEach(function (e) {
+      if (e.ownRow) { return; }
+      var sid = studentOf(e);
+      S.sheets.forEach(function (r) { if (r.student_id === sid && r.status !== 'void' && !used[r.id] && voids.indexOf(r.id) < 0) { voids.push(r.id); } });
+    });
+
     var ids = {};
-    todo.forEach(function (e) { itemsFor(e.sheet, e.version).forEach(function (it) { ids[String(it.item_id)] = true; }); });
+    todo.forEach(function (e) { versionSets(e.sheet).forEach(function (set) { set.forEach(function (it) { ids[String(it.item_id)] = true; }); }); });
     el('swGrade').disabled = true;
     say('swGradeMsg', 'Grading\u2026');
     var itemMap = {}, scanFails = 0, scanOk = 0;
-    fetchItems(Object.keys(ids)).then(function (m) {
+    var clones = todo.filter(function (e) { return !e.row; });
+    // Re-grading keeps every answer corrected by hand on the student's saved grade (read fresh from the database).
+    (regrade ? sb.from('im_paper_sheet').select('student_id,answers').eq('exam_id', S.examId).eq('status', 'graded').then(function (r) {
+      if (r.error) { throw new Error(r.error.message); }
+      var fresh = {}; (r.data || []).forEach(function (x) { if (x.student_id) { fresh[x.student_id] = x; } });
+      todo.forEach(function (e) {
+        var old = fresh[studentOf(e)]; if (!old || !old.answers) { return; }
+        Object.keys(old.answers).forEach(function (q) { var a = old.answers[q]; if (a && a.edited) { e.answers[q] = { value: a.value, status: a.status, edited: true }; } });
+        if (old.answers.V && old.answers.V.edited && isVersioned(e.sheet)) { e.version = Number(old.answers.V.value); }
+      });
+    }) : Promise.resolve()).then(function () {
+      return fetchItems(Object.keys(ids));
+    }).then(function (m) {
       itemMap = m;
       return loadStaticKeys(Object.keys(ids).filter(function (id) { return !(m[id] && m[id].generator_id); }));
+    }).then(function () {
+      return runSeq(chunk(voids, 100), function (part) {
+        return sb.from('im_paper_sheet').update({ status: 'void' }).in('id', part).then(function (r) { if (r.error) { throw new Error(r.error.message); } });
+      });
+    }).then(function () {
+      if (!clones.length) { return null; }
+      say('swGradeMsg', 'Creating sheet records for ' + clones.length + ' copied sheet' + (clones.length === 1 ? '' : 's') + '\u2026');
+      return runSeq(clones, function (e) {
+        var s = e.sheet, sid = studentOf(e);
+        var row = { code: newCode(), exam_id: S.examId, course_id: S.courseId, student_id: sid, student_label: rosterName(sid) || null,
+          items: s.items, page_count: s.page_count || 1, layout_version: s.layout_version || SheetwiseCore.VERSION, status: 'printed' };
+        return sb.from('im_paper_sheet').insert(row).select('*').then(function (r) {
+          if (r.error) { throw new Error('Could not create a sheet for ' + (row.student_label || sid) + ': ' + r.error.message); }
+          e.row = (r.data && r.data[0]) || null; if (!e.row) { throw new Error('Could not create a sheet for ' + (row.student_label || sid) + '.'); }
+          e.cloned = true;
+        });
+      });
     }).then(function () {
       var now = new Date().toISOString(), uid = State.user ? State.user.id : null;
       var ups = [], scoreRows = [], unknown = 0;
@@ -1173,22 +1288,20 @@
         var items = itemsFor(e.sheet, e.version);
         var g = gradeItems(items, e.answers, itemMap);
         unknown += g.unknownKey;
-        var sid = e.sheet.student_id || e.assignTo, ans = {};
+        var sid = studentOf(e), ans = {};
         if (e.answers.V) { ans.V = { value: e.answers.V.value, status: e.answers.V.status, edited: !!e.answers.V.edited }; }
         items.forEach(function (it) { var a = e.answers[it.q]; ans[it.q] = a ? { value: a.value, status: a.status, edited: !!a.edited } : { value: null, status: 'not_scanned' }; });
-        ups.push({ e: e, sheet: e.sheet, sid: sid, patch: { student_id: sid, answers: ans, per_item: g.per, score: g.score, max_score: g.max, status: 'graded', graded_at: now, graded_by: uid } });
+        ups.push({ e: e, sheet: e.row, sid: sid, patch: { student_id: sid, answers: ans, per_item: g.per, score: g.score, max_score: g.max, status: 'graded', graded_at: now, graded_by: uid } });
         scoreRows.push({ exam_id: S.examId, student_id: sid, course_id: S.courseId, points: g.score, updated_by: uid, updated_at: now });
       });
-      var voids = [];
-      ups.forEach(function (u) {
-        if (!u.sheet.student_id) { S.sheets.forEach(function (s) { if (s.student_id === u.sid && s.id !== u.sheet.id && s.status !== 'void') { voids.push(s.id); } }); }
-      });
-      return runSeq(chunk(voids, 100), function (part) {
+      // (sheets a student no longer uses were retired before any sheet record was created)
+      var voids2 = [];
+      return runSeq(chunk(voids2, 100), function (part) {
         return sb.from('im_paper_sheet').update({ status: 'void' }).in('id', part).then(function (r) { if (r.error) { throw new Error(r.error.message); } });
       }).then(function () {
         return runSeq(ups, function (u, i) {
           say('swGradeMsg', 'Saving ' + (i + 1) + ' of ' + ups.length + ' (with scans)\u2026');
-          return uploadScans(u.e).then(function (up) {
+          return uploadScans(u.e, u.sheet).then(function (up) {
             scanFails += up.fails; scanOk += up.paths.length;
             if (up.paths.length) { u.patch.scan_paths = up.paths; }
             return sb.from('im_paper_sheet').update(u.patch).eq('id', u.sheet.id).then(function (r) {
@@ -1210,6 +1323,9 @@
           (scanOk ? ' and stored ' + scanOk + ' scanned page' + (scanOk === 1 ? '' : 's') : '') + '.' +
           (scanFails ? ' ' + scanFails + ' page(s) could not be stored (' + (S.lastUploadError || 'storage error') + ' \u2014 run im_78_paper_review.sql).' : '') +
           (noVersion ? ' ' + noVersion + ' sheet(s) skipped: no booklet version chosen.' : '') +
+          (skippedGraded ? ' ' + skippedGraded + ' already-graded student(s) left unchanged.' : '') +
+          (conflicts ? ' ' + conflicts + ' sheet(s) with duplicate pages not saved.' : '') +
+          (clones.length ? ' ' + clones.length + ' copied sheet(s) saved under new sheet records for their students.' : '') +
           (res.unknown ? ' ' + res.unknown + ' answer(s) had no readable bank key and were marked wrong \u2014 check the item bank.' : ''),
           (res.unknown || noVersion || scanFails) ? 'err' : 'ok');
       });

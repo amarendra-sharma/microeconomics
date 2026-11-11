@@ -9,7 +9,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = 'sheetwise-core-1.3';
+  var VERSION = 'sheetwise-core-1.4';
   var PAGE_W = 612, PAGE_H = 792;              // US Letter in points
 
   // Fiducial squares (centres) and orientation bar, in page points.
@@ -335,7 +335,17 @@
   /* ---------------------------------------------------------------- locate */
   // Finds fiducials, fixes orientation, decodes the QR code.
   // Returns { ok, H, code, page, white, black, error }
+  // Standard search first; if that fails (shrunk "fit to page" printouts, pages scanned
+  // sideways, corners cut off by the printer) a whole-page search rebuilds the frame from
+  // the squares it can find. A rebuilt frame is only accepted if the QR code then decodes.
   function locate(img) {
+    var r = locateStd(img);
+    if (r.ok && r.code) { return r; }
+    var w = null;
+    try { w = locateWide(img); } catch (e) { w = null; }
+    return w || r;
+  }
+  function locateStd(img) {
     var f = [], missing = [];
     for (var c = 0; c < 4; c++) {
       var p = findFiducial(img, c);
@@ -370,6 +380,101 @@
     }
     if (!out.code) { out.warning = 'QR code unreadable \u2014 enter the sheet code printed under it.'; }
     return out;
+  }
+
+  /* ------------------------------------------- whole-page frame recovery */
+  function findSquaresAll(img) {
+    var W = img.w, Hh = img.h, g = img.gray, n = W * Hh;
+    var th = Math.min(otsu(img, 0, 0, W, Hh), 140);
+    var exp = FID / PAGE_W * W, lo = exp * 0.4, hi = exp * 1.5;
+    var seen = new Uint8Array(n), stack = [], out = [];
+    for (var i = 0; i < n; i++) {
+      if (seen[i] || g[i] > th) { continue; }
+      var cnt = 0, mnx = 1e9, mxx = -1, mny = 1e9, mxy = -1, sx = 0, sy = 0, big = false;
+      stack.length = 0; stack.push(i); seen[i] = 1;
+      while (stack.length) {
+        var p = stack.pop(), px = p % W, py = (p - px) / W;
+        cnt++; sx += px; sy += py;
+        if (px < mnx) { mnx = px; } if (px > mxx) { mxx = px; } if (py < mny) { mny = py; } if (py > mxy) { mxy = py; }
+        if (cnt > hi * hi * 2) { big = true; }
+        if (px > 0 && !seen[p - 1] && g[p - 1] <= th) { seen[p - 1] = 1; stack.push(p - 1); }
+        if (px < W - 1 && !seen[p + 1] && g[p + 1] <= th) { seen[p + 1] = 1; stack.push(p + 1); }
+        if (py > 0 && !seen[p - W] && g[p - W] <= th) { seen[p - W] = 1; stack.push(p - W); }
+        if (py < Hh - 1 && !seen[p + W] && g[p + W] <= th) { seen[p + W] = 1; stack.push(p + W); }
+      }
+      if (big) { continue; }
+      var bw = mxx - mnx + 1, bh = mxy - mny + 1;
+      if (bw < lo || bh < lo || bw > hi || bh > hi) { continue; }
+      if (bw / bh < 0.75 || bw / bh > 1.33) { continue; }
+      if (cnt / (bw * bh) < 0.85) { continue; }
+      out.push({ x: sx / cnt, y: sy / cnt, s: Math.sqrt(cnt) });
+    }
+    return out;
+  }
+  function locateWide(img) {
+    var sq = findSquaresAll(img);
+    if (sq.length < 2 || sq.length > 60) { return null; }
+    var DIAG = Math.sqrt(532 * 532 + 712 * 712);
+    var TYPES = [[532, [[0, 1], [2, 3]]], [712, [[0, 2], [1, 3]]], [DIAG, [[0, 3], [1, 2]]]];
+    var hyps = [], seenH = {};
+    for (var i = 0; i < sq.length; i++) {
+      for (var j = i + 1; j < sq.length; j++) {
+        var P = sq[i], Q = sq[j], sAvg = (P.s + Q.s) / 2;
+        if (Math.abs(P.s - Q.s) / Math.max(P.s, Q.s) > 0.25) { continue; }
+        var kk = sAvg / FID, dd = Math.sqrt((P.x - Q.x) * (P.x - Q.x) + (P.y - Q.y) * (P.y - Q.y)) / kk;
+        for (var t = 0; t < TYPES.length; t++) {
+          if (Math.abs(dd - TYPES[t][0]) / TYPES[t][0] > 0.1) { continue; }
+          for (var cp = 0; cp < 2; cp++) {
+            for (var ord = 0; ord < 2; ord++) {
+              var a = TYPES[t][1][cp][0], b = TYPES[t][1][cp][1], A = ord ? Q : P, B = ord ? P : Q;
+              // similarity template->image: z = m*t + c (complex)
+              var tx = FIDS[b][0] - FIDS[a][0], ty = FIDS[b][1] - FIDS[a][1], ix = B.x - A.x, iy = B.y - A.y;
+              var den = tx * tx + ty * ty, mr = (ix * tx + iy * ty) / den, mi = (iy * tx - ix * ty) / den;
+              var cr = A.x - (mr * FIDS[a][0] - mi * FIDS[a][1]), ci = A.y - (mi * FIDS[a][0] + mr * FIDS[a][1]);
+              var pts = [], real = [], nReal = 0;
+              for (var c = 0; c < 4; c++) {
+                var px = mr * FIDS[c][0] - mi * FIDS[c][1] + cr, py = mi * FIDS[c][0] + mr * FIDS[c][1] + ci, hit = null, hd = sAvg * 0.45;
+                for (var m = 0; m < sq.length; m++) {
+                  var d2 = Math.sqrt((sq[m].x - px) * (sq[m].x - px) + (sq[m].y - py) * (sq[m].y - py));
+                  if (d2 < hd && Math.abs(sq[m].s - sAvg) / sAvg < 0.3) { hd = d2; hit = sq[m]; }
+                }
+                pts.push(hit ? [hit.x, hit.y] : [px, py]); real.push(!!hit); if (hit) { nReal++; }
+              }
+              if (nReal === 3) {
+                var mis = real.indexOf(false), opp = 3 - mis, adj = [0, 1, 2, 3].filter(function (z) { return z !== mis && z !== opp; });
+                pts[mis] = [pts[adj[0]][0] + pts[adj[1]][0] - pts[opp][0], pts[adj[0]][1] + pts[adj[1]][1] - pts[opp][1]];
+              }
+              var key = pts.map(function (q) { return Math.round(q[0] / 8) + ',' + Math.round(q[1] / 8); }).join(';');
+              if (seenH[key]) { continue; } seenH[key] = 1;
+              hyps.push({ pts: pts, n: nReal, ang: Math.atan2(mi, mr) });
+            }
+          }
+        }
+      }
+    }
+    hyps.sort(function (x, y) { return y.n - x.n; });
+    for (var h = 0; h < hyps.length && h < 24; h++) {
+      var Hm = solveHomography(FIDS, hyps[h].pts); if (!Hm) { continue; }
+      var black = 0; for (var k2 = 0; k2 < 4; k2++) { black += patchMean(img, Hm, FIDS[k2][0], FIDS[k2][1], FID * 0.3); } black /= 4;
+      var white = 0; for (k2 = 0; k2 < WHITE_PTS.length; k2++) { white += patchMean(img, Hm, WHITE_PTS[k2][0], WHITE_PTS[k2][1], 5); } white /= WHITE_PTS.length;
+      var bar = patchMean(img, Hm, OBAR.x + OBAR.w / 2, OBAR.y + OBAR.h / 2, 3);
+      if ((white - bar) / Math.max(1, white - black) < 0.5) { continue; }
+      // a corner predicted off the page reads as white: judge contrast on the real squares only
+      var blk = 0, nb = 0; for (k2 = 0; k2 < 4; k2++) { var pp = hyps[h].pts[k2]; if (pp[0] >= 0 && pp[1] >= 0 && pp[0] < img.w && pp[1] < img.h) { blk += patchMean(img, Hm, FIDS[k2][0], FIDS[k2][1], FID * 0.3); nb++; } }
+      if (nb) { black = blk / nb; }
+      if (white - black < 40) { continue; }
+      var qr = decodeQR(img, Hm); if (!qr) { continue; }
+      var parts = qr.split('|'); if (parts[0] !== 'SW1' || parts.length < 3) { continue; }
+      var deg = Math.round(hyps[h].ang * 180 / Math.PI / 90) * 90; deg = ((deg % 360) + 360) % 360;
+      return { ok: true, H: Hm, rotation: deg, white: white, black: black, code: parts[1], page: parseInt(parts[2], 10) || 1,
+        repaired: hyps[h].n + ' of 4 corner squares found' + (deg % 180 ? '; page was sideways' : '') };
+    }
+    return null;
+  }
+  function insideImage(img, H, bb) {
+    var c = [[bb.x, bb.y], [bb.x + bb.w, bb.y], [bb.x, bb.y + bb.h], [bb.x + bb.w, bb.y + bb.h]];
+    for (var i = 0; i < 4; i++) { var p = mapPt(H, c[i][0], c[i][1]); if (p[0] < 1 || p[1] < 1 || p[0] > img.w - 2 || p[1] > img.h - 2) { return false; } }
+    return true;
   }
 
   function patchMean(img, H, x, y, rad) {
@@ -650,7 +755,7 @@
     var img = grayFromCanvas(cv);
     var loc = locate(img);
     if (!loc.ok) { return { ok: false, error: loc.error, found: loc.found || 0 }; }
-    var out = { ok: true, code: loc.code, page: loc.page, rotation: loc.rotation, warning: loc.warning || null };
+    var out = { ok: true, code: loc.code, page: loc.page, rotation: loc.rotation, warning: loc.warning || null, repaired: loc.repaired || null };
     out.preview = pagePreview(img, loc, 1.1);
     out._img = img; out._loc = loc;          // caller may call finishRead later (e.g. after manual code entry)
     if (loc.code && resolvePage) {
@@ -663,6 +768,15 @@
   function finishRead(out, pageLayout) {
     var r = readMarks(out._img, out._loc, pageLayout);
     out.base = r.base; out.groups = r.groups;
+    if (out._loc.repaired) {
+      // Rebuilt frame: anything the printer/scanner cut off must be checked, never silently read as blank.
+      for (var q0 in r.groups) {
+        var g0 = r.groups[q0];
+        if (Object.prototype.hasOwnProperty.call(r.groups, q0) && g0.bbox && !insideImage(out._img, out._loc.H, g0.bbox)) {
+          g0.value = null; g0.display = ''; g0.status = 'offpage'; g0.needsReview = true;
+        }
+      }
+    }
     for (var q in r.groups) {
       if (Object.prototype.hasOwnProperty.call(r.groups, q) && r.groups[q].needsReview) {
         var bb = r.groups[q].bbox;
