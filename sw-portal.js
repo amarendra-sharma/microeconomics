@@ -16,7 +16,7 @@
    ========================================================================== */
 (function () {
   'use strict';
-  var SW_BUILD = 'sw-portal-3.4';
+  var SW_BUILD = 'sw-portal-3.5';
   // Scan libraries: served next to index.html first (same origin, no CDN or
   // worker cross-origin issues); CDN only as a fallback.
   var LIBS = {
@@ -1172,8 +1172,9 @@
 
   /* -------------------------------------------- student-review snapshots */
   // Everything a student may be shown, computed here (the student never gets
-  // seeds or keys). Question text is included ONLY for "questions" mode.
-  function buildReview(sheet, itemMap, withQuestions) {
+  // seeds or keys). Question text is included ONLY for "questions" mode, and in
+  // "missed" mode ONLY for the questions this student did not get full credit on.
+  function buildReview(sheet, itemMap, qmode) {
     var v = versionFromAnswers(sheet, sheet.answers), items = itemsFor(sheet, v) || versionSets(sheet)[0];
     var per = {}; (sheet.per_item || []).forEach(function (p) { per[p.q] = p; });
     var out = [];
@@ -1185,7 +1186,7 @@
         row.yi = a.value == null || a.value === '' ? null : (it.kind === 'yn' ? (a.value === 'yes' ? 0 : 1) : Number(a.value));
         row.ci = row.correct && row.correct.length === 1 ? (it.kind === 'yn' ? (row.correct === 'Y' ? 0 : 1) : row.correct.charCodeAt(0) - 65) : null;
       }
-      if (withQuestions) {
+      if (qmode === true || qmode === 'questions' || (qmode === 'missed' && !(Number(row.earned) >= Number(row.points)))) {
         var r = itemMap[String(it.item_id)] || {}, gen = genFor(r, it.seed);
         row.prompt = gen && gen.prompt ? gen.prompt : (r.prompt || '');
         if (it.kind === 'mc') {
@@ -1350,7 +1351,7 @@
   function refreshSnapshots(onlyIds) {
     if (!S.release || !S.release.released_at) { return Promise.resolve(); }
     var list = S.sheets.filter(function (s) { return s.status === 'graded' && (!onlyIds || onlyIds.indexOf(s.id) >= 0); });
-    return writeSnapshots(list, S.release.mode === 'questions');
+    return writeSnapshots(list, S.release.mode);
   }
   function writeSnapshots(list, withQ) {
     var ids = {};
@@ -1436,6 +1437,7 @@
   var MODE_TXT = {
     score: 'Score only \u2014 total plus their own scanned sheet',
     answers: 'Answers \u2014 plus each question\u2019s their answer / correct answer / points, no question text (recommended)',
+    missed: 'Missed questions \u2014 their sheet plus ONLY the questions they got wrong, with question text and the correct answer (protected viewer)',
     questions: 'Full questions \u2014 plus question text and graphs, in a protected, watermarked viewer'
   };
   function releaseCardHTML() {
@@ -1444,7 +1446,7 @@
     var weekAhead = new Date(Date.now() + 7 * 864e5).toISOString();
     return '<div class="card" style="margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><div style="font-weight:700;flex:1;">Student review</div>' +
       (on ? '<span class="tag green">Released ' + h(fmtDT(r.released_at)) + '</span>' : '<span class="tag dim">Not released</span>') + '</div>' +
-      '<label class="fld">What students see<select id="swRelMode">' + ['score', 'answers', 'questions'].map(function (m) { return '<option value="' + m + '"' + ((r.mode || 'answers') === m ? ' selected' : '') + '>' + MODE_TXT[m] + '</option>'; }).join('') + '</select></label>' +
+      '<label class="fld">What students see<select id="swRelMode">' + ['score', 'answers', 'missed', 'questions'].map(function (m) { return '<option value="' + m + '"' + ((r.mode || 'answers') === m ? ' selected' : '') + '>' + MODE_TXT[m] + '</option>'; }).join('') + '</select></label>' +
       '<div id="swRelWarn" style="font-size:12px;margin:-2px 0 8px;color:var(--warn,#d97706);"></div>' +
       '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
       '<label class="fld" style="min-width:190px;">Opens<input type="datetime-local" id="swRelOpen" value="' + h(toLocalInput(r.opens_at || new Date().toISOString())) + '"></label>' +
@@ -1458,8 +1460,8 @@
     if (!el('swRelSave')) { return; }
     function warn() {
       var m = el('swRelMode').value, w = el('swRelWarn');
-      if (m !== 'questions') { w.textContent = ''; return; }
-      w.textContent = 'Students will see the question text. Screenshots and phone photos can\u2019t be fully prevented \u2014 prefer a short window (e.g. 48 hours) and keep drawing future exams from the generated bank.';
+      if (m !== 'questions' && m !== 'missed') { w.textContent = ''; return; }
+      w.textContent = (m === 'missed' ? 'Each student sees the text of only the questions they missed, so the full exam is never shown to anyone, but across the class most questions will be seen by someone. ' : '') + 'Students will see the question text. Screenshots and phone photos can\u2019t be fully prevented \u2014 prefer a short window (e.g. 48 hours) and keep drawing future exams from the generated bank.';
       exposureCount().then(function (n) { if (n && el('swRelWarn')) { el('swRelWarn').textContent += ' ' + n + ' of these questions were already shown in an earlier full release.'; } });
     }
     el('swRelMode').addEventListener('change', warn); warn();
@@ -1473,13 +1475,18 @@
       });
     }
   }
+  function missedItemIds() {
+    var o = {};
+    S.sheets.forEach(function (s) { if (s.status === 'graded') { (s.per_item || []).forEach(function (p) { if (!(Number(p.earned) >= Number(p.points)) && p.item_id) { o[String(p.item_id)] = true; } }); } });
+    return Object.keys(o);
+  }
   function examItemIds() {
     var o = {};
     S.sheets.forEach(function (s) { if (s.status === 'graded') { versionSets(s).forEach(function (set) { set.forEach(function (it) { o[String(it.item_id)] = true; }); }); } });
     return Object.keys(o);
   }
   function exposureCount() {
-    return sb.from('im_paper_release').select('exam_id,exposed_items,mode').eq('mode', 'questions').then(function (r) {
+    return sb.from('im_paper_release').select('exam_id,exposed_items,mode').in('mode', ['questions', 'missed']).then(function (r) {
       var seen = {}; (r.data || []).forEach(function (x) { if (String(x.exam_id) !== String(S.examId)) { (x.exposed_items || []).forEach(function (id) { seen[String(id)] = true; }); } });
       return examItemIds().filter(function (id) { return seen[id]; }).length;
     }, function () { return 0; });
@@ -1489,7 +1496,7 @@
     var mode = el('swRelMode').value;
     var row = { exam_id: S.examId, course_id: S.courseId, mode: mode, opens_at: isoOrNull(el('swRelOpen').value),
       closes_at: isoOrNull(el('swRelClose').value), regrade_until: mode === 'score' ? null : isoOrNull(el('swRelRegrade').value),
-      watermark: el('swRelWm').checked, exposed_items: mode === 'questions' ? examItemIds() : null,
+      watermark: el('swRelWm').checked, exposed_items: mode === 'questions' ? examItemIds() : (mode === 'missed' ? missedItemIds() : null),
       released_at: new Date().toISOString(), released_by: State.user ? State.user.id : null, updated_at: new Date().toISOString() };
     if (row.closes_at && row.opens_at && row.closes_at <= row.opens_at) { say('swResMsg', 'The close time must be after the open time.', 'err'); return; }
     el('swRelSave').disabled = true;
@@ -1498,7 +1505,7 @@
       if (r.error) { throw new Error(r.error.message); }
       S.release = row;
       var graded = S.sheets.filter(function (s) { return s.status === 'graded'; });
-      return writeSnapshots(graded, mode === 'questions').then(function () { return graded.length; });
+      return writeSnapshots(graded, mode).then(function () { return graded.length; });
     }).then(function (n) {
       return loadReviewData().then(function () { renderResultsBody(); say('swResMsg', 'Released to ' + n + ' student' + (n === 1 ? '' : 's') + ' (' + mode + ' mode).', 'ok'); });
     }).catch(function (err) { if (el('swRelSave')) { el('swRelSave').disabled = false; } say('swResMsg', err.message || String(err), 'err'); });
@@ -1803,7 +1810,8 @@
     } else { html += '<div style="font-size:12.5px;color:var(--text-muted);">The scan of your sheet isn\u2019t available.</div>'; }
     html += '</div>';
     if (d.mode !== 'score') {
-      html += '<div class="card" style="margin-bottom:12px;"><div style="font-weight:700;margin-bottom:8px;">Question by question</div>';
+      html += '<div class="card" style="margin-bottom:12px;"><div style="font-weight:700;margin-bottom:8px;">' + (d.mode === 'missed' ? 'Questions you missed (' + items.length + ')' : 'Question by question') + '</div>' +
+        (d.mode === 'missed' && !items.length ? '<div style="font-size:13px;color:var(--text-muted);">You didn\u2019t miss any questions.</div>' : '');
       items.forEach(function (it) {
         var reqs = reqByQ[String(it.q)] || [], open = reqs.filter(function (q) { return q.status === 'open'; })[0];
         html += '<div style="border-top:1px solid var(--border);padding:10px 0;">' +
@@ -1812,7 +1820,7 @@
           '<span style="font-size:13px;">Your answer: <b>' + h(it.your || '(blank)') + '</b> \u00b7 Correct: <b>' + h(it.correct) + '</b></span>' +
           (it.edited ? '<span class="tag amber">adjusted by instructor</span>' : '') + '<div style="flex:1"></div>' +
           (d.can_regrade && !open ? '<button class="btn btn-ghost btn-sm" data-swask="' + it.q + '">Request regrade</button>' : '') + '</div>';
-        if (d.mode === 'questions' && it.prompt) {
+        if ((d.mode === 'questions' || d.mode === 'missed') && it.prompt) {
           html += '<div style="margin:8px 0 0;font-size:14px;">' + h(it.prompt) + '</div>';
           if (it.figure && typeof renderFigure === 'function') { html += renderFigure(it.figure); }
           if (it.options) {
@@ -1875,7 +1883,7 @@
   function protect(d) {
     unprotect();
     var root = el('swStuReview'); if (!root) { return; }
-    var strict = d.mode === 'questions';
+    var strict = d.mode === 'questions' || d.mode === 'missed';
     if (d.watermark !== false) {
       var stamp = (d.email || '') + ' \u00b7 ' + new Date().toLocaleString();
       var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="200"><text x="10" y="120" transform="rotate(-24 180 100)" font-family="Helvetica,Arial" font-size="15" fill="#888" fill-opacity="0.22">' + h(stamp) + '</text></svg>';
