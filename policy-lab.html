@@ -1000,7 +1000,7 @@ function imRenderAuth() {
         pvHasAccess = !!ok;
         var b = document.getElementById("im-access-badge");
         if (b) {
-          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; graded</span>"; }
+          if (ok) { b.innerHTML = "<span style=\"color:#166534;font-weight:600;\">&#10003; enrolled &mdash; this arena counts toward your grade</span>"; }
           else { b.innerHTML = "<a href=\"#\" onclick=\"IMBackend.goToCheckout();return false;\" style=\"color:#b87408;font-weight:600;\">Not enrolled &mdash; unlock the suite</a>"; }
         }
         var ctas = document.getElementsByClassName("sb-cta");
