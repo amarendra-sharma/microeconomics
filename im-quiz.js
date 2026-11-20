@@ -53,7 +53,7 @@
     10: ['profit_max_pmc', 'shutdown_decision', 'firm_profit_calc', 'ch10_profit_max_graph', 'ch10_profit_loss_graph', 'ch10_shutdown_graph', 'ch10_zero_profit_graph', 'ch10_firm_demand_graph', 'ch10_pmc_rule', 'ch10_written_shutdown', 'ch10_price_taker', 'ch10_mr_equals_price', 'ch10_profit_max_rule', 'ch10_shutdown_rule', 'ch10_exit_rule', 'ch10_sunk_fixed', 'ch10_supply_curve', 'ch10_zero_profit', 'ch10_entry_effect', 'ch10_pmc_calc', 'ch10_profit_calc2', 'ch10_loss_calc', 'ch10_identical_products', 'ch10_written_shutdown_vs_exit', 'ch10_written_zero_profit', 'ch10_price_equals_minatc', 'ch10_hard_shutdown_numeric', 'ch10_hard_longrun_entry'],
     11: ['ch11_monopoly_quantity', 'ch11_monopoly_price', 'ch11_monopoly_dwl', 'ch11_monopoly_profit', 'ch11_mr_below_demand', 'ch11_source_monopoly', 'ch11_natural_monopoly', 'ch11_price_maker', 'ch11_mr_less_price', 'ch11_profit_max_rule', 'ch11_no_supply_curve', 'ch11_dwl_source', 'ch11_vs_competition', 'ch11_price_discrimination', 'ch11_perfect_pd', 'ch11_regulation', 'ch11_patent_tradeoff', 'ch11_markup_elasticity', 'ch11_numeric_mr', 'ch11_numeric_price', 'ch11_written_dwl', 'ch11_written_price_disc', 'ch11_antitrust', 'ch11_two_effects_calc', 'ch11_welfare_transfer'],
     12: ['ch12_lr_zero_profit', 'ch12_markup', 'ch12_price_vs_mc_graph', 'ch12_excess_capacity_graph', 'ch12_features', 'ch12_differentiation', 'ch12_sr_profit', 'ch12_lr_entry', 'ch12_excess_capacity', 'ch12_markup_price', 'ch12_vs_perfect_comp', 'ch12_advertising_debate', 'ch12_brand_names', 'ch12_variety_benefit', 'ch12_business_stealing', 'ch12_examples', 'ch12_demand_elastic', 'ch12_written_lr', 'ch12_written_advertising', 'ch12_efficient_scale_gap', 'ch12_nonprice_comp', 'ch12_number_products', 'ch12_vs_monopoly', 'ch12_markup_reason', 'ch12_written_efficiency'],
-    13: ['ch13_definition', 'ch13_interdependence', 'ch13_collusion', 'ch13_cartel_unstable', 'ch13_prisoners_dilemma', 'ch13_dominant_strategy', 'ch13_nash', 'ch13_output_effect', 'ch13_size_effect', 'ch13_repeated_game', 'ch13_antitrust_oligopoly', 'ch13_tit_for_tat', 'ch13_public_goods_link', 'ch13_written_cartel', 'ch13_written_pd', 'ch13_concentration', 'ch13_pd_payoff', 'ch13_pd_cooperative', 'ch13_dominant_check', 'ch13_oligopoly_price', 'ch13_kinked', 'ch13_collusion_detect', 'ch13_game_advertise', 'ch13_written_oligopoly_output', 'ch13_number_and_price'],
+    13: ['ch13_definition', 'ch13_interdependence', 'ch13_collusion', 'ch13_cartel_unstable', 'ch13_prisoners_dilemma', 'ch13_pd_dominant', 'ch13_pd_nash', 'ch13_output_effect', 'ch13_size_effect', 'ch13_repeated_game', 'ch13_antitrust_oligopoly', 'ch13_tit_for_tat', 'ch13_public_goods_link', 'ch13_written_cartel', 'ch13_written_pd', 'ch13_concentration', 'ch13_pd_joint', 'ch13_pd_temptation', 'ch13_dominant_check', 'ch13_oligopoly_price', 'ch13_kinked', 'ch13_collusion_detect', 'ch13_game_advertise', 'ch13_written_oligopoly_output', 'ch13_pd_deviation_gain'],
     14: ['ch14_labor_eq_wage', 'ch14_labor_supply_shift', 'ch14_labor_demand_shift_graph', 'ch14_vmpl_graph', 'ch14_derived_demand', 'ch14_vmpl', 'ch14_vmpl_calc', 'ch14_labor_demand_shift', 'ch14_labor_supply', 'ch14_marginal_product_labor', 'ch14_complementary_inputs', 'ch14_wage_determination', 'ch14_other_factors', 'ch14_factor_linkage', 'ch14_monopsony', 'ch14_human_capital', 'ch14_written_labor_demand', 'ch14_written_wage_gap', 'ch14_supply_shift_wage', 'ch14_compensating_diff', 'ch14_union', 'ch14_capital_return', 'ch14_superstar', 'ch14_discrimination', 'ch14_written_superstar'],
     15: ['ch15_neg_externality_q', 'ch15_pigovian_tax', 'ch15_externality_type', 'ch15_external_cost_total', 'ch15_externality_dwl', 'ch15_definition', 'ch15_negative_over', 'ch15_positive_under', 'ch15_pigovian', 'ch15_subsidy_positive', 'ch15_coase', 'ch15_coase_fails', 'ch15_tradable_permits', 'ch15_tax_vs_permits', 'ch15_command_control', 'ch15_internalize', 'ch15_private_solutions', 'ch15_written_pollution', 'ch15_written_coase', 'ch15_optimal_not_zero', 'ch15_technology_spillover', 'ch15_double_counting', 'ch15_gas_tax', 'ch15_permits_vs_tax_uncertainty', 'ch15_written_optimal_pollution'],
     16: ['ch16_asym_info', 'ch16_adverse_selection', 'ch16_lemons', 'ch16_moral_hazard', 'ch16_signaling', 'ch16_screening', 'ch16_education_signal', 'ch16_warranty_signal', 'ch16_insurance_adverse', 'ch16_deductible', 'ch16_efficiency_wages', 'ch16_written_asym', 'ch16_written_signaling', 'ch16_hidden_char_action', 'ch16_used_car_remedy', 'ch16_insurance_mandate', 'ch16_principal_agent', 'ch16_stock_options', 'ch16_screening_insurance', 'ch16_reputation', 'ch16_political_info', 'ch16_condorcet', 'ch16_arrow', 'ch16_written_lemons', 'ch16_written_moral_hazard'],
@@ -329,11 +329,41 @@
       }
     }
 
-    var instances = pick.map(function (p) {
-      var q = G.generate(p.genId, p.seed);
-      q._genId = p.genId; q._seed = p.seed;
+    /* A bank id with no generator behind it returns null here. Mapping over it
+       threw ("cannot set _genId of null") and the student got an empty quiz with
+       no explanation -- one stale name took the whole chapter down. Skip it,
+       draw a replacement from the rest of the chapter bank, and say so in the
+       console so the gap is findable. */
+    var instances = [];
+    var missing = [];
+    var ii, qq;
+    function imqBuild(genId, seed) {
+      var q = null;
+      try { q = G.generate(genId, seed); } catch (ge) { q = null; }
+      if (!q || !q.prompt) { missing.push(genId); return null; }
+      q._genId = genId; q._seed = seed;
       return q;
-    });
+    }
+    for (ii = 0; ii < pick.length; ii++) {
+      qq = imqBuild(pick[ii].genId, pick[ii].seed);
+      if (qq) { instances.push(qq); }
+    }
+    if (!isExam) {
+      var want = spec.count || pick.length;
+      while (instances.length < want && pool && pool.length) {
+        var rj = Math.floor(Math.random() * pool.length);
+        var rid = pool[rj]; pool.splice(rj, 1);
+        qq = imqBuild(rid, rand32());
+        if (qq) { instances.push(qq); }
+      }
+    }
+    if (missing.length) {
+      try { console.warn("IMQuiz: no generator for " + missing.join(", ") + " -- skipped. Fix CH_BANK or im-generators.js."); } catch (ce) {}
+    }
+    if (!instances.length) {
+      mountEl.innerHTML = "<p style='color:#991b1b;'>This chapter's question bank could not be loaded. Please tell your instructor \u2014 nothing has been recorded.</p>";
+      return;
+    }
 
     var titleText = isExam ? (spec.title || "Exam") : ("Chapter " + chapter + " Quiz");
     var subText = instances.length + " questions \u00b7 answers are graded after you submit.";
