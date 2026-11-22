@@ -360,6 +360,10 @@
     </div>
     <button class="btn btn-primary" id="authSubmit" style="width:100%;">Sign in</button>
     <div class="auth-toggle" id="authToggle">No account yet? <b>Create one</b></div>
+    <a href="self-study.html" id="ssPromo" style="display:block;margin-top:16px;padding:12px 14px;border:1px solid rgba(155,123,255,.35);border-radius:10px;background:rgba(124,92,255,.08);text-decoration:none;">
+      <div style="font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:var(--violet);font-family:'JetBrains Mono',monospace;">New · Self-study with Asha</div>
+      <div style="font-size:13px;color:var(--text);margin-top:3px;">The full course on your schedule: live classes, quizzes, arenas, proctored exams and a MacroNations certificate. <b style="color:var(--violet);">See what&rsquo;s included &rarr;</b></div>
+    </a>
     <div style="text-align:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
       <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px;">Just want to look around?</div>
       <button class="btn btn-ghost btn-sm" id="guestBrowseBtn">Browse free chapters &amp; arenas &mdash; no account needed</button>
@@ -434,6 +438,7 @@
       <h1 class="page-title" id="welcomeTitle">Welcome back</h1>
       <div class="page-sub">Your strategic-thinking workspace. Pick up where you left off.</div>
       <div id="homeNameCard"></div>
+      <div id="homeSelfStudy"></div>
       <div class="stat-row" id="homeStats"></div>
       <div class="grid grid-3" id="homeQuick"></div>
       <div id="homeDeadlines"></div>
@@ -539,11 +544,7 @@
 <script src="mn-proctor.js"></script>
 <script src="im-diagrams.js?v=grid1"></script>
 <script src="im-generators.js?v=ch13fix"></script>
-<<<<<<< HEAD
-<script src="im-econ160.js?v=finalfigs2"></script>
-=======
 <script src="im-econ160.js?v=finalfigs3"></script>
->>>>>>> 2b02c9854e51d816d4c470a6b33675a029a3ee9d
 <script src="mn-submit.js?v=retry1"></script>
 <script src="im-quiz.js?v=ch13fix"></script>
 <script src="im-backend.js?v=retry1"></script>
@@ -786,6 +787,15 @@ function hide(el){ if(el){el.classList.add('hidden');} }
    ==================================================================== */
 function setAuthMsg(t,k){ var m=$('authMsg'); m.textContent=t||''; m.className='msg '+(k?k:''); if(!t){m.className='msg';} }
 $('authToggle').addEventListener('click', function(){ State.signup=!State.signup; $('authSubmit').textContent=State.signup?'Create account':'Sign in'; $('authToggle').innerHTML=State.signup?'Already registered? <b>Sign in</b>':'No account yet? <b>Create one</b>'; setAuthMsg('',''); if(State.signup){ show($('signupRole')); } else { hide($('signupRole')); } });
+// Arriving from the self-study page (self-study.html): open in sign-up mode.
+(function(){
+  var q = null; try { q = new URLSearchParams(window.location.search).get('selfstudy'); } catch (e) {}
+  if (q !== '1') { return; }
+  State.wantSelfStudy = true;
+  if (!State.signup) { $('authToggle').click(); }
+  setAuthMsg('Create your student account (leave the join code blank). Your Home page will then walk you through paying and choosing your schedule. Already registered? Sign in below.', 'ok');
+  var p = $('ssPromo'); if (p) { p.style.display = 'none'; }
+})();
 $('authSubmit').addEventListener('click', doAuth);
 if($('guestBrowseBtn')){ $('guestBrowseBtn').addEventListener('click', function(){
   enterGuest();
@@ -1088,7 +1098,8 @@ function loadCourses(){
     ? sb.from('im_course').select('*').order('created_at',{ascending:false})
     : sb.from('im_course').select('*').eq('owner_id', State.user.id).order('created_at',{ascending:false});
   return q.then(function(res){
-    State.courses = res.data ? res.data : [];
+    // Self-study sections (one per student, owned by the administrator) are listed in Platform > Self-study, not in the picker.
+    State.courses = (res.data ? res.data : []).filter(function(c){ return !c.is_self_study || c.id === State.ssOpenCourse; });
     var ownerNames = {};
     var finish = function(){
       var sel=$('coursePick'); sel.innerHTML='';
@@ -1459,7 +1470,40 @@ function renderMaterials(host){
   });
   loadMaterialsList();
 }
-function matIcon(kind){ return kind==='video'?'\uD83C\uDFA5':(kind==='slides'?'\uD83D\uDC3D':'\uD83D\uDD17'); }
+function matIcon(kind){ return kind==='syllabus'?'\uD83D\uDCC4':(kind==='video'?'\uD83C\uDFA5':(kind==='slides'?'\uD83D\uDCCA':'\uD83D\uDD17')); }
+/* A material that carries its own HTML body (the self-study syllabus Asha posts)
+   opens in a sandboxed viewer instead of linking out. */
+var MatBodies = {};
+function matLink(m, style){
+  if(m.body){
+    MatBodies[m.id] = { title:m.title, body:m.body };
+    return '<a href="#" data-matbody="'+esc(m.id)+'" style="'+style+'">'+esc(m.title)+'</a>';
+  }
+  return '<a href="'+esc(m.url)+'" target="_blank" rel="noopener" style="'+style+'">'+esc(m.title)+'</a>';
+}
+function wireMatBodies(host){
+  Array.prototype.forEach.call(host.querySelectorAll('[data-matbody]'), function(a){
+    a.addEventListener('click', function(ev){ ev.preventDefault(); openMatBody(a.getAttribute('data-matbody')); });
+  });
+}
+function openMatBody(id){
+  var m = MatBodies[id]; if(!m){ return; }
+  var css = '<style>body{font:14px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;color:#1f2937;margin:22px;}h1{font-size:21px;margin:0 0 8px;}h2{font-size:16px;margin:22px 0 6px;color:#4c3aa8;}'+
+    'table{border-collapse:collapse;width:100%;font-size:13px;}th,td{border:1px solid #d6d3e6;padding:5px 8px;text-align:left;vertical-align:top;}th{background:#f3f0ff;}ul{padding-left:20px;}li{margin:3px 0;}'+
+    '@media print{body{margin:0;}h2{break-after:avoid;}tr{break-inside:avoid;}}</style>';
+  var bg = document.createElement('div'); bg.className = 'modal-bg';
+  bg.innerHTML = '<div class="modal" style="max-width:860px;width:94vw;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;"><h2 style="margin:0;">'+esc(m.title)+'</h2>'+
+    '<span class="inline-actions"><button class="btn btn-ghost btn-sm" id="matBodyPrint">Print / save as PDF</button><button class="btn btn-primary btn-sm" id="matBodyClose">Close</button></span></div>'+
+    '<iframe id="matBodyFrame" sandbox="allow-same-origin allow-modals" style="width:100%;height:70vh;border:1px solid var(--border);border-radius:8px;background:#fff;"></iframe></div>';
+  $('modalHost').appendChild(bg);
+  var fr = $('matBodyFrame');
+  fr.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(m.title)+'</title>'+css+'</head><body>'+m.body+'</body></html>';
+  function close(){ if(bg.parentNode){ bg.parentNode.removeChild(bg); } }
+  $('matBodyClose').addEventListener('click', close);
+  bg.addEventListener('click', function(e){ if(e.target===bg){ close(); } });
+  $('matBodyPrint').addEventListener('click', function(){ try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){} });
+}
 function loadMaterialsList(){
   sb.from('im_material').select('*').eq('course_id',State.teachCourseId).order('position',{ascending:true}).order('created_at',{ascending:true}).then(function(r){
     var rows=r.data?r.data:[];
@@ -1468,8 +1512,8 @@ function loadMaterialsList(){
       '<p style="font-size:11.5px;color:var(--text-subtle);margin-bottom:10px;">Use \u2191 / \u2193 to set the order students see.</p>';
     rows.forEach(function(m,i){
       html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">'+
-        '<div style="flex:1;"><span style="margin-right:6px;">'+matIcon(m.kind)+'</span><a href="'+esc(m.url)+'" target="_blank" rel="noopener" style="color:var(--violet);text-decoration:none;">'+esc(m.title)+'</a>'+
-        '<div style="font-size:11px;color:var(--text-subtle);margin-top:2px;">'+esc(m.url)+'</div></div>'+
+        '<div style="flex:1;"><span style="margin-right:6px;">'+matIcon(m.kind)+'</span>'+matLink(m,'color:var(--violet);text-decoration:none;')+
+        '<div style="font-size:11px;color:var(--text-subtle);margin-top:2px;">'+(m.body?'Posted by Asha \u00b7 opens in the viewer':esc(m.url))+'</div></div>'+
         '<span class="inline-actions">'+
           '<button class="btn btn-ghost btn-sm" data-mup="'+i+'"'+(i===0?' disabled aria-disabled="true"':'')+' aria-label="Move '+esc(m.title)+' up">\u2191</button>'+
           '<button class="btn btn-ghost btn-sm" data-mdown="'+i+'"'+(i===rows.length-1?' disabled aria-disabled="true"':'')+' aria-label="Move '+esc(m.title)+' down">\u2193</button>'+
@@ -1477,6 +1521,7 @@ function loadMaterialsList(){
     });
     html+='</div>';
     $('matList').innerHTML=html;
+    wireMatBodies($('matList'));
     Array.prototype.forEach.call($('matList').querySelectorAll('[data-delmat]'), function(b){ b.addEventListener('click', function(){
       if(!confirm('Remove this material?')){ return; }
       sb.from('im_material').delete().eq('id',b.getAttribute('data-delmat')).then(loadMaterialsList);
@@ -7305,12 +7350,13 @@ function renderPlatform(host){
     '<div class="row2"><div class="field"><label>Price per student / course</label><input id="pfPrice" type="number" min="0" step="0.01" value="'+((s.price_cents?s.price_cents:0)/100).toFixed(2)+'"></div>'+
     '<div class="field"><label>Currency</label><input id="pfCur" value="'+esc(s.currency||'usd')+'"></div></div>'+
     '<div class="field"><label>Stripe payment link</label><input id="pfStripe" value="'+esc(s.stripe_link||'')+'" placeholder="https://buy.stripe.com/..."></div>'+
-    '<div class="field"><label>Notify email (where new professor requests are sent)</label><input id="pfNotify" value="'+esc(s.notify_email||'')+'" placeholder="you@macronations.com"></div>'+
+    '<div class="field"><label>Notify email (where new professor requests are sent)</label><input id="pfNotify" value="" placeholder="you@macronations.com"></div>'+
     '<button class="btn btn-primary" id="pfSavePricing">Save pricing</button></div>'+
     '<div class="card" style="max-width:680px;margin-bottom:18px;"><h3>Self-study course</h3>'+
-    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">When on, students who aren\u2019t enrolled in a professor\u2019s course are placed into the platform self-study course so they can read, practice, and take quizzes on their own. Turn it off to close self-study for everyone at once.</div>'+
+    '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">When on, any student can buy the self-study course: after paying, the student chooses the course length and the live-class schedule, and Asha teaches a private section on that schedule, fully automatically. Only the administrator can see these sections; professors never get them. Turning this off stops new self-study sign-ups; students already enrolled continue.</div>'+
     '<label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;"><input type="checkbox" id="pfSelfStudy"'+((s.self_study_enabled===false)?'':' checked')+' style="width:auto;"> Self-study is available platform-wide</label>'+
     '<button class="btn btn-primary" id="pfSaveSelfStudy" style="margin-top:12px;">Save</button></div>'+
+    '<div class="card" style="max-width:1280px;margin-bottom:18px;"><h3>Self-study students</h3><div id="pfSSKey" style="font-size:13px;margin-bottom:12px;"></div><div id="pfSSList" style="font-size:13px;">Loading\u2026</div></div>'+
     '<div class="card" style="max-width:680px;"><h3>Author bio &amp; photo</h3><div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Shown on the textbook’s “About the Author” page.</div>'+
     '<div class="field"><label>Author name</label><input id="pfName" value="'+esc(s.author_name||'')+'"></div>'+
     '<div class="field"><label>Subtitle (optional — leave blank to keep the founder line)</label><input id="pfSub" value="'+esc(s.author_subtitle||'')+'"></div>'+
@@ -7319,14 +7365,169 @@ function renderPlatform(host){
     '<button class="btn btn-primary" id="pfSaveBio">Save bio</button></div>';
   $('pfSavePricing').addEventListener('click', function(){
     var cents=Math.round(parseFloat($('pfPrice').value||'0')*100);
-    savePlatform({ price_cents:cents, currency:$('pfCur').value.trim()||'usd', stripe_link:$('pfStripe').value.trim(), notify_email:$('pfNotify').value.trim() }, 'Pricing saved.');
+    // The notify email lives in the admin-only im_platform_private table, not in the
+    // publicly readable settings row.
+    sb.from('im_platform_private').upsert({ id:1, notify_email:$('pfNotify').value.trim()||null, updated_at:new Date().toISOString(), updated_by:State.user.id }, {onConflict:'id'}).then(function(){});
+    savePlatform({ price_cents:cents, currency:$('pfCur').value.trim()||'usd', stripe_link:$('pfStripe').value.trim() }, 'Pricing saved.');
+  });
+  sb.from('im_platform_private').select('notify_email').eq('id',1).maybeSingle().then(function(r){
+    if(r && r.data && r.data.notify_email && $('pfNotify') && !$('pfNotify').value){ $('pfNotify').value = r.data.notify_email; }
   });
   $('pfSaveBio').addEventListener('click', function(){
     savePlatform({ author_name:$('pfName').value.trim(), author_subtitle:$('pfSub').value.trim(), author_photo_url:$('pfPhoto').value.trim(), author_bio_html:$('pfBio').value.trim() }, 'Bio saved.');
   });
+  loadSelfStudyAdmin();
   if($('pfSaveSelfStudy')){ $('pfSaveSelfStudy').addEventListener('click', function(){
     savePlatform({ self_study_enabled: $('pfSelfStudy').checked }, $('pfSelfStudy').checked?'Self-study turned on for everyone.':'Self-study turned off for everyone.');
   }); }
+}
+function loadSelfStudyKey(){
+  var host=$('pfSSKey'); if(!host){ return; }
+  sb.rpc('im_selfstudy_key_owner_get').then(function(r){
+    var d=r&&r.data?r.data:{};
+    host.innerHTML='<div><b>Asha\u2019s AI key for self-study is billed to:</b> '+(d.owner?esc(d.email||d.owner)+(d.has_key?' <span class="tag green">key saved</span>':' <span class="tag amber">no key saved</span>'):'<span class="tag amber">not set</span>')+'</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><input id="pfSSKeyEmail" placeholder="email of the account whose saved key should pay" style="max-width:340px;"><button class="btn btn-ghost btn-sm" id="pfSSKeySave">Change</button><span id="pfSSKeyMsg" class="msg"></span></div>';
+    $('pfSSKeySave').addEventListener('click', function(){
+      sb.rpc('im_selfstudy_key_owner_set',{p_email:$('pfSSKeyEmail').value}).then(function(x){
+        var y=x&&x.data?x.data:{}; var m=$('pfSSKeyMsg');
+        if(x.error||y.ok===false){ m.className='msg err'; m.textContent=x.error?x.error.message:(y.reason==='no_key'?'That account has no saved AI key yet; save one in its AI Instructor settings first.':'No account with that email.'); return; }
+        loadSelfStudyKey();
+      });
+    });
+  });
+}
+function loadSelfStudyAdmin(){
+  loadSelfStudyKey();
+  var host=$('pfSSList'); if(!host){ return; }
+  sb.rpc('im_selfstudy_admin_list').then(function(r){
+    if(r.error){ host.textContent=r.error.message; return; }
+    var rows=r.data||[];
+    if(!rows.length){ host.innerHTML='<div class="muted">No self-study students yet.</div>'; return; }
+    renderSelfStudyOverview(host, rows);
+  }, function(){ host.textContent='Could not load self-study students.'; });
+}
+
+/* Admin overview of every self-study student: summary tiles, then one row per
+   student with the same weighted components and total the student sees under
+   My progress (so "certificate" here matches what the student can download),
+   live classes held, integrity flags, and the row actions. */
+var SS_LAB={awaiting_payment:'Awaiting payment',awaiting_setup:'Paid — choosing schedule',active:'Active',completed:'Completed',cancelled:'Cancelled'};
+function renderSelfStudyOverview(host, rows){
+  var started = rows.filter(function(x){ return x.status==='active'||x.status==='completed'; });
+  var stripe = rows.filter(function(x){ return x.paid_by && x.paid_by!=='admin' && x.paid_by!=='waiver'; }).length;
+  var tile=function(id,label,val){ return '<div style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--surface);"><div style="font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:1px;">'+label+'</div><div id="'+id+'" style="font-size:22px;color:var(--text-bright);font-family:\'Instrument Serif\',serif;">'+val+'</div></div>'; };
+  var price = (State.settings && State.settings.price_cents) ? State.settings.price_cents : 0;
+  host.innerHTML =
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">'+
+      tile('ssTStudents','Students',rows.length)+
+      tile('ssTActive','Active',rows.filter(function(x){return x.status==='active';}).length)+
+      tile('ssTPending','Not started',rows.filter(function(x){return x.status==='awaiting_payment'||x.status==='awaiting_setup';}).length)+
+      tile('ssTAvg','Average total','…')+
+      tile('ssTCert','At certificate level','…')+
+      tile('ssTRev','Paid via Stripe',stripe+(price?' <span style="font-size:13px;color:var(--text-muted);">≈ '+esc(money(stripe*price, (State.settings&&State.settings.currency)||'usd'))+'</span>':''))+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px;flex-wrap:wrap;">'+
+      '<div class="muted" style="font-size:12px;">Totals use the course weights with untaken exams counted as 0, exactly as the student sees them. The certificate needs '+Math.round(COMPLETION_THRESHOLD*100)+'%.</div>'+
+      '<button class="btn btn-ghost btn-sm" id="ssCsv">Download CSV</button></div>'+
+    '<div style="overflow-x:auto;"><table class="tbl" style="width:100%;font-size:12.5px;"><tr><th align="left">Student</th><th align="left">Status</th><th>Classes</th><th>Reading</th><th>Quizzes</th><th>Arenas</th><th>Attend.</th><th>Midterm</th><th>Final</th><th>Total</th><th>Flags</th><th align="left">Ends</th><th></th></tr>'+
+    rows.map(function(x){
+      var live = x.status==='active'||x.status==='completed';
+      var cell=function(k){ return '<td align="center" data-ssc="'+x.course_id+':'+k+'">'+(live?'<span class="muted">…</span>':'—')+'</td>'; };
+      return '<tr><td>'+esc(x.name||x.email||x.student_id)+(x.email&&x.name?'<div class="muted" style="font-size:11px;">'+esc(x.email)+'</div>':'')+'</td>'+
+        '<td>'+esc(SS_LAB[x.status]||x.status)+(x.paid_by?'<div class="muted" style="font-size:11px;">'+esc(x.paid_by==='admin'?'comped':(x.paid_by==='waiver'?'fee waived':'Stripe'))+'</div>':'')+
+          (x.weeks?'<div class="muted" style="font-size:11px;">'+x.weeks+' weeks</div>':'')+'</td>'+
+        '<td align="center">'+(x.classes?(x.held+' / '+x.classes):'—')+(x.next_at?'<div class="muted" style="font-size:10.5px;" title="Next class">'+esc(new Date(x.next_at).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}))+'</div>':'')+'</td>'+
+        cell('reading')+cell('quizzes')+cell('arenas')+cell('attendance')+cell('midterm')+cell('final')+cell('total')+cell('flags')+
+        '<td>'+(x.ends_at?esc(new Date(x.ends_at).toLocaleDateString()):'—')+'</td>'+
+        '<td style="white-space:nowrap;">'+(x.status==='awaiting_payment'?'<button class="btn btn-ghost btn-sm" data-sscomp="'+x.course_id+'">Comp (free)</button> ':'')+
+        (x.status==='active'&&!x.held?'<button class="btn btn-ghost btn-sm" data-ssreset="'+x.course_id+'">Let student reschedule</button> ':'')+
+        (live?'<button class="btn btn-ghost btn-sm" data-ssintg="'+x.course_id+'">Integrity</button> ':'')+
+        '<button class="btn btn-ghost btn-sm" data-ssopen="'+x.course_id+'">Open</button></td></tr>';
+    }).join('')+'</table></div>';
+
+  Array.prototype.forEach.call(host.querySelectorAll('[data-sscomp]'), function(b){ b.addEventListener('click', function(){ sb.rpc('im_selfstudy_admin_comp',{p_course:b.getAttribute('data-sscomp')}).then(loadSelfStudyAdmin); }); });
+  Array.prototype.forEach.call(host.querySelectorAll('[data-ssreset]'), function(b){ b.addEventListener('click', function(){ sb.rpc('im_selfstudy_admin_reset',{p_course:b.getAttribute('data-ssreset')}).then(loadSelfStudyAdmin); }); });
+  Array.prototype.forEach.call(host.querySelectorAll('[data-ssintg]'), function(b){ b.addEventListener('click', function(){ openSelfStudyIntegrity(b.getAttribute('data-ssintg')); }); });
+  Array.prototype.forEach.call(host.querySelectorAll('[data-ssopen]'), function(b){ b.addEventListener('click', function(){
+    State.ssOpenCourse=b.getAttribute('data-ssopen'); State.teachCourseId=State.ssOpenCourse;
+    loadCourses().then(function(){ var sel=$('coursePick'); if(sel){ sel.value=State.ssOpenCourse; } switchView('gradebook'); });
+  }); });
+
+  // Fill the grade columns per student, and the integrity flag totals.
+  var stats = {};   // course_id -> {reading,...,total,flags}
+  function put(cid, k, html){ var td=host.querySelector('[data-ssc="'+cid+':'+k+'"]'); if(td){ td.innerHTML=html; } }
+  function pct(v){ return (v===null||v===undefined)?'—':Math.round(v*100)+'%'; }
+  var ids = started.map(function(x){ return x.course_id; });
+  var flagsP = ids.length ? sb.from('im_proctor_events').select('course_id,violations').in('course_id', ids).then(function(r){
+    var f={}; (r.data||[]).forEach(function(e){ f[e.course_id]=(f[e.course_id]||0)+(e.violations||0); });
+    ids.forEach(function(cid){ var n=f[cid]||0; (stats[cid]=stats[cid]||{}).flags=n;
+      put(cid,'flags', n?'<a href="#" data-ssflag="'+cid+'" style="color:var(--amber);font-weight:600;">'+n+'</a>':'<span class="muted">0</span>'); });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-ssflag]'), function(a){ a.addEventListener('click', function(ev){ ev.preventDefault(); openSelfStudyIntegrity(a.getAttribute('data-ssflag')); }); });
+  }, function(){}) : Promise.resolve();
+  var gradeP = Promise.all(started.map(function(x){
+    return computeCompletion(x.course_id, x.student_id, { noSync:true }).then(function(res){
+      var st = stats[x.course_id] = stats[x.course_id] || {};
+      if(!res){ ['reading','quizzes','arenas','attendance','midterm','final','total'].forEach(function(k){ put(x.course_id,k,'—'); }); return; }
+      res.comps.forEach(function(c){
+        var label=String(c[0]||''), isExam=(c[3]===true||c[3]===false);
+        var k = label==='Reading'?'reading':label==='Quizzes'?'quizzes':label==='Arenas'?'arenas':label==='Attendance'?'attendance':
+                (isExam && /final/i.test(label))?'final':(isExam?'midterm':null);
+        if(!k){ return; }
+        st[k] = c[3]===true ? null : c[1];
+        put(x.course_id, k, c[3]===true ? '<span class="muted" title="Not taken yet">—</span>' : pct(c[1]));
+      });
+      st.total = res.total;
+      ['reading','quizzes','arenas','attendance','midterm','final'].forEach(function(k){ if(!(k in st)){ put(x.course_id,k,'<span class="muted" title="Not part of this course’s grade">—</span>'); } });
+      var ok = res.total >= COMPLETION_THRESHOLD;
+      put(x.course_id,'total','<b style="color:'+(ok?'var(--green)':'var(--text-bright)')+';">'+pct(res.total)+'</b>'+(ok?'<div style="font-size:10.5px;color:var(--green);">certificate</div>':''));
+    }, function(){ put(x.course_id,'total','?'); });
+  }));
+  Promise.all([gradeP, flagsP]).then(function(){
+    var totals = started.map(function(x){ return stats[x.course_id] && stats[x.course_id].total; }).filter(function(v){ return typeof v==='number'; });
+    var avg = totals.length ? totals.reduce(function(a,b){return a+b;},0)/totals.length : null;
+    if($('ssTAvg')){ $('ssTAvg').textContent = avg===null?'—':Math.round(avg*100)+'%'; }
+    if($('ssTCert')){ $('ssTCert').textContent = totals.filter(function(v){ return v>=COMPLETION_THRESHOLD; }).length + ' of ' + started.length; }
+  });
+
+  $('ssCsv').addEventListener('click', function(){
+    var head=['Student','Email','Status','Paid by','Weeks','Starts','Ends','Classes held','Classes total','Reading %','Quizzes %','Arenas %','Attendance %','Midterm %','Final %','Total %','Certificate','Integrity flags'];
+    var q=function(v){ v=(v===null||v===undefined)?'':String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+    var p=function(v){ return (typeof v==='number')?Math.round(v*1000)/10:''; };
+    var lines=[head.join(',')].concat(rows.map(function(x){ var st=stats[x.course_id]||{};
+      return [x.name||'',x.email||'',SS_LAB[x.status]||x.status,x.paid_by||'',x.weeks||'',x.starts_on||'',x.ends_at?String(x.ends_at).slice(0,10):'',x.held||0,x.classes||'',
+        p(st.reading),p(st.quizzes),p(st.arenas),p(st.attendance),p(st.midterm),p(st.final),p(st.total),(typeof st.total==='number'&&st.total>=COMPLETION_THRESHOLD)?'yes':'no',st.flags||0].map(q).join(','); }));
+    var blob=new Blob([lines.join('\n')],{type:'text/csv'}); var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='self-study-students-'+new Date().toISOString().slice(0,10)+'.csv'; document.body.appendChild(a); a.click(); a.remove();
+  });
+}
+/* Integrity records for one self-study student: proctored midterm/final plus
+   every camera-proctored chapter quiz (exam_id 'quiz-ch<N>-<course>'). */
+function openSelfStudyIntegrity(courseId){
+  var bg=document.createElement('div'); bg.className='modal-bg';
+  bg.innerHTML='<div class="modal" style="max-width:760px;width:94vw;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><h2 style="margin:0;">Integrity log</h2><button class="btn btn-primary btn-sm" id="ssIntgClose">Close</button></div>'+
+    '<div id="ssIntgList">'+loadingCard()+'</div><div id="ssIntgBody" style="margin-top:12px;max-height:55vh;overflow:auto;"></div></div>';
+  $('modalHost').appendChild(bg);
+  function close(){ if(bg.parentNode){ bg.parentNode.removeChild(bg); } }
+  $('ssIntgClose').addEventListener('click', close);
+  bg.addEventListener('click', function(e){ if(e.target===bg){ close(); } });
+  Promise.all([
+    sb.from('im_proctor_events').select('exam_id,violations,updated_at').eq('course_id',courseId).order('updated_at',{ascending:false}),
+    sb.from('im_exam').select('id,title').eq('course_id',courseId)
+  ]).then(function(rs){
+    var list=$('ssIntgList'); if(!list){ return; }
+    if(rs[0].error){ list.innerHTML=errCard(rs[0].error.message); return; }
+    var rows=rs[0].data||[]; var titles={};
+    (rs[1].data||[]).forEach(function(e){ titles[e.id]=e.title; });
+    if(!rows.length){ list.innerHTML='<div class="card empty">No proctored quizzes or exams taken yet.</div>'; return; }
+    list.innerHTML='<table class="tbl" style="width:100%;"><tr><th align="left">Session</th><th>Flags</th><th align="left">Last activity</th><th></th></tr>'+rows.map(function(r){
+      var m=/^quiz-ch(\d+)-/.exec(r.exam_id||''); var label=m?('Chapter '+m[1]+' quiz'):(titles[r.exam_id]||r.exam_id);
+      return '<tr><td>'+esc(label)+'</td><td align="center">'+(r.violations||0)+'</td><td>'+esc(new Date(r.updated_at).toLocaleString())+'</td>'+
+        '<td><button class="btn btn-ghost btn-sm" data-intgx="'+esc(r.exam_id)+'">View</button></td></tr>';
+    }).join('')+'</table>';
+    Array.prototype.forEach.call(list.querySelectorAll('[data-intgx]'), function(b){ b.addEventListener('click', function(){
+      if(typeof MNProctor!=='undefined'){ MNProctor.renderIntegrityLog(b.getAttribute('data-intgx'), $('ssIntgBody')); }
+    }); });
+  }, function(){ var l=$('ssIntgList'); if(l){ l.innerHTML=errCard('Could not load the integrity log.'); } });
 }
 function savePlatform(patch, okMsg){
   patch.id=1; patch.updated_by=State.user.id;
@@ -7501,6 +7702,10 @@ function resolveAccess() {
 function chapterLocked(n) { if (State.hasAccess) { return false; } return !FREE_CHAPTERS[n]; }
 function arenaLocked(slug) { if (State.hasAccess) { return false; } return !FREE_ARENAS[slug]; }
 function openSubscribePrompt(whatLabel) {
+  if (State.user && !State.payCourseId && State.role !== 'professor' && State.role !== 'admin' && State.settings && State.settings.self_study_enabled !== false) {
+    // A student with no course pays through self-study, so the payment is matched to a section.
+    switchView('home'); return;
+  }
   // Ensure platform settings (price + stripe link) are loaded before we decide
   // whether to show the link or the "not configured" message. Without this, a
   // slow/never-run settings load makes every Subscribe click say "not configured".
@@ -7633,29 +7838,19 @@ function ensureProfileAndCourse() {
       }
       // The course a payment should be attributed to: a professor course if joined, else self-study.
       State.payCourseId = profRow ? profRow.course_id : (selfRow ? selfRow.course_id : null);
-      if (selfRow) { State.selfCourseId = selfRow.course_id; if(!State.payCourseId){ State.payCourseId = selfRow.course_id; } return null; }
-      if (anyRow) { State.selfCourseId = anyRow.course_id; if(!State.payCourseId){ State.payCourseId = anyRow.course_id; } return null; }
-      // No ACTIVE enrollment (e.g., dropped from the only course): put the student
-      // into THE single platform self-study course -- but only if the super-admin
-      // has self-study enabled platform-wide.
-      if (State.settings && State.settings.self_study_enabled === false) {
-        State.selfCourseId = null;
+      if (selfRow) { State.selfCourseId = selfRow.course_id; if(!State.payCourseId){ State.payCourseId = selfRow.course_id; } prefetchSelfStudyFlag(); return null; }
+      if (anyRow) { State.selfCourseId = anyRow.course_id; if(!State.payCourseId){ State.payCourseId = anyRow.course_id; } prefetchSelfStudyFlag(); return null; }
+      // No ACTIVE enrollment. A self-study student who has started but not yet paid has a
+      // private section waiting for payment: attribute the payment to it. Nothing is
+      // created here -- the student starts self-study from the Home card.
+      State.selfCourseId = null;
+      if (State.settings && State.settings.self_study_enabled === false) { return null; }
+      return sb.rpc('im_selfstudy_status').then(function(ss) {
+        var d = ss && ss.data ? ss.data : null;
+        State.selfStudy = d;
+        if (d && d.course_id && !State.payCourseId) { State.payCourseId = d.course_id; }
         return null;
-      }
-      return sb.from('im_course').select('id').eq('is_self_study', true).limit(1).maybeSingle().then(function(ss) {
-        if (!ss || !ss.data) {
-          // The admin has not created the self-study course yet. Leave the student
-          // without one rather than inventing a personal course.
-          State.selfCourseId = null;
-          return null;
-        }
-        State.selfCourseId = ss.data.id;
-        if (!State.payCourseId) { State.payCourseId = ss.data.id; }
-        return sb.from('im_enrollment').upsert(
-          { course_id: ss.data.id, student_id: uid, status: 'active' },
-          { onConflict: 'course_id,student_id' }
-        );
-    });
+      }, function(){ return null; });
     });
   });
 }
@@ -7808,6 +8003,161 @@ function renderArenas() {
   }
 }
 
+/* ====================================================================
+   SELF-STUDY WITH ASHA (students). Each paying self-study student gets a
+   private section, owned by the administrator, that Asha teaches on the
+   schedule the student chooses. Server: im_selfstudy_* RPCs (migration im_09).
+   ==================================================================== */
+var SS_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function ssFmt(ts, tz){
+  try { return new Date(ts).toLocaleString(undefined, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZone: tz || undefined }); }
+  catch(e){ return new Date(ts).toLocaleString(); }
+}
+function ssFmtDate(ts, tz){
+  try { return new Date(ts).toLocaleDateString(undefined, { month:'long', day:'numeric', year:'numeric', timeZone: tz || undefined }); }
+  catch(e){ return new Date(ts).toLocaleDateString(); }
+}
+function ssPayLink(st){
+  var base = State.settings ? State.settings.stripe_link : '';
+  if(!base || !State.user || !st.course_id){ return ''; }
+  var sep = (base.indexOf('?') >= 0) ? '&' : '?';
+  return base + sep + 'client_reference_id=' + encodeURIComponent(State.user.id + '__' + st.course_id) + '&prefilled_email=' + encodeURIComponent(State.user.email || '');
+}
+function ssReason(r, d){
+  var m = {
+    not_paid: 'Your payment has not been confirmed yet.',
+    already_started: 'Your first class has already taken place, so the schedule can no longer be changed. Ask the administrator if you need a change.',
+    bad_weeks: 'Choose one of the durations listed.', bad_minutes: 'Choose a class length between 30 and 120 minutes.',
+    bad_tz: 'That time zone was not recognized.', bad_time: 'Enter a valid start time.', bad_days: 'Choose at least one day of the week.',
+    bad_start: 'The first day must be between today and 30 days from now.',
+    too_few_classes: 'This schedule gives only ' + (d && d.classes != null ? d.classes : 'a few') + ' live classes; at least 12 are needed to cover the 17 chapters. Add a day per week or choose a longer duration.',
+    too_many_classes: 'This schedule gives more than 120 classes; choose fewer days per week or a shorter duration.',
+    disabled: 'Self-study is not open at the moment.', staff: 'Instructor and administrator accounts cannot enroll in self-study; use a student account.',
+    no_admin: 'Self-study is not configured yet.', closed: 'This self-study course has ended.'
+  };
+  return m[r] || ('Something went wrong (' + r + ').');
+}
+function ssCountClasses(weeks, startStr, days, timeStr, tz){
+  if(!startStr || !days.length){ return 0; }
+  var p = startStr.split('-'), start = new Date(Date.UTC(+p[0], +p[1]-1, +p[2])), n = 0, now = Date.now(), last = weeks*7 - 7, i;
+  for(i = 0; i <= last; i++){
+    var d = new Date(start.getTime() + i*86400000);
+    if(days.indexOf(d.getUTCDay()) < 0){ continue; }
+    if(i === 0){ var hm = (timeStr||'00:00').split(':'); var t = new Date(); t.setHours(+hm[0], +hm[1], 0, 0); if(startStr === ssToday() && t.getTime() < now + 15*60000){ continue; } }
+    n++;
+  }
+  return n;
+}
+function ssToday(){ var d = new Date(); return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2); }
+function ssAddDays(s, k){ var p = s.split('-'); var d = new Date(+p[0], +p[1]-1, +p[2] + k); return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2); }
+function loadSelfStudyCard(){
+  var host = $('homeSelfStudy'); if(!host){ return; }
+  if(State.guest || !State.user || State.role === 'professor' || State.role === 'admin'){ host.innerHTML = ''; return; }
+  sb.rpc('im_selfstudy_status').then(function(res){
+    var st = res && res.data ? res.data : null;
+    if(!st || res.error){ host.innerHTML = ''; return; }
+    State.selfStudy = st;
+    renderSelfStudyCard(host, st);
+  }, function(){ host.innerHTML = ''; });
+}
+function renderSelfStudyCard(host, st){
+  var price = st.price_cents ? money(st.price_cents, st.currency || 'usd') : '';
+  var head = '<div class="card" style="margin-bottom:18px;border-left:4px solid var(--accent);">';
+  if(st.status === 'none'){
+    if(!st.enabled || State.selfCourseId){ host.innerHTML = ''; return; }   // already in a professor's course
+    host.innerHTML = head + '<div class="c-eyebrow">Self-study</div><h3 style="margin:4px 0 8px;">Take the whole course with Asha, your AI professor</h3>' +
+      '<p style="color:var(--text-muted);font-size:14px;margin:0 0 12px;">You choose how many weeks the course lasts and when your live classes meet. Asha then teaches every chapter in live classes on your schedule, sets your quiz and arena deadlines, runs the midterm and final, grades your work, and answers questions at any hour. All 17 chapters and 12 arenas are included, with proctored quizzes and exams and a MacroNations certificate when you finish' + (price ? ', for ' + esc(price) : '') + '.</p>' +
+      '<button class="btn btn-primary" id="ssStart">Start self-study</button> <a class="btn btn-ghost" href="self-study.html" target="_blank" rel="noopener">See everything included</a> <span id="ssMsg" class="msg" style="display:inline-block;margin-left:8px;"></span></div>';
+    $('ssStart').addEventListener('click', function(){
+      $('ssStart').disabled = true;
+      sb.rpc('im_selfstudy_start').then(function(r){
+        var d = r && r.data ? r.data : {};
+        if(r.error || d.ok === false){ $('ssStart').disabled = false; var e = $('ssMsg'); e.className = 'msg err'; e.textContent = r.error ? r.error.message : ssReason(d.reason, d); return; }
+        State.payCourseId = d.course_id; renderSelfStudyCard(host, d);
+      });
+    });
+    return;
+  }
+  if(st.status === 'awaiting_payment'){
+    var link = ssPayLink(st);
+    if(!State.settings || !State.settings.stripe_link){ loadPlatformSettings().then(function(){ renderSelfStudyCard(host, st); }); }
+    host.innerHTML = head + '<div class="c-eyebrow">Self-study · step 1 of 2</div><h3 style="margin:4px 0 8px;">Pay the course fee</h3>' +
+      '<p style="color:var(--text-muted);font-size:14px;margin:0 0 12px;">After payment you will choose your course length and your live-class times. Payments are confirmed automatically, usually within an hour. <a href="self-study.html" target="_blank" rel="noopener" style="color:var(--violet);">What&rsquo;s included</a></p>' +
+      (link ? '<a class="btn btn-primary" href="' + esc(link) + '" target="_blank" rel="noopener">Pay ' + esc(price || 'now') + '</a> ' : '<div class="msg err" style="display:block;">The payment link is not configured yet.</div>') +
+      '<button class="btn btn-ghost" id="ssCheck">I have paid — check now</button> <span id="ssMsg" class="msg" style="display:inline-block;margin-left:8px;"></span></div>';
+    $('ssCheck').addEventListener('click', function(){
+      $('ssCheck').disabled = true;
+      sb.rpc('im_selfstudy_check_payment').then(function(r){
+        $('ssCheck').disabled = false;
+        var d = r && r.data ? r.data : {};
+        if(d.status && d.status !== 'awaiting_payment'){ resolveAccess().then(function(){ return ensureProfileAndCourse(); }).then(function(){ renderSelfStudyCard(host, d); renderChapters(); renderArenas(); }); return; }
+        var e = $('ssMsg'); e.className = 'msg'; e.textContent = 'Not confirmed yet. Payments usually appear within an hour; this page also checks for you.';
+      });
+    });
+    return;
+  }
+  if(st.status === 'awaiting_setup' || (st.status === 'active' && host.getAttribute('data-edit') === '1')){
+    renderSelfStudyWizard(host, st); return;
+  }
+  if(st.status === 'active'){
+    var dayNames = (st.days || []).map(function(x){ return SS_DAYS[x]; }).join(', ');
+    host.innerHTML = head + '<div class="c-eyebrow">Self-study with Asha</div><h3 style="margin:4px 0 8px;">' + esc(st.weeks + '-week course · ' + st.classes + ' live classes') + '</h3>' +
+      '<div style="font-size:14px;line-height:1.7;">' +
+      (st.next_at ? '<div><b>Next live class:</b> ' + esc(st.next_title || '') + ' — ' + esc(ssFmt(st.next_at, st.tz)) + '</div>' : '') +
+      '<div><b>Class times:</b> ' + esc(dayNames) + ' at ' + esc(st.start_local) + ' (' + esc(st.tz) + '), ' + esc(String(st.minutes)) + ' minutes</div>' +
+      (st.midterm ? '<div><b>Midterm:</b> ' + esc(ssFmt(st.midterm.opens, st.tz)) + ' – ' + esc(ssFmt(st.midterm.closes, st.tz)) + '</div>' : '') +
+      (st.final ? '<div><b>Final:</b> ' + esc(ssFmt(st.final.opens, st.tz)) + ' – ' + esc(ssFmt(st.final.closes, st.tz)) + '</div>' : '') +
+      '<div><b>Course ends:</b> ' + esc(ssFmtDate(st.ends_at, st.tz)) + '</div><div class="muted" style="font-size:12px;">Times are shown in ' + esc(st.tz) + '.</div></div>' +
+      '<p style="color:var(--text-muted);font-size:13px;margin:10px 0 0;">Open the AI Instructor at class time to join Asha’s live class. Read each chapter before its class; quizzes and arenas are due three days after the chapter is finished.</p>' +
+      (!st.started ? '<button class="btn btn-ghost btn-sm" id="ssEdit" style="margin-top:10px;">Change my schedule</button>' : '') + '</div>';
+    if($('ssEdit')){ $('ssEdit').addEventListener('click', function(){ host.setAttribute('data-edit', '1'); renderSelfStudyCard(host, st); }); }
+    return;
+  }
+  host.innerHTML = head + '<div class="c-eyebrow">Self-study with Asha</div><h3 style="margin:4px 0 8px;">Your self-study course has ended</h3><p style="color:var(--text-muted);font-size:14px;margin:0;">Your grades remain available under My progress.</p></div>';
+}
+function renderSelfStudyWizard(host, st){
+  var tz = st.tz || ((typeof Intl !== 'undefined' && Intl.DateTimeFormat) ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC');
+  var today = ssToday(), weeks = st.weeks || 8, days = st.days || [1, 3], startT = st.start_local || '19:00', mins = st.minutes || 60;
+  var startD = st.starts_on && st.starts_on >= today ? st.starts_on : ssAddDays(today, 1);
+  var wk = [4, 6, 8, 10, 12, 16].map(function(w){ return '<option value="' + w + '"' + (w === weeks ? ' selected' : '') + '>' + w + ' weeks</option>'; }).join('');
+  var mn = [30, 45, 60, 75, 90, 120].map(function(m){ return '<option value="' + m + '"' + (m === mins ? ' selected' : '') + '>' + m + ' minutes</option>'; }).join('');
+  var dy = SS_DAYS.map(function(n, i){ return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:14px;cursor:pointer;"><input type="checkbox" class="ssDay" value="' + i + '"' + (days.indexOf(i) >= 0 ? ' checked' : '') + ' style="width:auto;">' + n + '</label>'; }).join('');
+  host.innerHTML = '<div class="card" style="margin-bottom:18px;border-left:4px solid var(--accent);"><div class="c-eyebrow">Self-study · step 2 of 2</div>' +
+    '<h3 style="margin:4px 0 8px;">Choose your course length and live-class schedule</h3>' +
+    '<p style="color:var(--text-muted);font-size:14px;margin:0 0 12px;">Asha spreads the 17 chapters over your classes, with the last week kept for the final exam. Classes are live with Asha; you can ask questions during class and at any other time.</p>' +
+    '<div class="row2"><div class="field"><label>Course length</label><select id="ssWeeks">' + wk + '</select></div>' +
+    '<div class="field"><label>First day</label><input type="date" id="ssStartD" min="' + today + '" max="' + ssAddDays(today, 30) + '" value="' + startD + '"></div></div>' +
+    '<div class="field"><label>Class days</label><div>' + dy + '</div></div>' +
+    '<div class="row2"><div class="field"><label>Class start time</label><input type="time" id="ssTime" value="' + esc(startT) + '"></div>' +
+    '<div class="field"><label>Class length</label><select id="ssMins">' + mn + '</select></div></div>' +
+    '<div class="field"><label>Time zone</label><input id="ssTz" value="' + esc(tz) + '" placeholder="e.g. America/New_York"></div>' +
+    '<div id="ssPreview" style="font-size:14px;margin:6px 0 12px;"></div>' +
+    '<button class="btn btn-primary" id="ssConfirm">Confirm my schedule</button>' +
+    (st.status === 'active' ? ' <button class="btn btn-ghost" id="ssCancelEdit">Keep my current schedule</button>' : '') +
+    ' <span id="ssMsg" class="msg" style="display:inline-block;margin-left:8px;"></span></div>';
+  function chosenDays(){ var out = []; Array.prototype.forEach.call(host.querySelectorAll('.ssDay'), function(c){ if(c.checked){ out.push(+c.value); } }); return out; }
+  function preview(){
+    var w = +$('ssWeeks').value, n = ssCountClasses(w, $('ssStartD').value, chosenDays(), $('ssTime').value, $('ssTz').value);
+    var ok = n >= 12 && n <= 120;
+    $('ssPreview').innerHTML = (ok ? '✅ ' : '⚠️ ') + '<b>' + n + ' live classes</b> of ' + $('ssMins').value + ' minutes over ' + w + ' weeks' +
+      (n < 12 ? ' — at least 12 are needed; add a day or choose a longer course.' : (n >= 24 ? ', including a midterm review and a final review.' : '.'));
+    $('ssConfirm').disabled = !ok;
+  }
+  Array.prototype.forEach.call(host.querySelectorAll('select,input'), function(el){ el.addEventListener('change', preview); el.addEventListener('input', preview); });
+  preview();
+  if($('ssCancelEdit')){ $('ssCancelEdit').addEventListener('click', function(){ host.removeAttribute('data-edit'); renderSelfStudyCard(host, st); }); }
+  $('ssConfirm').addEventListener('click', function(){
+    $('ssConfirm').disabled = true;
+    var e = $('ssMsg'); e.className = 'msg'; e.textContent = 'Asha is preparing your course…';
+    sb.rpc('im_selfstudy_configure', { p_weeks: +$('ssWeeks').value, p_start_date: $('ssStartD').value, p_days: chosenDays(), p_start: $('ssTime').value, p_minutes: +$('ssMins').value, p_tz: $('ssTz').value.trim() }).then(function(r){
+      var d = r && r.data ? r.data : {};
+      if(r.error || d.ok === false){ $('ssConfirm').disabled = false; e.className = 'msg err'; e.textContent = r.error ? r.error.message : ssReason(d.reason, d); return; }
+      host.removeAttribute('data-edit');
+      ensureProfileAndCourse().then(function(){ renderSelfStudyCard(host, d); try{ loadHomeDeadlines(); }catch(x){} });
+    });
+  });
+}
+
 function loadHome() {
   if (State.guest) {
     if($('welcomeTitle')){ $('welcomeTitle').textContent = 'Welcome — free preview'; }
@@ -7837,6 +8187,7 @@ function loadHome() {
   if (!State.user) { return; }
   var uid = State.user.id;
   renderHomeNameCard();
+  try { loadSelfStudyCard(); } catch (e) {}
   // counts: graded attempts, correct, arenas played
   Promise.all([
     sb.from('im_exam_attempt').select('is_correct', { count: 'exact' }).eq('student_id', uid).not('graded_at','is',null),
@@ -7928,10 +8279,11 @@ function loadMyMaterials(){
       rows.forEach(function(m){
         html+='<div style="padding:9px 0;border-bottom:1px solid var(--border);">'+
           '<span style="margin-right:8px;font-size:16px;">'+matIcon(m.kind)+'</span>'+
-          '<a href="'+esc(m.url)+'" target="_blank" rel="noopener" style="color:var(--violet);text-decoration:none;font-size:15px;">'+esc(m.title)+'</a></div>';
+          matLink(m,'color:var(--violet);text-decoration:none;font-size:15px;')+'</div>';
       });
       html+='</div>';
       box.innerHTML=html;
+      wireMatBodies(box);
     });
   });
 }
@@ -8394,6 +8746,60 @@ function startGradedQuiz(chapter) {
     area.innerHTML = errCard('Quiz engine is not loaded. Please hard-refresh the page.');
     return;
   }
+  // Self-study courses run every graded quiz on camera with a stored integrity
+  // record; regular courses keep the light (no-webcam) proctoring.
+  var cid = State.payCourseId || State.selfCourseId;
+  if (!cid) { startGradedQuizSoft(chapter); return; }
+  // Known already (prefetched at sign-in): dispatch synchronously so the soft path
+  // keeps the click's user gesture for fullscreen.
+  if (State.courseSelfStudy && State.courseSelfStudy[cid] !== undefined) {
+    if (State.courseSelfStudy[cid]) { startGradedQuizCamera(chapter, cid); } else { startGradedQuizSoft(chapter); }
+    return;
+  }
+  area.innerHTML = '<div class="q-card"><span class="spinner"></span> &nbsp;Preparing your quiz…</div>';
+  sb.from('im_course').select('is_self_study').eq('id', cid).maybeSingle().then(function(r){
+    State.courseSelfStudy = State.courseSelfStudy || {}; State.courseSelfStudy[cid] = !!(r && r.data && r.data.is_self_study);
+    if (State.courseSelfStudy[cid]) { startGradedQuizCamera(chapter, cid); }
+    else { area.innerHTML = ''; startGradedQuizSoft(chapter); }
+  }, function(){ area.innerHTML = ''; startGradedQuizSoft(chapter); });
+}
+
+function prefetchSelfStudyFlag() {
+  var cid = State.payCourseId || State.selfCourseId;
+  if (!cid) { return; }
+  State.courseSelfStudy = State.courseSelfStudy || {};
+  if (State.courseSelfStudy[cid] !== undefined) { return; }
+  sb.from('im_course').select('is_self_study').eq('id', cid).maybeSingle().then(function(r){
+    if (r && !r.error) { State.courseSelfStudy[cid] = !!(r.data && r.data.is_self_study); }
+  }, function(){});
+}
+
+function startGradedQuizCamera(chapter, cid) {
+  var area = $('practiceArea');
+  if (typeof MNProctor === 'undefined' || !MNProctor.runConsent) {
+    area.innerHTML = errCard('This quiz is proctored on camera, but the monitoring component failed to load. Please hard-refresh the page; the quiz will not start unmonitored.');
+    return;
+  }
+  var cfg = { id: 'quiz-ch' + chapter + '-' + cid, course_id: cid, proctored: true, camera_mode: 'block', sessionLabel: 'quiz' };
+  window.__mnpUserId = State.user.id;
+  MNProctor.runConsent(cfg, area, function(){
+    area.innerHTML = '';
+    MNProctor.onAutoSubmit(function(){
+      var btns = area.querySelectorAll('button'); var sub = null;
+      Array.prototype.forEach.call(btns, function(b){ if (/^Submit/i.test((b.textContent || '').trim()) && !b.disabled) { sub = b; } });
+      if (sub) { sub.click(); }
+    });
+    MNProctor.start(cfg, State.user);
+    invalidateSchedule();
+    IMQuiz.quiz({ chapter: chapter, count: QUIZ_LEN }, area, {
+      onSubmit: function(res){ if (res && res.ok && !res.offline && MNProctor.isActive()) { MNProctor.finish(); } }
+    });
+  }, function(){ area.innerHTML = ''; });
+}
+
+function startGradedQuizSoft(chapter) {
+  if (!chapter) { return; }
+  var area = $('practiceArea');
   // Soft-proctoring notice (chapter quizzes are lightly proctored, no webcam).
   var ready = window.confirm('This is a graded quiz for Chapter ' + chapter + '.\n\n\u2022 It runs in fullscreen; leaving the tab or exiting fullscreen is recorded.\n\u2022 No webcam is used.\n\u2022 Answers are graded after you submit and are not shown during the quiz.\n\nStart now?');
   if (!ready) { return; }
@@ -10271,13 +10677,21 @@ function loadBadges() {
 function loadCompletion() {
   var host = $('completionPanel'); if (!host) { return; }
   if (!State.user) { host.innerHTML = ''; return; }
-  var uid = State.user.id;
   // Use the student's primary course: a professor course if joined, else self-study.
   var courseId = State.payCourseId || State.selfCourseId;
   if (!courseId) { host.innerHTML = ''; return; }
+  computeCompletion(courseId, State.user.id).then(function(res){
+    if (!res) { host.innerHTML = ''; return; }
+    renderCompletion(host, res.course, res.comps, res.total);
+  });
+}
 
-  Promise.all([
-    sb.from('im_course').select('id,title,owner_id,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,weight_assignments,att_presence_share,grade_scale').eq('id', courseId).maybeSingle(),
+/* The weighted course total behind the certificate, for any student in a course
+   (the student's own My progress panel, and the admin self-study overview).
+   Resolves {course, comps:[[label, score0to1, weight, notTaken]], total} or null. */
+function computeCompletion(courseId, uid, opts) {
+  return Promise.all([
+    sb.from('im_course').select('id,title,owner_id,is_self_study,weight_reading,weight_quizzes,weight_arenas,weight_midterm,weight_final,weight_attendance,weight_assignments,att_presence_share,grade_scale').eq('id', courseId).maybeSingle(),
     sb.from('im_chapter_progress').select('chapter,reading_done,quiz_passed,quiz_score').eq('student_id', uid).eq('course_id', courseId),
     sb.from('im_attempt').select('arena_slug,is_correct,created_at').eq('user_id', uid).eq('course_id', courseId),
     sb.from('im_exam').select('id,kind,title,total_points,item_ids,weight,attempt_scoring,is_manual').eq('course_id', courseId).eq('is_published', true),
@@ -10287,8 +10701,8 @@ function loadCompletion() {
     sb.from('im_manual_exam_score').select('exam_id,points').eq('course_id', courseId).eq('student_id', uid),
     sb.from('im_assignment').select('id,points').eq('course_id', courseId).eq('is_published', true),
     sb.from('im_submission').select('assignment_id,score').eq('student_id', uid)
-  ]).then(function(r) {
-    var course = r[0].data; if (!course) { host.innerHTML=''; return; }
+  ]).then(function(r) { return new Promise(function(resolveC){
+    var course = r[0].data; if (!course) { resolveC(null); return; }
     var prog = r[1].data ? r[1].data : [];
     var arenas = r[2].data ? r[2].data : [];
     var exams = r[3].data ? r[3].data : [];
@@ -10337,7 +10751,7 @@ function loadCompletion() {
       });
       var wsum=comps.reduce(function(s,x){return s+x[2];},0);
       var total=wsum>0?comps.reduce(function(s,x){return s+x[1]*x[2];},0)/wsum:0;
-      renderCompletion(host, course, comps, total);
+      resolveC({ course:course, comps:comps, total:total });
     }
 
     if (examIds.length === 0) { finish({}); return; }
@@ -10369,7 +10783,7 @@ function loadCompletion() {
         afterPts(pointsById);
       }, function(){ afterPts({}); });
     });
-  });
+  }); });
 }
 
 function renderCompletion(host, course, comps, total) {
@@ -10427,7 +10841,9 @@ function getStudentName(cb) {
 
 function openCertificate(course, pct, isProfCourse) {
   getStudentName(function(name) {
-    if (isProfCourse && course.owner_id) {
+    if (course.is_self_study) {
+      launchCertificate({ name:name, pct:pct, mode:'selfstudy', courseTitle:'Introduction to Microeconomics', professor:'Asha' });
+    } else if (isProfCourse && course.owner_id) {
       sb.from('im_person').select('full_name,display_title').eq('user_id', course.owner_id).maybeSingle().then(function(res) {
         var prof = (res.data && res.data.full_name) ? res.data.full_name : 'Course Instructor';
         launchCertificate({ name:name, pct:pct, mode:'enrolled', courseTitle:course.title, professor:prof });
@@ -10483,9 +10899,10 @@ function crestSVG() {
 
 function buildCertificateHTML(o) {
   var year = new Date().getFullYear();
-  var subtitle = (o.mode === 'enrolled') ? o.courseTitle : 'Independent Study';
+  var subtitle = (o.mode === 'enrolled') ? o.courseTitle : (o.mode === 'selfstudy' ? 'Self-Study with Proctored Examinations' : 'Independent Study');
   var leftName, leftRole;
   if (o.mode === 'enrolled') { leftName = o.professor; leftRole = 'COURSE INSTRUCTOR'; }
+  else if (o.mode === 'selfstudy') { leftName = 'Asha'; leftRole = 'AI PROFESSOR \u00b7 MACRONATIONS'; }
   else { leftName = 'Amarendra Sharma, Ph.D.'; leftRole = 'FOUNDER \u00b7 STRATEGYARENA'; }
   var body = 'has completed the Introduction to Microeconomics course, demonstrating mastery of supply and demand, elasticity, market structures, welfare analysis, and the core models of microeconomic reasoning that follow from themtition, cooperation, and decision-making.';
 

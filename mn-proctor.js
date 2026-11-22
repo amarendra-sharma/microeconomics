@@ -82,6 +82,7 @@ var MNProctor = (function () {
   function runConsent(exam, hostEl, onBegin, onCancel){
     S.exam = exam;
     var cam = exam.camera_mode && exam.camera_mode !== 'off';
+    var what = exam.sessionLabel || 'exam';
     if(!proctored()){ if(onBegin){ onBegin(); } return; }
     var rules = '';
     rules += '<li>Stay in this browser window and in fullscreen for the whole exam.</li>';
@@ -113,14 +114,14 @@ var MNProctor = (function () {
 
     hostEl.innerHTML =
       '<div style="max-width:640px;margin:0 auto;border:1px solid rgba(128,128,128,.25);border-radius:12px;padding:20px;">'+
-        '<h2 style="font-size:22px;margin:0 0 6px;">Before you begin \u2014 proctored exam</h2>'+
-        '<p style="font-size:13.5px;opacity:.75;margin-bottom:12px;">This exam is monitored to protect academic integrity. Please read the rules:</p>'+
+        '<h2 style="font-size:22px;margin:0 0 6px;">Before you begin \u2014 proctored '+what+'</h2>'+
+        '<p style="font-size:13.5px;opacity:.75;margin-bottom:12px;">This '+what+' is monitored to protect academic integrity. Please read the rules:</p>'+
         '<ul style="font-size:14px;line-height:1.7;padding-left:20px;margin-bottom:8px;">'+rules+'</ul>'+
         idBlock+
         '<div style="background:rgba(0,0,0,.15);border:1px solid rgba(128,128,128,.25);border-radius:8px;padding:10px 12px;font-size:12.5px;opacity:.8;margin:6px 0 16px;">Note: this is browser-based monitoring. It records and reacts to violations but does not physically lock your computer. By starting, you consent to this monitoring'+(cam?' and to webcam photos, your ID photo, and short video clips (with audio, recorded if talking is detected) being stored and reviewed by your instructor. Recordings are automatically deleted after 30 days':'')+'.</div>'+
         '<div style="display:flex;justify-content:flex-end;gap:10px;">'+
           '<button id="mnpCancel" style="cursor:pointer;padding:8px 14px;border-radius:7px;border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;">Cancel</button>'+
-          '<button id="mnpBegin" style="cursor:pointer;padding:8px 16px;border-radius:7px;border:none;background:#7c5cff;color:#fff;font-weight:600;'+(cam && exam.camera_mode==='block'?'opacity:.5;':'')+'"'+(cam && exam.camera_mode==='block'?' disabled':'')+'>I understand \u2014 begin exam</button>'+
+          '<button id="mnpBegin" style="cursor:pointer;padding:8px 16px;border-radius:7px;border:none;background:#7c5cff;color:#fff;font-weight:600;'+(cam && exam.camera_mode==='block'?'opacity:.5;':'')+'"'+(cam && exam.camera_mode==='block'?' disabled':'')+'>I understand \u2014 begin '+what+'</button>'+
         '</div>'+
       '</div>';
 
