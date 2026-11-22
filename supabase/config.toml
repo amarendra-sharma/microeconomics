@@ -1,0 +1,5 @@
+# Supabase CLI settings, used by the GitHub Action that deploys im-grade-attempt.
+project_id = "microeconomics"
+
+[functions.im-grade-attempt]
+verify_jwt = false
