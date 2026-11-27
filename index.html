@@ -542,6 +542,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="mn-proctor.js"></script>
+<script src="px-proctor.js?v=pilot1"></script>
 <script src="im-diagrams.js?v=grid1"></script>
 <script src="im-generators.js?v=ch13fix"></script>
 <script src="im-econ160.js?v=finalfigs3"></script>
@@ -556,13 +557,72 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-11-perf';
+var SA_BUILD = 'intro-micro-portal-2026-11-px-pilot';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
 // table/bucket so no data migration is needed.
 if(typeof MNProctor!=='undefined'){
   MNProctor.init({ sb: sb, table: 'im_proctor_events', bucket: 'proctor-snapshots' });
+}
+
+// ---------------------------------------------------------------------------
+// MacroNations Proctor PILOT (px-proctor.js): the server keeps the record, runs
+// the clock, decides auto-submit, and checks for AI agents. ONLY the courses in
+// PX_PILOT_COURSES use it; every other course keeps mn-proctor.js exactly as
+// before. To switch the pilot off, empty the list.
+// ---------------------------------------------------------------------------
+var PX_TENANT = '63385909-4712-4750-904a-63dfa80f23f0';
+var PX_PILOT_COURSES = ['96b76b37-b732-4112-b16b-f08447a8eb82'];   // Test Course 1
+if (typeof MNProctor !== 'undefined' && typeof PXProctor !== 'undefined') {
+  (function () {
+    var orig = { start: MNProctor.start, finish: MNProctor.finish, isActive: MNProctor.isActive, onAutoSubmit: MNProctor.onAutoSubmit };
+    var autoCb = null, usingPx = false;
+    function courseOf(cfg) {
+      return (cfg && cfg.course_id) || State.payCourseId || State.selfCourseId || State.currentCourseId || null;
+    }
+    function isPilot(cfg) { var c = courseOf(cfg); return !!c && PX_PILOT_COURSES.indexOf(String(c)) !== -1; }
+    function clickSubmit() {
+      var area = $('practiceArea'); if (!area) { return; }
+      var sub = null;
+      Array.prototype.forEach.call(area.querySelectorAll('button'), function (b) {
+        if (/^Submit/i.test((b.textContent || '').trim()) && !b.disabled) { sub = b; }
+      });
+      if (sub) { sub.click(); }
+    }
+    MNProctor.onAutoSubmit = function (cb) { autoCb = cb; return orig.onAutoSubmit(cb); };
+    MNProctor.start = function (cfg, user) {
+      if (!isPilot(cfg)) { usingPx = false; return orig.start(cfg, user); }
+      usingPx = true;
+      var soft = !!(cfg && cfg.mode === 'soft');
+      var label = (cfg && cfg.sessionLabel) || (soft ? 'quiz' : 'exam');
+      var cb = soft ? clickSubmit : autoCb;
+      autoCb = null;
+      PXProctor.start({
+        url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, tenantId: PX_TENANT,
+        examId: 'im:' + courseOf(cfg) + ':' + ((cfg && cfg.id) ? String(cfg.id) : label),
+        accessToken: function () {
+          return sb.auth.getSession().then(function (r) { return (r && r.data && r.data.session) ? r.data.session.access_token : null; });
+        },
+        displayName: (State.user && State.user.email) || null,
+        label: label,
+        root: '.main', questionSelector: '.q-card, .imq-ans', optionSelector: '.q-option', canaryValue: -1,
+        allowInject: '.modal-bg, .modal',
+        onSubmit: function () { if (cb) { try { cb(); } catch (e) { /* ignore */ } } },
+        onStop: function (msg) { try { alert(msg); } catch (e) { /* ignore */ } }
+      }).then(null, function (err) {
+        usingPx = false;
+        try { console.error('Proctor pilot could not start:', err && err.message); } catch (e) { /* ignore */ }
+        try { alert('Proctoring could not start: ' + (err && err.message ? err.message : 'unknown error') + '. Please reload the page.'); } catch (e2) { /* ignore */ }
+      });
+    };
+    MNProctor.isActive = function () { return usingPx ? PXProctor.isActive() : orig.isActive(); };
+    MNProctor.finish = function () {
+      if (usingPx) { usingPx = false; return PXProctor.end('submitted'); }
+      return orig.finish();
+    };
+    MNProctor.usingPx = function () { return usingPx; };
+  })();
 }
 
 var CHAPTERS = [
@@ -8806,13 +8866,18 @@ function startGradedQuizSoft(chapter) {
   area.innerHTML = '';
   // Engage soft proctoring if available (fullscreen + tab-switch flags, no webcam).
   if (typeof MNProctor !== 'undefined' && MNProctor.start) {
-    try { MNProctor.start({ mode: 'soft', noPersist: true }); } catch (e) {}
+    try { MNProctor.start({ mode: 'soft', noPersist: true, id: 'quiz-ch' + chapter }); } catch (e) {}
   }
   // The quiz engine draws items from the chapter bank (each with a per-student
   // seed), collects answers, and submits once to the im-grade-quiz Edge Function,
   // which regenerates each question from its seed and grades server-side.
   invalidateSchedule();
-  IMQuiz.quiz({ chapter: chapter, count: QUIZ_LEN }, area);
+  IMQuiz.quiz({ chapter: chapter, count: QUIZ_LEN }, area, {
+    // Pilot courses only: close the proctoring session once the quiz is saved.
+    onSubmit: function (res) {
+      if (res && res.ok && !res.offline && MNProctor.usingPx && MNProctor.usingPx()) { MNProctor.finish(); }
+    }
+  });
 }
 
 function startGradedQuiz_LEGACY(chapter) {
