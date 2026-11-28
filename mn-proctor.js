@@ -126,10 +126,16 @@ var MNProctor = (function () {
       '</div>';
 
     $('mnpCancel').addEventListener('click', function(){ stopConsentCam(); if(onCancel){ onCancel(); } });
-    $('mnpBegin').addEventListener('click', function(){ stopConsentCam(); if(onBegin){ onBegin(); } });
+    $('mnpBegin').addEventListener('click', function(){ releaseConsentPreview(); if(onBegin){ onBegin(); } });
 
     if(cam && navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
-      navigator.mediaDevices.getUserMedia({ video:{ width:320, height:240 }, audio:false }).then(function(stream){
+      // Ask for camera AND microphone here, once, while the page is NOT fullscreen.
+      // The same stream is reused when the exam starts (see startCamera): a second
+      // permission prompt over a fullscreen page can be invisible (Firefox, private
+      // windows ask every time) and the page then ignores every click.
+      navigator.mediaDevices.getUserMedia({ video:{ width:320, height:240 }, audio:true })
+        .then(null, function(){ return navigator.mediaDevices.getUserMedia({ video:{ width:320, height:240 }, audio:false }); })
+        .then(function(stream){
         window.__mnpConsentStream = stream;
         var v=$('mnpVideo'); if(v){ v.srcObject=stream; }
         if($('mnpStatus')){ $('mnpStatus').textContent='Camera on. Capture your ID to continue.'; }
@@ -155,6 +161,17 @@ var MNProctor = (function () {
         if(exam.camera_mode!=='block'){ var bb=$('mnpBegin'); if(bb){ bb.disabled=false; bb.style.opacity='1'; } }
       });
     }
+  }
+  // Begin: keep the camera running for the exam, just detach it from the rules page.
+  function releaseConsentPreview(){
+    var v=$('mnpVideo'); if(v){ try{ v.srcObject=null; }catch(e){} }
+    var s=window.__mnpConsentStream;
+    if(s){ setTimeout(function(){ if(window.__mnpConsentStream===s && !S.active){ stopConsentCam(); } }, 120000); }  // never started: release
+  }
+  function liveConsentStream(){
+    var s=window.__mnpConsentStream; if(!s){ return null; }
+    var vt=s.getVideoTracks()[0];
+    return (vt && vt.readyState==='live') ? s : null;
   }
   function stopConsentCam(){
     if(window.__mnpConsentStream){ window.__mnpConsentStream.getTracks().forEach(function(t){ try{t.stop();}catch(e){} }); window.__mnpConsentStream=null; }
@@ -281,7 +298,8 @@ var MNProctor = (function () {
   function startCamera(){
     if(camMode()==='off'){ return; }
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ flag('camera not supported by browser'); return; }
-    navigator.mediaDevices.getUserMedia({ video:{ width:320, height:240 }, audio:true }).then(function(stream){
+    var reuse=liveConsentStream(); window.__mnpConsentStream=null;
+    (reuse ? Promise.resolve(reuse) : navigator.mediaDevices.getUserMedia({ video:{ width:320, height:240 }, audio:true })).then(function(stream){
       S.cam.stream=stream;
       var v=document.createElement('video'); v.autoplay=true; v.muted=true; v.playsInline=true; v.srcObject=stream;
       v.style.cssText='width:120px;height:90px;border-radius:8px;object-fit:cover;display:block;';

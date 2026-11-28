@@ -21,7 +21,7 @@
  * ==========================================================================*/
 var PXCamera = (function () {
   'use strict';
-  var VERSION = 'px-camera-2026-11-step4';
+  var VERSION = 'px-camera-2026-11-step4b';
   var MP_VER = '0.10.14';
   var MP_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MP_VER;
   var FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
@@ -277,7 +277,13 @@ var PXCamera = (function () {
     var room = setting('room_scan', 'optional');          // 'required' | 'optional' | 'off'
     var premium = !!K.settings.premium_recording;
     return new Promise(function (resolve) {
-      function finish() { var d = $('pxCheckin'); if (d && d.parentNode) { d.parentNode.removeChild(d); } dock(); resolve(); }
+      function close() { var d = $('pxCheckin'); if (d && d.parentNode) { d.parentNode.removeChild(d); } dock(); resolve(); }
+      // Last step: one click that also puts the exam in fullscreen (needs a user gesture).
+      function finish() {
+        panel(step('All set', 'Your camera is on. The exam opens in fullscreen; stay in it until you submit.',
+                   btn('pxGo', 'Start exam', true)));
+        on('pxGo', function () { if (K.ready) { K.ready(); } close(); });
+      }
       function screenStep() {
         if (!premium) { finish(); return; }
         panel(step('Share your entire screen', 'This exam records your screen at low resolution. Choose <b>Entire screen</b> in the next window.',

@@ -30,7 +30,7 @@
  * ==========================================================================*/
 var PXProctor = (function () {
   'use strict';
-  var VERSION = 'px-sdk-2026-11-step4';
+  var VERSION = 'px-sdk-2026-11-step4b';
 
   var C = null;            // config
   var S = null;            // live session state
@@ -574,6 +574,7 @@ var PXProctor = (function () {
     // A bare blur is weak evidence (permission prompts, notifications, clicks on
     // a second monitor). Logged at once, counted only if the student stays away.
     H.blur = function () {
+      if (S.setup) { return; }                // camera permission prompt during check-in
       record('focus_lost_brief');
       if (S.awayTimer) { clearTimeout(S.awayTimer); }
       S.awayTimer = setTimeout(function () {
@@ -583,7 +584,8 @@ var PXProctor = (function () {
     };
     H.focus = function () { if (S.awayTimer) { clearTimeout(S.awayTimer); S.awayTimer = null; } };
     H.fs = function () {
-      if (S && S.active && !isFullscreen()) {
+      if (S && S.selfExit && !isFullscreen()) { S.selfExit = false; return; }   // our own exit for the camera check-in
+      if (S && S.active && !S.setup && !isFullscreen()) {
         record('fullscreen_exit');
         overlay('Return to fullscreen', 'This is a proctored exam. Leaving fullscreen has been recorded.', 'Resume exam in fullscreen', goFullscreen);
       }
@@ -697,7 +699,9 @@ var PXProctor = (function () {
   }
   function camCtx(res) {
     return { url: C.url, anonKey: C.anonKey, bucket: res.upload.bucket, prefix: res.upload.prefix, settings: S.settings,
-             token: function () { try { return typeof C.accessToken === 'function' ? C.accessToken() : (C.accessToken || null); } catch (e) { return null; } }, record: record, overlay: overlay };
+             token: function () { try { return typeof C.accessToken === 'function' ? C.accessToken() : (C.accessToken || null); } catch (e) { return null; } }, record: record, overlay: overlay,
+             // called from the check-in's final click (a user gesture)
+             ready: function () { if (S) { S.setup = false; } goFullscreen(); } };
   }
   function startCamera(res) {
     var mode = S.settings.camera_mode || 'off';
@@ -706,8 +710,12 @@ var PXProctor = (function () {
       S.camera = true;
       return cam.begin(camCtx(res));
     }).then(null, function (err) {
+      S.setup = false;
       record('camera_denied', { reason: (err && err.message) || 'failed' });
-      if (mode !== 'block') { return false; }
+      if (mode !== 'block') {
+        overlay('Camera not available', 'This exam continues without the camera; that is recorded for your instructor.', 'Continue in fullscreen', goFullscreen);
+        return false;
+      }
       // Camera-required exam: the exam stays covered until the camera works.
       // (The session stays open and the clock keeps running, as on paper.)
       return new Promise(function (resolve) {
@@ -731,7 +739,11 @@ var PXProctor = (function () {
     if (!C.url || !C.anonKey) { return Promise.reject(new Error('PXProctor: url and anonKey are required')); }
     // Ask for fullscreen now, while the student's click still counts as a user
     // gesture; browsers refuse it once the server round-trip has finished.
-    goFullscreen();
+    // Camera exams go fullscreen later, from the check-in's "Start exam" click:
+    // a camera permission prompt shown over a fullscreen page can be invisible
+    // (Firefox), leaving the student with a page that ignores every click.
+    var camLikely = C.cameraMode && C.cameraMode !== 'off';
+    if (!camLikely) { goFullscreen(); }
     var call = refreshSeb().then(function () {
       return C.launchToken
         ? rpc('px_start', { p_launch_token: C.launchToken, p_client: clientInfo() })
@@ -758,7 +770,12 @@ var PXProctor = (function () {
       if (typeof res.remaining_sec === 'number') { syncClock(res.remaining_sec); }
       buildBanner(C.label || 'exam');
       attach();
-      if (!isFullscreen()) { goFullscreen(); }
+      S.setup = (S.settings.camera_mode || 'off') !== 'off' && !!res.upload;
+      if (S.setup && isFullscreen() && document.exitFullscreen) {
+        S.selfExit = true;
+        document.exitFullscreen().then(function () {}, function () {});   // see camLikely above
+      }
+      if (!S.setup && !isFullscreen()) { goFullscreen(); }
       if (window.screen && window.screen.isExtended === true) { record('multi_screen'); }
       agentStart();
       schedule();
