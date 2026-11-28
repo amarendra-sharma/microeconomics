@@ -204,6 +204,88 @@ async function canGradeCourse(db: any, courseId: string, callerId: string): Prom
   return !!staff && (staff.can_grade === true || staff.can_view_grades === true);
 }
 
+// ----------------------------------------------------------------------------
+//  EXAM ATTEMPTS (retakes)
+//  One "attempt" is one sitting: all rows sharing attempt_no. The latest attempt
+//  stays open while any of its questions is unanswered. Once every question in
+//  it is answered, the next issue request starts attempt N+1, but only if the
+//  student still has attempts left. Chapter quizzes (no exam_id) do not use this.
+// ----------------------------------------------------------------------------
+// deno-lint-ignore no-explicit-any
+function isUnanswered(r: any): boolean {
+  return r.graded_at === null && (r.submitted_value === null || r.submitted_value === undefined);
+}
+
+async function examAttemptSlot(
+  // deno-lint-ignore no-explicit-any
+  db: any, studentId: string, examId: string,
+  // deno-lint-ignore no-explicit-any
+): Promise<any> {
+  const { data: exam, error: xe } = await db
+    .from("im_exam").select("id, course_id, max_attempts").eq("id", examId).maybeSingle();
+  if (xe) return { error: "Exam lookup failed: " + xe.message, status: 400 };
+  if (!exam) return { error: "Exam not found", status: 404 };
+
+  // page through the rows: unlimited-attempt exams can pass the 1000-row cap
+  // deno-lint-ignore no-explicit-any
+  let rows: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db
+      .from("im_exam_attempt")
+      .select("id, item_id, generator_id, seed, attempt_no, graded_at, submitted_value")
+      .eq("exam_id", examId).eq("student_id", studentId)
+      .order("attempt_no").order("id")
+      .range(from, from + 999);
+    if (error) return { error: "Attempt lookup failed: " + error.message, status: 400 };
+    rows = rows.concat(data || []);
+    if (!data || data.length < 1000) break;
+  }
+
+  // deno-lint-ignore no-explicit-any
+  const open: Record<string, any> = {};
+  if (rows.length === 0) return { courseId: exam.course_id, attemptNo: 1, open: open };
+
+  const used: Record<string, boolean> = {};
+  let latest = 1;
+  for (const r of rows) {
+    const n = Number(r.attempt_no) || 1;
+    used[String(n)] = true;
+    if (n > latest) latest = n;
+  }
+  const latestRows = rows.filter(function (r) { return (Number(r.attempt_no) || 1) === latest; });
+  if (latestRows.some(isUnanswered)) {
+    for (const r of latestRows) open[r.item_id] = r;
+    return { courseId: exam.course_id, attemptNo: latest, open: open };
+  }
+
+  // The latest attempt is finished: a new one needs an attempt to spare.
+  const base = (exam.max_attempts === null || exam.max_attempts === undefined) ? 1 : Number(exam.max_attempts);
+  if (base !== 0) {           // 0 = unlimited
+    const { data: courseAcc, error: e1 } = await db
+      .from("im_accommodation").select("extra_attempts")
+      .eq("course_id", exam.course_id).eq("student_id", studentId);
+    const { data: examAcc, error: e2 } = await db
+      .from("im_assessment_accommodation").select("extra_attempts")
+      .eq("course_id", exam.course_id).eq("student_id", studentId)
+      .eq("kind", "exam").eq("ref_id", examId);
+    if (e1 || e2) return { error: "Could not check your attempts: " + (e1 || e2).message, status: 400 };
+    let allowed = base;
+    for (const a of (courseAcc || []).concat(examAcc || [])) allowed += Number(a.extra_attempts) || 0;
+    if (Object.keys(used).length >= allowed) {
+      // status 200 + final: the page shows this text and does not retry
+      return { error: "No attempts left on this exam.", code: "no_attempts", final: true, status: 200 };
+    }
+  }
+  return { courseId: exam.course_id, attemptNo: latest + 1, open: open };
+}
+
+// deno-lint-ignore no-explicit-any
+function slotError(slot: any): Response {
+  return json({ error: slot.error, code: slot.code, final: slot.final }, slot.status || 400);
+}
+
+const ANSWERED_MSG = "This attempt is already partly submitted. Reload the Exams page to finish the remaining questions.";
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -251,12 +333,22 @@ Deno.serve(async (req: Request) => {
       for (const r of (rows || [])) byId[r.id] = r;
 
       // deno-lint-ignore no-explicit-any
+      let slot: any = null;
+      if (examId) {
+        slot = await examAttemptSlot(db, studentId, examId);
+        if (slot.error) return slotError(slot);
+      }
+
+      // deno-lint-ignore no-explicit-any
       const built: any[] = [];
       // deno-lint-ignore no-explicit-any
       const inserts: any[] = [];
       for (const itemId of ids) {
         const item = byId[itemId];
-        if (!item || item.is_active === false) return json({ error: "Item not available: " + itemId }, 404);
+        // already issued in the open attempt: hand back the same instance
+        const prior = slot ? slot.open[itemId] : null;
+        if (prior && !isUnanswered(prior)) return json({ error: ANSWERED_MSG, code: "attempt_open", final: true });
+        if (!item || (item.is_active === false && !prior)) return json({ error: "Item not available: " + itemId }, 404);
         let itemType = item.item_type || "parameterized_numeric";
         let prompt = item.prompt || "";
         // deno-lint-ignore no-explicit-any
@@ -265,9 +357,9 @@ Deno.serve(async (req: Request) => {
         // deno-lint-ignore no-explicit-any
         let figure: any = null;
         let seed: number | null = null;
-        const genId = item.generator_id || null;
+        const genId = (prior ? prior.generator_id : item.generator_id) || null;
         if (genId) {
-          seed = randSeed();
+          seed = prior ? (Number(prior.seed) || 1) : randSeed();
           const q = ENGINE.IMGenerators.generate(genId, seed);
           if (!q) return json({ error: "Unknown generator: " + genId }, 400);
           itemType = toItemType(q.kind);
@@ -276,14 +368,24 @@ Deno.serve(async (req: Request) => {
           points = q.points ? Number(q.points) : 1;
           figure = q.diagramSpec ? toFigure(q.diagramSpec) : null;
         }
-        built.push({ item_id: itemId, seed: seed, item_type: itemType, prompt: prompt, options: options, points: points, figure: figure });
-        inserts.push({ exam_id: examId, student_id: studentId, course_id: courseId, item_id: itemId, generator_id: genId, seed: seed });
+        built.push({ item_id: itemId, prior_id: prior ? prior.id : null, seed: seed, item_type: itemType, prompt: prompt, options: options, points: points, figure: figure });
+        if (!prior) {
+          // deno-lint-ignore no-explicit-any
+          const row: any = { exam_id: examId, student_id: studentId, course_id: slot ? slot.courseId : courseId, item_id: itemId, generator_id: genId, seed: seed };
+          if (slot) row.attempt_no = slot.attemptNo;
+          inserts.push(row);
+        }
       }
 
-      const { data: atts, error: ae } = await db
-        .from("im_exam_attempt").insert(inserts).select("id, item_id, seed");
-      if (ae) return json({ error: "Could not issue: " + ae.message }, 400);
-      if (!atts || atts.length !== built.length) return json({ error: "Could not issue: row count mismatch" }, 500);
+      // deno-lint-ignore no-explicit-any
+      let atts: any[] = [];
+      if (inserts.length) {
+        const { data, error: ae } = await db
+          .from("im_exam_attempt").insert(inserts).select("id, item_id, seed");
+        if (ae) return json({ error: "Could not issue: " + ae.message }, 400);
+        if (!data || data.length !== inserts.length) return json({ error: "Could not issue: row count mismatch" }, 500);
+        atts = data;
+      }
 
       // Match rows back by item_id + seed (do not rely on RETURNING order).
       // deno-lint-ignore no-explicit-any
@@ -296,7 +398,7 @@ Deno.serve(async (req: Request) => {
       const items: any[] = [];
       for (const b of built) {
         const k = String(b.item_id) + "|" + String(b.seed);
-        const a = pool[k] && pool[k].shift();
+        const a = b.prior_id ? { id: b.prior_id } : (pool[k] && pool[k].shift());
         if (!a) return json({ error: "Could not issue: unmatched row" }, 500);
         items.push({ item_id: b.item_id, attempt_id: a.id, item_type: b.item_type, prompt: b.prompt,
                      options: b.options, points: b.points, figure: b.figure });
@@ -418,7 +520,17 @@ Deno.serve(async (req: Request) => {
         .select("id, generator_id, item_type, prompt, options, points, is_active")
         .eq("id", itemId).maybeSingle();
       if (ie) return json({ error: "Item lookup failed: " + ie.message }, 400);
-      if (!item || item.is_active === false) return json({ error: "Item not available" }, 404);
+
+      // deno-lint-ignore no-explicit-any
+      let slot: any = null;
+      if (examId) {
+        slot = await examAttemptSlot(db, studentId, examId);
+        if (slot.error) return slotError(slot);
+      }
+      // already issued in the open attempt: hand back the same instance
+      const prior = slot ? slot.open[itemId] : null;
+      if (prior && !isUnanswered(prior)) return json({ error: ANSWERED_MSG, code: "attempt_open", final: true });
+      if (!item || (item.is_active === false && !prior)) return json({ error: "Item not available" }, 404);
 
       let itemType = item.item_type || "parameterized_numeric";
       let prompt = item.prompt || "";
@@ -428,11 +540,11 @@ Deno.serve(async (req: Request) => {
       // deno-lint-ignore no-explicit-any
       let figure: any = null;
       let seed: number | null = null;
-      const genId = item.generator_id || null;
+      const genId = (prior ? prior.generator_id : item.generator_id) || null;
 
       if (genId) {
-        // GENERATOR-BACKED: produce a fresh instance
-        seed = randSeed();
+        // GENERATOR-BACKED: a fresh instance, unless this question is already open
+        seed = prior ? (Number(prior.seed) || 1) : randSeed();
         const q = ENGINE.IMGenerators.generate(genId, seed);
         if (!q) return json({ error: "Unknown generator: " + genId }, 400);
         itemType = toItemType(q.kind);
@@ -443,17 +555,22 @@ Deno.serve(async (req: Request) => {
       }
 
       // record the attempt (seed lets grade regenerate the exact instance)
-      const { data: att, error: ae } = await db
-        .from("im_exam_attempt")
-        .insert({
-          exam_id: examId, student_id: studentId, course_id: courseId,
+      let attemptId: string = prior ? prior.id : "";
+      if (!prior) {
+        // deno-lint-ignore no-explicit-any
+        const row: any = {
+          exam_id: examId, student_id: studentId, course_id: slot ? slot.courseId : courseId,
           item_id: itemId, generator_id: genId, seed: seed,
-        })
-        .select("id").single();
-      if (ae) return json({ error: "Could not issue: " + ae.message }, 400);
+        };
+        if (slot) row.attempt_no = slot.attemptNo;
+        const { data: att, error: ae } = await db
+          .from("im_exam_attempt").insert(row).select("id").single();
+        if (ae) return json({ error: "Could not issue: " + ae.message }, 400);
+        attemptId = att.id;
+      }
 
       return json({
-        attempt_id: att.id, item_type: itemType, prompt: prompt,
+        attempt_id: attemptId, item_type: itemType, prompt: prompt,
         options: options, points: points, figure: figure,
       });
     }
@@ -555,10 +672,10 @@ Deno.serve(async (req: Request) => {
       // wrong (and ungraded-written) attempts belonging to THIS student
       const { data: atts, error: ae } = await db
         .from("im_exam_attempt")
-        .select("id, item_id, generator_id, seed, submitted_value, is_correct, points_earned")
+        .select("id, item_id, generator_id, seed, submitted_value, is_correct, points_earned, attempt_no")
         .eq("exam_id", examId).eq("student_id", studentId)
         .not("graded_at", "is", null)
-        .order("created_at");
+        .order("attempt_no").order("created_at");
       if (ae) return json({ error: ae.message }, 400);
 
       // wrong_only is the platform policy; read it so a future "full review"
@@ -588,6 +705,7 @@ Deno.serve(async (req: Request) => {
           rationale: q.rationale || null,
           is_correct: a.is_correct,
           points_earned: a.points_earned,
+          attempt_no: a.attempt_no,
         });
       }
       return json({ ok: true, open: true, wrong_only: wrongOnly, items: items });
@@ -748,9 +866,9 @@ Deno.serve(async (req: Request) => {
 
       const { data: atts, error: ae } = await db
         .from("im_exam_attempt")
-        .select("id, item_id, generator_id, seed, submitted_value, is_correct, points_earned, graded_at, original_points, regraded_by, regraded_at, regrade_note")
+        .select("id, item_id, generator_id, seed, submitted_value, is_correct, points_earned, graded_at, original_points, regraded_by, regraded_at, regrade_note, attempt_no")
         .eq("exam_id", examId).eq("student_id", targetStudent)
-        .order("created_at");
+        .order("attempt_no").order("created_at");
       if (ae) return json({ error: ae.message }, 400);
 
       // deno-lint-ignore no-explicit-any
@@ -778,6 +896,7 @@ Deno.serve(async (req: Request) => {
           regraded_by: a.regraded_by,
           regraded_at: a.regraded_at,
           regrade_note: a.regrade_note,
+          attempt_no: a.attempt_no,
         });
       }
       return json({ ok: true, exam: { id: exam.id, title: exam.title, total_points: exam.total_points }, items: items });
@@ -937,10 +1056,19 @@ Deno.serve(async (req: Request) => {
       const examId = String(body.exam_id || "");
       if (!examId) return json({ error: "exam_id required" }, 400);
 
+      const { data: last, error: le } = await db
+        .from("im_exam_attempt")
+        .select("attempt_no")
+        .eq("exam_id", examId).eq("student_id", studentId)
+        .order("attempt_no", { ascending: false }).limit(1);
+      if (le) return json({ error: le.message }, 400);
+      if (!last || last.length === 0) return json({ ok: true, items: [] });
+
       const { data: atts, error: ae } = await db
         .from("im_exam_attempt")
         .select("id, item_id, generator_id, seed, submitted_value, graded_at")
         .eq("exam_id", examId).eq("student_id", studentId)
+        .eq("attempt_no", last[0].attempt_no)
         .is("graded_at", null)
         .order("created_at");
       if (ae) return json({ error: ae.message }, 400);

@@ -557,7 +557,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-11-px-pilot3';
+var SA_BUILD = 'intro-micro-portal-2026-11-retakes1';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -2237,9 +2237,10 @@ function renderGradebook(host){
       var all=[], PAGE=1000;
       function page(from){
         return sb.from('im_exam_attempt')
-          .select('student_id,exam_id,item_id,points_earned,created_at')
-          .in('exam_id', ids).not('graded_at','is',null)
+          .select('student_id,exam_id,item_id,points_earned,attempt_no,graded_at,submitted_value')
+          .in('exam_id', ids)
           .order('created_at',{ascending:true})
+          .order('id',{ascending:true})
           .range(from, from+PAGE-1)
           .then(function(res){
             if(res && res.error){ return { data: all, error: res.error }; }
@@ -2256,32 +2257,15 @@ function renderGradebook(host){
     withTimeout(examAttemptsP, 'exam attempts', 20000).then(function(ea){
       var attempts=ea.data?ea.data:[];
       var scoringOf={}; gradedExams.forEach(function(e){ scoringOf[e.id]=e.attempt_scoring||'highest'; });
-      // group: student -> exam -> item -> [points...] (in time order)
+      // group: student -> exam -> attempt rows
       var grp={}; var gbIdset={};
-      attempts.sort(function(a,b){ return new Date(a.created_at)-new Date(b.created_at); });
       attempts.forEach(function(a){
         if(!grp[a.student_id]){ grp[a.student_id]={}; }
-        if(!grp[a.student_id][a.exam_id]){ grp[a.student_id][a.exam_id]={}; }
-        if(!grp[a.student_id][a.exam_id][a.item_id]){ grp[a.student_id][a.exam_id][a.item_id]=[]; }
-        grp[a.student_id][a.exam_id][a.item_id].push(a.points_earned?Number(a.points_earned):0);
+        if(!grp[a.student_id][a.exam_id]){ grp[a.student_id][a.exam_id]=[]; }
+        grp[a.student_id][a.exam_id].push(a);
         if(a.item_id){ gbIdset[a.item_id]=true; }
       });
       var examScore={}; // student -> { <examId>: rawPoints }
-      Object.keys(grp).forEach(function(sid){
-        examScore[sid]={};
-        Object.keys(grp[sid]).forEach(function(eid){
-          var policy=scoringOf[eid]||'highest';
-          var perItem=grp[sid][eid]; var total=0;
-          Object.keys(perItem).forEach(function(iid){
-            var arr=perItem[iid]; var v=0;
-            if(policy==='latest'){ v=arr[arr.length-1]; }
-            else if(policy==='average'){ var s=0; for(var k=0;k<arr.length;k++){s+=arr[k];} v=s/arr.length; }
-            else { v=Math.max.apply(null,arr); } // highest
-            total+=v;
-          });
-          examScore[sid][eid]=total; // key by exam id (supports many midterms)
-        });
-      });
       // assignment averages + manual overrides + arena performance
       // Page the arena attempts. Without paging, once a course passes the
       // server's ~1000-row cap the query silently truncated and any student
@@ -2441,14 +2425,12 @@ function renderGradebook(host){
         var gbPointsById={}; (ar[4] && ar[4].data ? ar[4].data : []).forEach(function(x){ gbPointsById[x.id]=x.points; });
         var examPossible={};
         Object.keys(grp).forEach(function(sid){
-          examPossible[sid]={};
+          examScore[sid]={}; examPossible[sid]={};
           Object.keys(grp[sid]).forEach(function(eid){
-            var perItem=grp[sid][eid]; var possible=0;
-            Object.keys(perItem).forEach(function(iid){
-              var mp=(gbPointsById[iid]!==undefined && gbPointsById[iid]!==null)?Number(gbPointsById[iid]):null;
-              possible += (mp!==null && mp>0)?mp:1;
-            });
-            examPossible[sid][eid]=possible;
+            var sc=imExamScore(grp[sid][eid], scoringOf[eid]||'highest', gbPointsById);
+            if(!sc){ return; }
+            examScore[sid][eid]=sc.earned; // key by exam id (supports many midterms)
+            examPossible[sid][eid]=sc.possible;
           });
         });
         // Attendance score per student (presence + pop-quiz, per the course split).
@@ -6267,9 +6249,12 @@ function wireQuizWritten(box){
 }
 
 function questionWorkHtml(items, t, sid){
-  var html='', i, it, yours, correct, mark;
+  var html='', i, it, yours, correct, mark, qn=0;
+  var severalAtt = t==='exam' && items.some(function(x){ return Number(x.attempt_no) > 1; });
   for(i=0;i<items.length;i++){
     it=items[i];
+    if(severalAtt && (i===0 || it.attempt_no!==items[i-1].attempt_no)){ qn=0; html+='<h3 style="font-size:15px;margin:14px 0 8px;">Attempt '+esc(String(it.attempt_no))+'</h3>'; }
+    qn++;
     yours=(it.your_answer===null||it.your_answer==='')?'(no answer)':String(it.your_answer);
     correct=(it.correct_answer===null||it.correct_answer===undefined)?'\u2014':String(it.correct_answer);
     if(it.item_type==='multiple_choice' && it.options){
@@ -6284,7 +6269,7 @@ function questionWorkHtml(items, t, sid){
          : '<span class="tag dim">needs marking</span>'));
     html+='<div class="card" style="margin-bottom:12px;padding:14px;">'+
       '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">'+
-        '<div style="font-weight:500;">Q'+(i+1)+(it.chapter?(' \u00b7 Ch '+it.chapter):'')+'</div><div>'+mark+'</div></div>'+
+        '<div style="font-weight:500;">Q'+qn+(it.chapter?(' \u00b7 Ch '+it.chapter):'')+'</div><div>'+mark+'</div></div>'+
       '<div style="margin-bottom:8px;">'+esc(it.prompt)+'</div>'+
       (it.figure?renderFigure(it.figure):'')+
       '<div style="font-size:13px;margin-top:6px;"><b>Student answered:</b> '+esc(yours)+'</div>'+
@@ -9590,7 +9575,7 @@ function computeWeightedGrade(callback){
       callback({ course:course, comps:comps, total:total, perfTotal:perfTotal, dueTotal:dueTotal, dueParts:_dp, perChapter:prog, perArena:arenaBreakdown(arenas) });
     }
     if (examIds.length===0){ finish({}); return; }
-    sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,created_at').eq('student_id',uid).in('exam_id',examIds).not('graded_at','is',null).then(function(ea){
+    sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,attempt_no,graded_at,submitted_value').eq('student_id',uid).in('exam_id',examIds).then(function(ea){
       var att = ea.data ? ea.data : [];
       // Denominator must match the questions the student ACTUALLY got. Look up each
       // issued item's point value from the bank; summing those gives the true
@@ -9600,23 +9585,8 @@ function computeWeightedGrade(callback){
       var allIds=Object.keys(idset);
       function afterPts(pointsById){
         function scoreFor(exam){
-          var policy = exam.attempt_scoring || 'highest';
-          var perItem={};
-          att.filter(function(a){return a.exam_id===exam.id;})
-             .sort(function(a,b){ return new Date(a.created_at)-new Date(b.created_at); })
-             .forEach(function(a){ if(!perItem[a.item_id]){ perItem[a.item_id]=[]; } perItem[a.item_id].push(a.points_earned?Number(a.points_earned):0); });
-          var keys=Object.keys(perItem); if(keys.length===0){ return null; }
-          var tot=0, possible=0;
-          keys.forEach(function(iid){
-            var arr=perItem[iid]; var v; if(policy==='latest'){v=arr[arr.length-1];} else if(policy==='average'){var s=0;for(var i=0;i<arr.length;i++){s+=arr[i];}v=s/arr.length;} else {v=Math.max.apply(null,arr);} tot+=v;
-            var mp=(pointsById && pointsById[iid]!==undefined && pointsById[iid]!==null)?Number(pointsById[iid]):null;
-            possible += (mp!==null && mp>0)?mp:1;
-          });
-          if(!(possible>0)){ possible=examPts(exam); }
-          if(!(possible>0)){ return null; }
-          var frac=tot/possible;
-          if(frac>1){ frac=1; }
-          return frac;
+          var sc=imExamScore(att.filter(function(a){return a.exam_id===exam.id;}), exam.attempt_scoring||'highest', pointsById);
+          return sc ? sc.frac : null;
         }
         var scoreById={};
         gradedExams.forEach(function(e){ scoreById[e.id]=scoreFor(e); });
@@ -9648,15 +9618,13 @@ function loadMyGradesDetail(host, summary){
       var subBy={}; subs.forEach(function(s){ subBy[s.assignment_id]=s; });
       var manualPtsById={}; (res[3] && res[3].data ? res[3].data : []).forEach(function(m){ manualPtsById[m.exam_id]=m.points; });
       var examIds=exams.map(function(e){ return e.id; });
-      var attemptsP = examIds.length ? sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,created_at,graded_at').eq('student_id',uid).in('exam_id',examIds).not('graded_at','is',null) : Promise.resolve({data:[]});
+      var attemptsP = examIds.length ? sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,attempt_no,graded_at,submitted_value').eq('student_id',uid).in('exam_id',examIds) : Promise.resolve({data:[]});
       attemptsP.then(function(at){
         var attempts=at.data?at.data:[];
-        attempts.sort(function(a,b){ return new Date(a.created_at)-new Date(b.created_at); });
         var grp={}; var idset={};
         attempts.forEach(function(a){
-          if(!grp[a.exam_id]){ grp[a.exam_id]={}; }
-          if(!grp[a.exam_id][a.item_id]){ grp[a.exam_id][a.item_id]=[]; }
-          grp[a.exam_id][a.item_id].push(a.points_earned?Number(a.points_earned):0);
+          if(!grp[a.exam_id]){ grp[a.exam_id]=[]; }
+          grp[a.exam_id].push(a);
           if(a.item_id){ idset[a.item_id]=true; }
         });
         var allIds=Object.keys(idset);
@@ -9664,19 +9632,9 @@ function loadMyGradesDetail(host, summary){
           var examScore={}, examPossible={};
           exams.forEach(function(e){
             if(!grp[e.id]){ return; }
-            var policy=e.attempt_scoring||'highest'; var total=0, possible=0;
-            Object.keys(grp[e.id]).forEach(function(iid){
-              var arr=grp[e.id][iid]; var v=0;
-              if(policy==='latest'){ v=arr[arr.length-1]; }
-              else if(policy==='average'){ var s=0; for(var k=0;k<arr.length;k++){s+=arr[k];} v=s/arr.length; }
-              else { v=Math.max.apply(null,arr); }
-              total+=v;
-              var mp=(pointsById && pointsById[iid]!==undefined && pointsById[iid]!==null)?Number(pointsById[iid]):null;
-              possible += (mp!==null && mp>0)?mp:1;
-            });
-            if(!(possible>0)){ possible=(e.total_points&&Number(e.total_points)>0)?Number(e.total_points):Object.keys(grp[e.id]).length; }
-            if(total>possible){ total=possible; }
-            examScore[e.id]=total; examPossible[e.id]=possible;
+            var sc=imExamScore(grp[e.id], e.attempt_scoring||'highest', pointsById);
+            if(!sc){ return; }
+            examScore[e.id]=Math.min(sc.earned, sc.possible); examPossible[e.id]=sc.possible;
           });
           // Paper (manual) exams: show typed points out of total_points.
           exams.forEach(function(e){
@@ -9925,8 +9883,10 @@ function openExamReview(examId, title){
     }
     var html='<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Showing the '+items.length+' question'+(items.length===1?'':'s')+' you answered incorrectly.</div>';
     var i, it, yours, correct;
+    var severalAtt = items.some(function(x){ return x.attempt_no !== items[0].attempt_no; }) || Number(items[0].attempt_no) > 1;
     for(i=0;i<items.length;i++){
       it=items[i];
+      if(severalAtt && (i===0 || it.attempt_no!==items[i-1].attempt_no)){ html+='<h3 style="font-size:15px;margin:14px 0 8px;">Attempt '+esc(String(it.attempt_no))+'</h3>'; }
       yours = (it.your_answer===null||it.your_answer==='') ? '(no answer)' : String(it.your_answer);
       correct = String(it.correct_answer);
       // for multiple choice, show the option text rather than the index
@@ -9972,13 +9932,59 @@ function loadMyExams() {
     }, function(){ loadMyExamsFor(host, uid, courseIds, titleById); });
   });
 }
+/* One student's score on one exam. Each attempt (sitting, = attempt_no) is
+   scored on its own, then the exam's rule picks one: highest (also 'best'),
+   latest, or average. Rows need attempt_no, item_id, points_earned, graded_at
+   and submitted_value. Returns { earned, possible, frac } or null when nothing
+   is graded yet. Keep in step with im_exam_score() in the database.
+   - Possible points come from the questions that attempt actually issued.
+   - An unfinished attempt is ignored once another attempt is finished.
+   - With one counted attempt, only graded questions count (written answers wait).
+     When several compete, a written answer still awaiting grading counts 0, so
+     a retake cannot overtake an earlier attempt before it has been marked. */
+function imExamScore(rows, policy, pointsById) {
+  var byNo = {}, nos = [], i, r, n;
+  for (i = 0; i < rows.length; i++) {
+    r = rows[i]; n = Number(r.attempt_no) || 1;
+    if (!byNo[n]) { byNo[n] = { rows:[], graded:0, open:false }; nos.push(n); }
+    byNo[n].rows.push(r);
+    if (r.graded_at) { byNo[n].graded++; }
+    else if (r.submitted_value === null || r.submitted_value === undefined) { byNo[n].open = true; }
+  }
+  nos.sort(function(a,b){ return a-b; });
+  var scored = nos.filter(function(k){ return byNo[k].graded > 0; });
+  if (scored.length === 0) { return null; }
+  var finished = scored.filter(function(k){ return !byNo[k].open; });
+  var use = finished.length ? finished : scored;
+  var several = use.length > 1;
+  var list = use.map(function(k){
+    var earned = 0, possible = 0;
+    byNo[k].rows.forEach(function(a){
+      if (!a.graded_at && !several) { return; }
+      var mp = (pointsById && pointsById[a.item_id] !== undefined && pointsById[a.item_id] !== null) ? Number(pointsById[a.item_id]) : null;
+      possible += (mp !== null && mp > 0) ? mp : 1;
+      if (a.graded_at && a.points_earned) { earned += Number(a.points_earned); }
+    });
+    return { earned:earned, possible:possible, frac:(possible > 0 ? earned/possible : 0) };
+  });
+  var pick = list[0], j;
+  if (policy === 'latest') { pick = list[list.length-1]; }
+  else if (policy === 'average' && list.length > 1) {
+    var sum = 0; for (j = 0; j < list.length; j++) { sum += Math.min(1, list[j].frac); }
+    var mean = sum / list.length, base = list[list.length-1].possible;
+    pick = { earned:Math.round(mean*base*100)/100, possible:base, frac:mean };
+  }
+  else { for (j = 1; j < list.length; j++) { if (list[j].frac > pick.frac) { pick = list[j]; } } }
+  return { earned:pick.earned, possible:pick.possible, frac:Math.min(1, pick.frac) };
+}
+
 function loadMyExamsFor(host, uid, courseIds, titleById) {
   {
     Promise.all([
       sb.from('im_exam').select('id,course_id,kind,title,total_points,time_limit_minutes,instructions,item_ids,is_published,max_attempts,shuffle_questions,attempt_scoring,opens_at,closes_at,proctored,camera_mode,random_per_student,random_recipe,is_manual,hide_before_open').in('course_id', courseIds).eq('is_published', true).order('created_at',{ascending:true}),
-      sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,graded_at,submitted_value').eq('student_id', uid).not('exam_id','is',null),
+      sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,graded_at,submitted_value,attempt_no').eq('student_id', uid).not('exam_id','is',null),
       sb.from('im_accommodation').select('course_id,time_multiplier,extra_attempts').eq('student_id', uid),
-      sb.from('im_assessment_accommodation').select('ref_id,due_override,opens_override').eq('student_id', uid).eq('kind','exam')
+      sb.from('im_assessment_accommodation').select('ref_id,due_override,opens_override,extra_attempts').eq('student_id', uid).eq('kind','exam')
     ]).then(function(r) {
       var exams = r[0].data ? r[0].data : [];
       // Show anything that is a real exam. Previously this kept only
@@ -9987,57 +9993,53 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
       // arenas are surfaced elsewhere, so exclude only those.
       exams = exams.filter(function(e){ return e.kind !== 'quiz' && e.kind !== 'arena' && !e.is_manual; });
       var attempts = r[1].data ? r[1].data : [];
-      // Unfinished sittings: attempts issued but never answered (graded_at null
-      // AND no submitted value). These let a student resume an interrupted exam.
-      var resumeCount = {};
-      attempts.forEach(function(a){
-        if(a.graded_at===null && (a.submitted_value===null||a.submitted_value===undefined)){
-          resumeCount[a.exam_id]=(resumeCount[a.exam_id]||0)+1;
-        }
-      });
       var accoms = r[2].data ? r[2].data : [];
       var accomByCourse = {}; accoms.forEach(function(a){ accomByCourse[a.course_id]=a; });
       // per-exam deadline overrides for THIS student (a reschedule wins over closes_at)
       var examDueOverride = {}; var examOpenOverride = {};
       (r[3] && r[3].data ? r[3].data : []).forEach(function(o){ if(o.due_override){ examDueOverride[o.ref_id]=new Date(o.due_override).getTime(); } if(o.opens_override){ examOpenOverride[o.ref_id]=new Date(o.opens_override).getTime(); } });
       if (exams.length === 0) { host.innerHTML = '<div class="card empty">No exams have been assigned yet.</div>'; if (window.SWPortal && SWPortal.studentSection) { SWPortal.studentSection(host); } return; }
-      // count graded SITTINGS per exam = graded attempts on that exam's first item
-      var sittingsBy = {}; var lastPts = {};
-      exams.forEach(function(e){ sittingsBy[e.id]=0; });
-      var firstItemOf = {}; exams.forEach(function(e){ firstItemOf[e.id]=(e.item_ids&&e.item_ids.length)?e.item_ids[0]:null; });
       // per-sitting item count for per-student random exams (sum of recipe n's)
       var perSittingOf = {}; exams.forEach(function(e){
         var ps=0; if(e.random_per_student && e.random_recipe){ e.random_recipe.forEach(function(r){ ps+=(r&&r.n)?Number(r.n):0; }); }
         perSittingOf[e.id]=ps>0?ps:1;
       });
-      // best score per exam (for display)
-      var bestPctBy = {};
-      var examPtsAcc = {}; // exam -> {sitting tally}
-      var submittedCountBy = {};
+      // A sitting is one attempt_no. It is "used" once anything in it has been
+      // answered; unanswered questions in the LATEST sitting can be resumed.
+      var latestNo = {}, usedNos = {}, openRows = {}, startedLatest = {};
       attempts.forEach(function(a){
-        var ex = exams.filter(function(e){ return e.id===a.exam_id; })[0];
-        if(a.submitted_value===null || a.submitted_value===undefined){ return; }
-        if(ex && ex.random_per_student){
-          // count all submitted items; convert to sittings after the loop
-          submittedCountBy[a.exam_id]=(submittedCountBy[a.exam_id]||0)+1;
-        } else if(firstItemOf[a.exam_id] && a.item_id===firstItemOf[a.exam_id]){
-          sittingsBy[a.exam_id]=(sittingsBy[a.exam_id]||0)+1;
+        var n = Number(a.attempt_no) || 1;
+        if(latestNo[a.exam_id]===undefined || n>latestNo[a.exam_id]){ latestNo[a.exam_id]=n; }
+      });
+      attempts.forEach(function(a){
+        var n = Number(a.attempt_no) || 1;
+        var open = !a.graded_at && (a.submitted_value===null || a.submitted_value===undefined);
+        if(!open){ if(!usedNos[a.exam_id]){ usedNos[a.exam_id]={}; } usedNos[a.exam_id][n]=true; }
+        if(n===latestNo[a.exam_id]){
+          if(open){ openRows[a.exam_id]=(openRows[a.exam_id]||0)+1; }
+          else { startedLatest[a.exam_id]=true; }
         }
       });
-      // finalize per-student sittings = submitted items / items-per-sitting
-      Object.keys(submittedCountBy).forEach(function(exId){
-        sittingsBy[exId]=Math.floor(submittedCountBy[exId]/(perSittingOf[exId]||1));
+      var resumeCount = {}, sittingsBy = {};
+      exams.forEach(function(e){
+        sittingsBy[e.id] = usedNos[e.id] ? Object.keys(usedNos[e.id]).length : 0;
+        var n = openRows[e.id] || 0;
+        // A fixed-list exam whose question loading broke off part way (nothing
+        // answered, questions missing) was never started: offer Start again, and
+        // the server hands back the same questions plus the missing ones.
+        var partial = !e.random_per_student && e.item_ids && !startedLatest[e.id] && n < e.item_ids.filter(function(id,i,all){ return all.indexOf(id)===i; }).length;
+        if(n>0 && !partial){ resumeCount[e.id]=n; }
       });
-      // total earned across all graded attempts of an exam (approx best by summing latest sitting is complex; show simple completed flag + score)
-      var earnedBy = {};
-      attempts.forEach(function(a){ if(a.graded_at){ earnedBy[a.exam_id]=(earnedBy[a.exam_id]||0)+(a.points_earned?Number(a.points_earned):0); } });
+      // extra attempts granted for one particular exam
+      var examExtra = {};
+      (r[3] && r[3].data ? r[3].data : []).forEach(function(o){ if(o.extra_attempts){ examExtra[o.ref_id]=(examExtra[o.ref_id]||0)+Number(o.extra_attempts); } });
       var html = '';
       exams.forEach(function(e) {
         var nItems = e.random_per_student ? (perSittingOf[e.id]||0) : (e.item_ids ? e.item_ids.length : 0);
         var sittings = sittingsBy[e.id]||0;
         var acc = accomByCourse[e.course_id];
         var baseAtt = (e.max_attempts===null||e.max_attempts===undefined)?1:Number(e.max_attempts);
-        var allowed = baseAtt===0 ? 0 : baseAtt + (acc?Number(acc.extra_attempts):0);
+        var allowed = baseAtt===0 ? 0 : baseAtt + (acc?(Number(acc.extra_attempts)||0):0) + (examExtra[e.id]||0);
         var now = Date.now();
         // A per-student reschedule (override) replaces the exam's own close time.
         var effClose = (examDueOverride[e.id]!==undefined) ? examDueOverride[e.id] : (e.closes_at ? new Date(e.closes_at).getTime() : null);
@@ -10053,7 +10055,6 @@ function loadMyExamsFor(host, uid, courseIds, titleById) {
         if (notOpen) { statusHtml='<span class="tag dim">Opens '+new Date(effOpen).toLocaleString()+'</span>'; action='<button class="btn btn-ghost btn-sm" disabled>Not open</button>'; }
         else if (closed) { statusHtml='<span class="tag rose">Closed</span>'; action='<button class="btn btn-ghost btn-sm" disabled>Closed</button>'; }
         else if (allowed!==0 && sittings>=allowed) {
-          var pctS = e.total_points && earnedBy[e.id]!==undefined ? Math.round((earnedBy[e.id]/(e.total_points*Math.max(1,sittings)))*100) : null;
           var canReview = (e.closes_at && now > new Date(e.closes_at).getTime()) || (!e.closes_at && sittings>0);
           var reviewBtn = canReview ? ' <button class="btn btn-ghost btn-sm" data-review="'+e.id+'">Review answers</button>' : '';
           statusHtml='<span class="tag green">Completed</span>'; action='<button class="btn btn-ghost btn-sm" disabled>No attempts left</button>'+reviewBtn;
@@ -10307,6 +10308,7 @@ function reallyStartExam(exam, accom) {
     function issueOne(itemId, tries) {
       return sb.functions.invoke('im-grade-attempt', { body: { action:'issue', item_id:itemId, course_id:exam.course_id, exam_id:exam.id } }).then(function(fn) {
         if (fn.error) { throw new Error(fn.error.message || 'issue failed'); }
+        if (fn.data && fn.data.final) { ExamState.blocked = fn.data.error; return; }
         if (fn.data && fn.data.error) { ExamState.issueError = fn.data.error; throw new Error(fn.data.error); }
         if (fn.data && fn.data.attempt_id) {
           issued.push({ attempt_id:fn.data.attempt_id, item_type:fn.data.item_type, prompt:fn.data.prompt, options:fn.data.options, points:fn.data.points, figure:fn.data.figure });
@@ -10322,6 +10324,7 @@ function reallyStartExam(exam, accom) {
     var batched = false;
     if (examBatchOn(exam.course_id)) {
       chain = sb.functions.invoke('im-grade-attempt', { body: { action:'issue_batch', item_ids:ids, course_id:exam.course_id, exam_id:exam.id } }).then(function(fn) {
+        if (fn && fn.data && fn.data.final) { ExamState.blocked = fn.data.error; return; }
         var list = (fn && !fn.error && fn.data && fn.data.items) ? fn.data.items : null;
         if (list && list.length === ids.length) {
           list.forEach(function(d) { issued.push({ attempt_id:d.attempt_id, item_type:d.item_type, prompt:d.prompt, options:d.options, points:d.points, figure:d.figure }); });
@@ -10330,9 +10333,14 @@ function reallyStartExam(exam, accom) {
       }, function(){});
     }
     ids.forEach(function(itemId) {
-      chain = chain.then(function() { if (batched) { return; } return issueOne(itemId, 3); });
+      chain = chain.then(function() { if (batched || ExamState.blocked) { return; } return issueOne(itemId, 3); });
     });
     chain.then(function() {
+      // The server refused outright (for example, no attempts left): say so.
+      if (ExamState.blocked) {
+        host.innerHTML = errCard(ExamState.blocked);
+        return;
+      }
       // SAFETY: never start a PARTIAL exam. If we couldn't issue every question,
       // abort with a clear message rather than dropping the student into a
       // 1-of-60 exam that then force-submits.
@@ -10830,23 +10838,14 @@ function computeCompletion(courseId, uid, opts) {
     }
 
     if (examIds.length === 0) { finish({}); return; }
-    sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,created_at').eq('student_id',uid).in('exam_id',examIds).not('graded_at','is',null).then(function(ea){
+    sb.from('im_exam_attempt').select('exam_id,item_id,points_earned,attempt_no,graded_at,submitted_value').eq('student_id',uid).in('exam_id',examIds).then(function(ea){
       var att = ea.data ? ea.data : [];
       var idset={}; att.forEach(function(a){ if(a.item_id){ idset[a.item_id]=true; } });
       var allIds=Object.keys(idset);
       function afterPts(pointsById){
         function scoreFor(exam){
-          var policy = exam.attempt_scoring || 'highest';
-          var perItem = {};
-          att.filter(function(a){return a.exam_id===exam.id;})
-             .sort(function(a,b){ return new Date(a.created_at)-new Date(b.created_at); })
-             .forEach(function(a){ if(!perItem[a.item_id]){ perItem[a.item_id]=[]; } perItem[a.item_id].push(a.points_earned?Number(a.points_earned):0); });
-          var keys = Object.keys(perItem); if(keys.length===0){ return null; }
-          var tot=0, possible=0;
-          keys.forEach(function(iid){ var arr=perItem[iid]; var v; if(policy==='latest'){v=arr[arr.length-1];} else if(policy==='average'){var s=0;for(var i=0;i<arr.length;i++){s+=arr[i];}v=s/arr.length;} else {v=Math.max.apply(null,arr);} tot+=v; var mp=(pointsById && pointsById[iid]!==undefined && pointsById[iid]!==null)?Number(pointsById[iid]):null; possible += (mp!==null && mp>0)?mp:1; });
-          if(!(possible>0)){ possible=examPts(exam); }
-          if(!(possible>0)){ return null; }
-          var frac=tot/possible; if(frac>1){ frac=1; } return frac;
+          var sc=imExamScore(att.filter(function(a){return a.exam_id===exam.id;}), exam.attempt_scoring||'highest', pointsById);
+          return sc ? sc.frac : null;
         }
         var scoreById={};
         gradedExams.forEach(function(e){ scoreById[e.id]=scoreFor(e); });
