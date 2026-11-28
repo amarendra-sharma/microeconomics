@@ -542,7 +542,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="mn-proctor.js"></script>
-<script src="px-proctor.js?v=pilot1"></script>
+<script src="px-proctor.js?v=pilot2"></script>
 <script src="im-diagrams.js?v=grid1"></script>
 <script src="im-generators.js?v=ch13fix"></script>
 <script src="im-econ160.js?v=finalfigs3"></script>
@@ -557,7 +557,7 @@
    CONFIG
    ==================================================================== */
 var SUPABASE_URL = 'https://rtaiivegcqqmdchpguzn.supabase.co';
-var SA_BUILD = 'intro-micro-portal-2026-11-px-pilot';
+var SA_BUILD = 'intro-micro-portal-2026-11-px-pilot2';
 var SUPABASE_ANON_KEY = 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm';
 var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Shared MacroNations proctoring engine. Point it at Intro Micro's existing
@@ -576,7 +576,7 @@ var PX_TENANT = '63385909-4712-4750-904a-63dfa80f23f0';
 var PX_PILOT_COURSES = ['96b76b37-b732-4112-b16b-f08447a8eb82'];   // Test Course 1
 if (typeof MNProctor !== 'undefined' && typeof PXProctor !== 'undefined') {
   (function () {
-    var orig = { start: MNProctor.start, finish: MNProctor.finish, isActive: MNProctor.isActive, onAutoSubmit: MNProctor.onAutoSubmit };
+    var orig = { start: MNProctor.start, finish: MNProctor.finish, isActive: MNProctor.isActive, onAutoSubmit: MNProctor.onAutoSubmit, runConsent: MNProctor.runConsent };
     var autoCb = null, usingPx = false;
     function courseOf(cfg) {
       return (cfg && cfg.course_id) || State.payCourseId || State.selfCourseId || State.currentCourseId || null;
@@ -591,6 +591,15 @@ if (typeof MNProctor !== 'undefined' && typeof PXProctor !== 'undefined') {
       if (sub) { sub.click(); }
     }
     MNProctor.onAutoSubmit = function (cb) { autoCb = cb; return orig.onAutoSubmit(cb); };
+    // Pilot: show the usual rules page, but without mn-proctor's own camera
+    // check-in; px-camera.js does the camera check-in once the exam starts.
+    MNProctor.runConsent = function (cfg, host, onBegin, onCancel) {
+      if (!isPilot(cfg) || !orig.runConsent) { return orig.runConsent(cfg, host, onBegin, onCancel); }
+      var copy = {}, k;
+      for (k in cfg) { if (Object.prototype.hasOwnProperty.call(cfg, k)) { copy[k] = cfg[k]; } }
+      copy.camera_mode = 'off';
+      return orig.runConsent(copy, host, onBegin, onCancel);
+    };
     MNProctor.start = function (cfg, user) {
       if (!isPilot(cfg)) { usingPx = false; return orig.start(cfg, user); }
       usingPx = true;
@@ -606,6 +615,7 @@ if (typeof MNProctor !== 'undefined' && typeof PXProctor !== 'undefined') {
         },
         displayName: (State.user && State.user.email) || null,
         label: label,
+        cameraMode: (cfg && cfg.camera_mode) || 'off',   // the exam's Webcam monitoring setting
         root: '.main', questionSelector: '.q-card, .imq-ans', optionSelector: '.q-option', canaryValue: -1,
         allowInject: '.modal-bg, .modal',
         onSubmit: function () { if (cb) { try { cb(); } catch (e) { /* ignore */ } } },

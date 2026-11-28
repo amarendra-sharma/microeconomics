@@ -30,7 +30,7 @@
  * ==========================================================================*/
 var PXProctor = (function () {
   'use strict';
-  var VERSION = 'px-sdk-2026-11-step2b';
+  var VERSION = 'px-sdk-2026-11-step4';
 
   var C = null;            // config
   var S = null;            // live session state
@@ -56,12 +56,32 @@ var PXProctor = (function () {
     var scr = window.screen || {};
     return {
       device: deviceId(), sdk: VERSION, ua: navigator.userAgent,
+      camera_request: C.cameraMode || null,      // the page may ask for MORE camera than the exam's setting, never less
       brands: (navigator.userAgentData && navigator.userAgentData.brands) ?
         navigator.userAgentData.brands.map(function (b) { return b.brand + ' ' + b.version; }) : null,
       lang: navigator.language, tz: (function () { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { return null; } })(),
       screen: { w: scr.width, h: scr.height, extended: scr.isExtended === true },
-      touch: ('ontouchstart' in window)
+      touch: ('ontouchstart' in window),
+      seb: sebInfo()
     };
+  }
+
+  // Safe Exam Browser exposes, for the current page, SHA-256(URL + Config Key)
+  // and SHA-256(URL + Browser Exam Key). The server checks them (lockdown exams).
+  function sebInfo() {
+    var X = window.SafeExamBrowser;
+    if (!X || !X.security) { return null; }
+    return { url: String(location.href).split('#')[0], version: X.version || null,
+             config_key_hash: X.security.configKey || null, bek_hash: X.security.browserExamKey || null };
+  }
+  function refreshSeb() {
+    var X = window.SafeExamBrowser;
+    if (!X || !X.security || typeof X.security.updateKeys !== 'function') { return Promise.resolve(); }
+    return new Promise(function (resolve) {
+      var done = false;
+      try { X.security.updateKeys(function () { if (!done) { done = true; resolve(); } }); } catch (e) { done = true; resolve(); }
+      setTimeout(function () { if (!done) { done = true; resolve(); } }, 1500);
+    });
   }
 
   // ------------------------------------------------------------ transport --
@@ -88,7 +108,7 @@ var PXProctor = (function () {
         try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
         if (!r.ok) {
           var err = new Error((data && (data.message || data.error)) || ('Proctor server error ' + r.status));
-          err.status = r.status; throw err;
+          err.status = r.status; err.hint = data && data.hint; err.details = data && data.details; throw err;
         }
         return data;
       });
@@ -112,6 +132,7 @@ var PXProctor = (function () {
     if (S.queue.length > 200) { S.queue.splice(0, S.queue.length - 200); }
     saveQueue();
     if (COUNTED_NOW[kind]) { flushSoon(); }
+    if (CAM_FLAG[kind] && window.PXCamera && S.camera) { try { window.PXCamera.onFlag(kind); } catch (e) { /* ignore */ } }
   }
 
   function flushSoon() {
@@ -220,6 +241,10 @@ var PXProctor = (function () {
       box.appendChild(btn);
     }
     d.appendChild(box); document.body.appendChild(d);
+  }
+  function showSebOverlay(message, link) {
+    overlay('Safe Exam Browser required', message + (link ? ' Use the button below; if nothing happens, install Safe Exam Browser from safeexambrowser.org first.' : ''),
+            link ? 'Open in Safe Exam Browser' : null, function () { if (link) { window.location.href = link; } });
   }
   function buildBanner(label) {
     var b = document.createElement('div'); b.id = 'pxBanner';
@@ -627,6 +652,7 @@ var PXProctor = (function () {
   function stopLocal() {
     if (!S || !S.active) { return; }
     agentStop();
+    if (S.camera && window.PXCamera) { try { window.PXCamera.stop(); } catch (e) { /* ignore */ } }
     S.active = false;
     detach();
     if (S.beatTimer) { clearInterval(S.beatTimer); }
@@ -646,6 +672,59 @@ var PXProctor = (function () {
     if (C.onSubmit) { try { C.onSubmit(reason, message); } catch (e) { /* ignore */ } }
   }
 
+  // ------------------------------------------------------------- camera (step 4) --
+  // Evidence is taken on these events (photo always; a short clip for serious ones).
+  var CAM_FLAG = { tab_hidden: 1, focus_lost_long: 1, fullscreen_exit: 1, multi_screen: 1, devtools_attempt: 1,
+                   multiple_faces: 1, phone_detected: 1, no_face: 1, voice_detected: 1, camera_blocked: 1,
+                   synthetic_input: 1, canary_triggered: 1, automation_detected: 1, input_without_interaction: 1 };
+  function cameraSrc() {
+    if (C.cameraSrc) { return C.cameraSrc; }
+    var list = document.getElementsByTagName('script'), i, m;
+    for (i = 0; i < list.length; i++) {
+      m = /^(.*\/)?px-proctor\.js(\?.*)?$/.exec(list[i].src || '');
+      if (m) { return (m[1] || '') + 'px-camera.js' + (m[2] || ''); }
+    }
+    return 'px-camera.js';
+  }
+  function loadCamera() {
+    if (window.PXCamera) { return Promise.resolve(window.PXCamera); }
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script'); s.src = cameraSrc(); s.async = true;
+      s.onload = function () { if (window.PXCamera) { resolve(window.PXCamera); } else { reject(new Error('camera module missing')); } };
+      s.onerror = function () { reject(new Error('Could not load the camera module.')); };
+      document.head.appendChild(s);
+    });
+  }
+  function camCtx(res) {
+    return { url: C.url, anonKey: C.anonKey, bucket: res.upload.bucket, prefix: res.upload.prefix, settings: S.settings,
+             token: function () { try { return typeof C.accessToken === 'function' ? C.accessToken() : (C.accessToken || null); } catch (e) { return null; } }, record: record, overlay: overlay };
+  }
+  function startCamera(res) {
+    var mode = S.settings.camera_mode || 'off';
+    if (mode === 'off' || !res.upload) { return Promise.resolve(false); }
+    return loadCamera().then(function (cam) {
+      S.camera = true;
+      return cam.begin(camCtx(res));
+    }).then(null, function (err) {
+      record('camera_denied', { reason: (err && err.message) || 'failed' });
+      if (mode !== 'block') { return false; }
+      // Camera-required exam: the exam stays covered until the camera works.
+      // (The session stays open and the clock keeps running, as on paper.)
+      return new Promise(function (resolve) {
+        function ask(msg) {
+          overlay('Camera required', msg + ' Allow camera access in the browser (address bar or system settings), then try again.',
+                  'Try again', function () {
+                    try { window.PXCamera.stop(); } catch (e) { /* ignore */ }
+                    window.PXCamera.begin(camCtx(res))
+                      .then(function () { resolve(true); }, function (e2) { ask((e2 && e2.message) || 'The camera is still not available.'); });
+                  });
+        }
+        if (!window.PXCamera) { overlay('Camera required', (err && err.message) || 'The camera module could not load. Reload the page.', null); return; }
+        ask((err && err.message) || 'This exam needs your camera.');
+      });
+    });
+  }
+
   function start(cfg) {
     if (S && S.active) { return Promise.reject(new Error('A proctored session is already running on this page.')); }
     C = cfg || {};
@@ -653,11 +732,24 @@ var PXProctor = (function () {
     // Ask for fullscreen now, while the student's click still counts as a user
     // gesture; browsers refuse it once the server round-trip has finished.
     goFullscreen();
-    var call = C.launchToken
-      ? rpc('px_start', { p_launch_token: C.launchToken, p_client: clientInfo() })
-      : rpc('px_start_auth', { p_tenant: C.tenantId, p_exam_ext_id: C.examId,
-                               p_display_name: C.displayName || null, p_client: clientInfo() });
-    return call.then(function (res) {
+    var call = refreshSeb().then(function () {
+      return C.launchToken
+        ? rpc('px_start', { p_launch_token: C.launchToken, p_client: clientInfo() })
+        : rpc('px_start_auth', { p_tenant: C.tenantId, p_exam_ext_id: C.examId,
+                                 p_display_name: C.displayName || null, p_client: clientInfo() });
+    });
+    return call.then(null, function (err) {
+      // Lockdown exam opened in an ordinary browser (or SEB with other settings):
+      // offer the instructor's "open in Safe Exam Browser" link when there is one.
+      if (err && (err.hint === 'PX_SEB_REQUIRED' || err.hint === 'PX_SEB_MISMATCH')) {
+        if (document.fullscreenElement && document.exitFullscreen) { document.exitFullscreen().then(function () {}, function () {}); }
+        var link = C.sebConfigUrl || err.details || '';
+        if (link && /^https?:\/\//i.test(link)) { link = link.replace(/^http/i, 'seb'); }   // https -> sebs, http -> seb
+        showSebOverlay(err.message, link);
+        err.lockdown = true;
+      }
+      throw err;
+    }).then(function (res) {
       S = { active: true, sessionId: res.session_id, token: res.token, queue: [], handlers: {},
             beatSec: (res.settings && res.settings.beat_sec) || 20, failures: 0, inFlight: false,
             beatTimer: null, tickTimer: null, flushTimer: null, awayTimer: null, deadlinePerf: null,
@@ -672,8 +764,8 @@ var PXProctor = (function () {
       schedule();
       S.tickTimer = setInterval(tick, 1000); tick();
       if (S.queue.length) { flushSoon(); }
-      return { sessionId: res.session_id, attempt: res.attempt_no, remainingSec: res.remaining_sec,
-               violations: res.violations, settings: res.settings };
+      return startCamera(res).then(function (camOn) { return { camera: camOn, sessionId: res.session_id, attempt: res.attempt_no, remainingSec: res.remaining_sec,
+               violations: res.violations, settings: res.settings }; });
     });
   }
 

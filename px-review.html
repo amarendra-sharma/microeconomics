@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Proctoring review</title>
+<script>
+  // Intro Micro portal: same Supabase project and sign-in as index.html.
+  window.PX_REVIEW = { url: 'https://rtaiivegcqqmdchpguzn.supabase.co', anonKey: 'sb_publishable_KCPCMiKYQoEUgG45DVF5uA_ke-UxQKm' };
+</script>
+<style>
+  :root { --bg:#0e0c1a; --panel:#17142a; --line:#2c2650; --text:#ece8ff; --dim:#a69dcc; --acc:#7c5cff;
+          --red:#ff6b81; --amber:#ffc35c; --green:#5fd39a; --blue:#6cb6ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0; flex:1; }
+  header .who { color:var(--dim); font-size:12px; }
+  main { padding:18px 20px; max-width:1200px; margin:0 auto; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:14px; }
+  h2 { font-size:15px; margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:#1f1b38; }
+  button, .btn { background:var(--acc); color:#fff; border:0; border-radius:7px; padding:7px 13px; font:600 13px system-ui,sans-serif; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+  button.red { background:#a8324b; } button.green { background:#2f8a5f; } button.amber { background:#a8782a; }
+  button:disabled { opacity:.5; cursor:default; }
+  input, textarea, select { background:#0b0a16; color:var(--text); border:1px solid var(--line); border-radius:7px; padding:8px 10px; font:13px system-ui,sans-serif; width:100%; }
+  textarea { min-height:70px; }
+  label { display:block; font-size:12px; color:var(--dim); margin:10px 0 4px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:20px; font-size:11px; font-weight:700; }
+  .p-red { background:#4a1726; color:var(--red); } .p-amber { background:#47361a; color:var(--amber); }
+  .p-green { background:#163a2a; color:var(--green); } .p-blue { background:#16304a; color:var(--blue); } .p-dim { background:#25213d; color:var(--dim); }
+  .muted { color:var(--dim); } .small { font-size:12px; }
+  .err { color:var(--red); margin-top:8px; } .ok { color:var(--green); margin-top:8px; }
+  .grid2 { display:grid; grid-template-columns: 1.3fr 1fr; gap:14px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .tl { max-height:520px; overflow:auto; }
+  .tl div.ev { padding:5px 0; border-bottom:1px dashed var(--line); font-size:13px; }
+  .sev3 { color:var(--red); } .sev2 { color:var(--amber); } .sev1 { color:var(--blue); } .sev0 { color:var(--dim); }
+  .ev .detail { color:var(--dim); font-size:11px; font-family:ui-monospace,Menlo,monospace; word-break:break-all; }
+  .thumbs { display:flex; flex-wrap:wrap; gap:8px; }
+  .thumbs a, .thumbs .vid { display:block; width:150px; }
+  .thumbs img, .thumbs video { width:150px; height:112px; object-fit:cover; border-radius:6px; background:#000; border:1px solid var(--line); }
+  .thumbs .cap { font-size:10px; color:var(--dim); }
+  .notice { border-left:3px solid var(--acc); padding:8px 12px; background:#151129; color:var(--dim); font-size:12px; margin-bottom:12px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Proctoring review</h1>
+  <span class="who" id="who"></span>
+  <button class="ghost" id="outBtn" hidden>Sign out</button>
+</header>
+<main>
+  <!-- sign in -->
+  <section class="card" id="login" hidden>
+    <h2>Sign in</h2>
+    <div class="row" style="gap:14px;align-items:flex-start;">
+      <div style="flex:1;min-width:260px;">
+        <div class="muted small">With your course account (instructors and students).</div>
+        <label for="em">Email</label><input id="em" type="email" autocomplete="username">
+        <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+        <div style="margin-top:12px;"><button id="loginBtn">Sign in</button></div>
+      </div>
+      <div style="flex:1;min-width:260px;" id="keyBox">
+        <div class="muted small">Or, for a school using its own LMS: tenant id and API key (kept only in this tab).</div>
+        <label for="tid">Tenant id</label><input id="tid" autocomplete="off">
+        <label for="akey">API key</label><input id="akey" type="password" autocomplete="off">
+        <div style="margin-top:12px;"><button class="ghost" id="keyBtn">Open with API key</button></div>
+      </div>
+    </div>
+    <div id="loginMsg"></div>
+  </section>
+
+  <!-- instructor: exams -->
+  <section class="card" id="exams" hidden>
+    <h2>Exams</h2>
+    <div class="notice">The software flags; you decide. A flag is a reason to look, not proof of cheating. Review the timeline and evidence, then record a decision. Students see the flags, your decision and your note, and can appeal once.</div>
+    <table><thead><tr><th>Exam</th><th>Sessions</th><th>Live now</th><th>Flagged</th><th>To review</th><th>Appeals</th><th>Camera</th></tr></thead><tbody id="examRows"></tbody></table>
+    <div id="examMsg"></div>
+  </section>
+
+  <!-- instructor: sessions of one exam -->
+  <section class="card" id="sessions" hidden>
+    <div class="row"><button class="ghost" id="backExams">&larr; Exams</button><h2 id="examTitle" style="margin:0;flex:1;"></h2><button class="ghost" id="reloadSessions">Refresh</button></div>
+    <table style="margin-top:10px;"><thead><tr><th>Student</th><th>Attempt</th><th>Status</th><th>Counted flags</th><th>Risk</th><th>AI/automation</th><th>Decision</th><th>Appeal</th><th>Started</th></tr></thead><tbody id="sessRows"></tbody></table>
+  </section>
+
+  <!-- instructor: one session -->
+  <section id="detail" hidden>
+    <div class="card">
+      <div class="row"><button class="ghost" id="backSessions">&larr; Sessions</button><h2 id="detTitle" style="margin:0;flex:1;"></h2></div>
+      <div id="detMeta" class="muted small" style="margin-top:8px;"></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="card"><h2>Timeline</h2><div class="tl" id="timeline"></div></div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Decision</h2>
+          <div id="curDecision" class="small muted"></div>
+          <label for="decNote">Note to the student (they will see it)</label>
+          <textarea id="decNote" placeholder="e.g. Left the exam tab twice; reviewed photos show the student alone. No further action."></textarea>
+          <div class="row" style="margin-top:10px;">
+            <button class="green" data-dec="cleared">Cleared</button>
+            <button class="amber" data-dec="warning">Warning</button>
+            <button class="red" data-dec="violation">Violation</button>
+            <button class="ghost" data-dec="needs_review">Needs more review</button>
+          </div>
+          <div id="decMsg"></div>
+          <div id="endBox" style="margin-top:14px;" hidden>
+            <button class="red" id="endBtn">End this live session now</button>
+            <div class="muted small">The student's exam is submitted with what they have answered.</div>
+          </div>
+        </div>
+        <div class="card" id="appealBox" hidden>
+          <h2>Appeal</h2>
+          <div id="appealText"></div>
+          <div id="appealForm">
+            <label for="appealResp">Your answer</label><textarea id="appealResp"></textarea>
+            <div class="row" style="margin-top:10px;">
+              <button class="green" data-ap="overturned">Overturn (clear)</button>
+              <button class="red" data-ap="upheld">Uphold</button>
+              <button class="ghost" data-ap="closed">Close</button>
+            </div>
+          </div>
+          <div id="appealMsg"></div>
+        </div>
+        <div class="card"><h2>Evidence</h2><div class="thumbs" id="evidence"></div><div id="evMsg" class="muted small"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- student: my records -->
+  <section class="card" id="mine" hidden>
+    <h2>My proctoring records</h2>
+    <div class="notice">These are the events the proctoring software recorded during your exams, and your instructor's decision. A flag on its own is not a finding of misconduct. If you think something was recorded unfairly, you can appeal once per exam within 30 days.</div>
+    <div id="mineList"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  // ------------------------------------------------------------- config --
+  // Set window.PX_REVIEW = { url, anonKey } before this script, or pass ?url=&key=.
+  var qs = {}; (location.search.replace(/^\?/, '').split('&')).forEach(function (kv) {
+    if (!kv) { return; } var i = kv.indexOf('='); qs[decodeURIComponent(i < 0 ? kv : kv.slice(0, i))] = i < 0 ? '' : decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' '));
+  });
+  var CFG = window.PX_REVIEW || {};
+  var URL_ = (qs.url || CFG.url || '').replace(/\/+$/, '');
+  var KEY = qs.key || CFG.anonKey || '';
+  var REF = (/^https:\/\/([a-z0-9]+)\.supabase\.co/.exec(URL_) || [])[1];
+  var A = { token: null, refresh: null, exp: 0, email: null, tenant: null, apiKey: null, mode: null };
+  var cur = { exam: null, tenant: null, session: null };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function when(t) { if (!t) { return ''; } var d = new Date(t); return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }); }
+  function msg(id, text, bad) { var el = $(id); if (el) { el.className = bad ? 'err' : 'ok'; el.textContent = text || ''; } }
+  function show(id) { ['login', 'exams', 'sessions', 'detail', 'mine'].forEach(function (x) { $(x).hidden = (x !== id); }); window.scrollTo(0, 0); }
+
+  // --------------------------------------------------------------- auth --
+  function sharedSession() {          // the course site's own sign-in, when this page is on the same site
+    if (!REF) { return null; }
+    try { var raw = localStorage.getItem('sb-' + REF + '-auth-token'); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  function useSession(s) {
+    if (!s || !s.access_token) { return false; }
+    A.token = s.access_token; A.refresh = s.refresh_token || null;
+    A.exp = s.expires_at ? s.expires_at * 1000 : Date.now() + 3000 * 1000;
+    A.email = (s.user && s.user.email) || null; A.mode = 'user';
+    try { sessionStorage.setItem('pxReviewAuth', JSON.stringify({ access_token: A.token, refresh_token: A.refresh, expires_at: Math.floor(A.exp / 1000), user: { email: A.email } })); } catch (e) { /* ignore */ }
+    return true;
+  }
+  function freshToken() {
+    if (A.mode !== 'user') { return Promise.resolve(null); }
+    if (A.exp - Date.now() > 60000 || !A.refresh) { return Promise.resolve(A.token); }
+    return fetch(URL_ + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: A.refresh }) })
+      .then(function (r) { return r.json(); }).then(function (j) { if (j.access_token) { useSession(j); } return A.token; }, function () { return A.token; });
+  }
+  function rpc(fn, args) {
+    return freshToken().then(function (tok) {
+      var h = { apikey: KEY, 'Content-Type': 'application/json' };
+      if (tok) { h.Authorization = 'Bearer ' + tok; }
+      return fetch(URL_ + '/rest/v1/rpc/' + fn, { method: 'POST', headers: h, body: JSON.stringify(args || {}) });
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var j = null; try { j = t ? JSON.parse(t) : null; } catch (e) { j = null; }
+        if (!r.ok) { var e2 = new Error((j && j.message) || ('Request failed (' + r.status + ')')); e2.status = r.status; throw e2; }
+        return j;
+      });
+    });
+  }
+  function keyArg(o) { if (A.mode === 'key') { o.p_api_key = A.apiKey; } return o; }
+
+  $('loginBtn').addEventListener('click', function () {
+    msg('loginMsg', '');
+    fetch(URL_ + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('em').value.trim(), password: $('pw').value }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (!useSession(j)) { throw new Error(j.error_description || j.msg || 'Sign-in failed'); } $('pw').value = ''; route(); },
+            function (e) { msg('loginMsg', e.message || 'Sign-in failed', true); })
+      .then(null, function (e) { msg('loginMsg', e.message, true); });
+  });
+  $('keyBtn').addEventListener('click', function () {
+    A.mode = 'key'; A.tenant = $('tid').value.trim(); A.apiKey = $('akey').value.trim(); $('akey').value = '';
+    route();
+  });
+  $('outBtn').addEventListener('click', function () {
+    try { sessionStorage.removeItem('pxReviewAuth'); } catch (e) { /* ignore */ }
+    A = { mode: null }; $('who').textContent = ''; $('outBtn').hidden = true; show('login');
+  });
+
+  // -------------------------------------------------------------- views --
+  function decisionPill(d) {
+    if (!d) { return '<span class="pill p-dim">not reviewed</span>'; }
+    var c = { cleared: 'p-green', warning: 'p-amber', violation: 'p-red', needs_review: 'p-blue' }[d] || 'p-dim';
+    return '<span class="pill ' + c + '">' + esc(d.replace('_', ' ')) + '</span>';
+  }
+  function appealPill(a) {
+    if (!a) { return ''; }
+    return '<span class="pill ' + (a === 'open' ? 'p-amber' : 'p-dim') + '">' + esc(a) + '</span>';
+  }
+  function statusText(s) {
+    if (s.status === 'active') { return '<span class="pill p-blue">live</span>'; }
+    var r = { submitted: 'submitted', time_up: 'time up', auto_flags: 'auto-submitted (flags)', abandoned: 'abandoned', instructor: 'ended by instructor' }[s.end_reason] || s.end_reason || 'ended';
+    return esc(r);
+  }
+
+  function loadExams() {
+    show('exams'); $('examRows').innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>';
+    rpc('px_list_exams', keyArg({ p_tenant: A.mode === 'key' ? A.tenant : null })).then(function (list) {
+      if (!list || !list.length) {
+        if (A.mode === 'user') { return loadMine(true); }
+        $('examRows').innerHTML = '<tr><td colspan="7" class="muted">No exams yet.</td></tr>'; return;
+      }
+      $('examRows').innerHTML = list.map(function (e, i) {
+        return '<tr class="click" data-i="' + i + '"><td><b>' + esc(e.title || e.ext_id) + '</b><div class="muted small">' + esc(e.ext_id) + '</div></td>' +
+          '<td>' + e.sessions + '</td><td>' + (e.active ? '<span class="pill p-blue">' + e.active + '</span>' : '0') + '</td>' +
+          '<td>' + e.flagged + '</td><td>' + (e.unreviewed ? '<span class="pill p-amber">' + e.unreviewed + '</span>' : '0') + '</td>' +
+          '<td>' + (e.open_appeals ? '<span class="pill p-red">' + e.open_appeals + '</span>' : '0') + '</td><td>' + esc(e.camera_mode || 'off') + '</td></tr>';
+      }).join('');
+      Array.prototype.forEach.call($('examRows').querySelectorAll('tr.click'), function (tr) {
+        tr.addEventListener('click', function () { var e = list[+tr.getAttribute('data-i')]; cur.exam = e.ext_id; cur.tenant = e.tenant_id; cur.title = e.title || e.ext_id; loadSessions(); });
+      });
+    }, function (e) { $('examRows').innerHTML = ''; msg('examMsg', e.message, true); });
+  }
+
+  function loadSessions() {
+    show('sessions'); $('examTitle').textContent = cur.title;
+    $('sessRows').innerHTML = '<tr><td colspan="9" class="muted">Loading…</td></tr>';
+    rpc('px_review_list', keyArg({ p_tenant: cur.tenant, p_exam_ext_id: cur.exam })).then(function (r) {
+      var list = r.sessions || [];
+      if (!list.length) { $('sessRows').innerHTML = '<tr><td colspan="9" class="muted">No one has started this exam yet.</td></tr>'; return; }
+      $('sessRows').innerHTML = list.map(function (s, i) {
+        return '<tr class="click" data-i="' + i + '"><td><b>' + esc(s.name || s.user) + '</b>' + (s.name ? '<div class="muted small">' + esc(s.user) + '</div>' : '') + '</td>' +
+          '<td>' + s.attempt_no + '</td><td>' + statusText(s) + '</td>' +
+          '<td>' + (s.violations ? '<span class="pill p-red">' + s.violations + '</span>' : '0') + '</td><td>' + s.risk_score + '</td>' +
+          '<td>' + (s.agent_flags ? '<span class="pill p-red">' + s.agent_flags + '</span>' : '0') + '</td>' +
+          '<td>' + decisionPill(s.decision) + '</td><td>' + appealPill(s.appeal) + '</td><td class="small">' + esc(when(s.started_at)) + '</td></tr>';
+      }).join('');
+      Array.prototype.forEach.call($('sessRows').querySelectorAll('tr.click'), function (tr) {
+        tr.addEventListener('click', function () { cur.session = list[+tr.getAttribute('data-i')].session_id; loadDetail(); });
+      });
+    }, function (e) { $('sessRows').innerHTML = '<tr><td colspan="9" class="err">' + esc(e.message) + '</td></tr>'; });
+  }
+
+  function detailText(d) {
+    if (!d) { return ''; }
+    var keys = Object.keys(d); if (!keys.length) { return ''; }
+    return keys.slice(0, 8).map(function (k) { var v = d[k]; return k + ': ' + (typeof v === 'object' ? JSON.stringify(v) : v); }).join(' · ');
+  }
+
+  function loadDetail() {
+    show('detail'); $('timeline').innerHTML = '<span class="muted">Loading…</span>'; $('evidence').innerHTML = ''; msg('decMsg', ''); msg('appealMsg', '');
+    rpc('px_session_detail', keyArg({ p_session: cur.session })).then(function (d) {
+      var s = d.session;
+      $('detTitle').textContent = (s.name || s.user) + ' — ' + (d.exam.title || d.exam.ext_id);
+      var c = s.client || {};
+      $('detMeta').innerHTML = 'Attempt ' + s.attempt_no + ' · ' + statusText(s) + ' · started ' + esc(when(s.started_at)) +
+        (s.ended_at ? ' · ended ' + esc(when(s.ended_at)) : '') + ' · counted flags ' + s.violations + ' · risk ' + s.risk_score +
+        (c.ua ? '<div style="margin-top:4px;">' + esc(c.ua) + '</div>' : '');
+      $('timeline').innerHTML = (d.events || []).map(function (e) {
+        return '<div class="ev"><span class="sev' + e.severity + '">' + (e.severity >= 2 ? '●' : '○') + '</span> <b>' + esc(when(e.t)) + '</b> ' +
+          esc(e.label || e.kind) + (e.counted ? ' <span class="pill p-red">counted</span>' : '') + (e.agent ? ' <span class="pill p-amber">AI/automation</span>' : '') +
+          (detailText(e.detail) ? '<div class="detail">' + esc(detailText(e.detail)) + '</div>' : '') + '</div>';
+      }).join('') || '<span class="muted">No events.</span>';
+      var rv = d.review;
+      $('curDecision').innerHTML = rv ? 'Current: ' + decisionPill(rv.decision) + ' · ' + esc(when(rv.reviewed_at)) + (rv.note ? '<div style="margin-top:4px;">' + esc(rv.note) + '</div>' : '') : 'No decision yet.';
+      $('decNote').value = (rv && rv.note) || '';
+      $('endBox').hidden = s.status !== 'active';
+      var ap = d.appeal;
+      $('appealBox').hidden = !ap;
+      if (ap) {
+        $('appealText').innerHTML = '<div class="small muted">' + esc(when(ap.created_at)) + ' · ' + appealPill(ap.status) + '</div><p>' + esc(ap.message) + '</p>' +
+          (ap.response ? '<div class="small muted">Your answer (' + esc(when(ap.responded_at)) + '):</div><p>' + esc(ap.response) + '</p>' : '');
+        $('appealForm').hidden = ap.status !== 'open';
+      }
+      showEvidence(d.evidence || []);
+    }, function (e) { $('timeline').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; });
+  }
+
+  function showEvidence(list) {
+    if (!list.length) { $('evMsg').textContent = 'No photos or recordings for this session.'; return; }
+    $('evMsg').textContent = list.length + ' file(s). Links open for 10 minutes.';
+    var paths = list.map(function (x) { return x.path; });
+    signUrls(paths).then(function (urls) {
+      $('evidence').innerHTML = list.map(function (x, i) {
+        var name = x.path.split('/').pop(), kind = name.split('-')[0], u = urls[i];
+        var tsm = /-(\d{12,})/.exec(name), cap = esc(kind) + (tsm ? ' · ' + esc(when(+tsm[1])) : '');
+        if (!u) { return '<div class="vid"><div class="cap">' + cap + ' (unavailable)</div></div>'; }
+        if (/\.jpg$/.test(name)) { return '<a href="' + esc(u) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + esc(u) + '" alt="' + esc(kind) + '"><div class="cap">' + cap + '</div></a>'; }
+        return '<div class="vid"><video controls preload="none" src="' + esc(u) + '"></video><div class="cap">' + cap + '</div></div>';
+      }).join('');
+    }, function (e) { $('evMsg').textContent = 'Could not open the files: ' + e.message; });
+  }
+
+  function signUrls(paths) {
+    if (A.mode === 'key') {          // outside LMS: the px-sign function checks the API key
+      return fetch(URL_ + '/functions/v1/px-sign', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: cur.session, api_key: A.apiKey }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { var m = {}; (j.urls || []).forEach(function (x) { m[x.path] = x.url; }); return paths.map(function (p) { return m[p] || null; }); });
+    }
+    return freshToken().then(function (tok) {
+      return fetch(URL_ + '/storage/v1/object/sign/px-evidence', { method: 'POST',
+        headers: { apikey: KEY, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expiresIn: 600, paths: paths }) });
+    }).then(function (r) { if (!r.ok) { throw new Error('storage ' + r.status); } return r.json(); })
+      .then(function (arr) {
+        var m = {}; (arr || []).forEach(function (x) { if (x.signedURL) { m[x.path] = URL_ + '/storage/v1' + x.signedURL; } });
+        return paths.map(function (p) { return m[p] || null; });
+      });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-dec]'), function (b) {
+    b.addEventListener('click', function () {
+      var dec = b.getAttribute('data-dec');
+      rpc('px_review_session', keyArg({ p_session: cur.session, p_decision: dec, p_note: $('decNote').value }))
+        .then(function () { msg('decMsg', 'Saved.'); loadDetail(); }, function (e) { msg('decMsg', e.message, true); });
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ap]'), function (b) {
+    b.addEventListener('click', function () {
+      rpc('px_answer_appeal', keyArg({ p_session: cur.session, p_status: b.getAttribute('data-ap'), p_response: $('appealResp').value }))
+        .then(function () { $('appealResp').value = ''; loadDetail(); }, function (e) { msg('appealMsg', e.message, true); });
+    });
+  });
+  $('endBtn').addEventListener('click', function () {
+    if (!window.confirm('End this student\'s live exam now? Their answers so far are submitted.')) { return; }
+    rpc('px_instructor_end', keyArg({ p_session: cur.session, p_note: null })).then(loadDetail, function (e) { msg('decMsg', e.message, true); });
+  });
+  $('backExams').addEventListener('click', loadExams);
+  $('reloadSessions').addEventListener('click', loadSessions);
+  $('backSessions').addEventListener('click', loadSessions);
+
+  // ------------------------------------------------------------ student --
+  function loadMine(fromInstructor) {
+    show('mine'); $('mineList').innerHTML = '<span class="muted">Loading…</span>';
+    rpc('px_my_sessions', {}).then(function (list) {
+      if (!list || !list.length) { $('mineList').innerHTML = '<p class="muted">' + (fromInstructor ? 'There are no exams for you to review and no proctored exams of your own.' : 'You have no proctored exams yet.') + '</p>'; return; }
+      $('mineList').innerHTML = list.map(function (s, i) {
+        var flags = (s.flags || []).map(function (f) { return '<div class="small">' + esc(when(f.t)) + ' — ' + esc(f.label) + (f.counted ? ' <span class="pill p-red">counted</span>' : '') + '</div>'; }).join('');
+        var ap = s.appeal, apHtml;
+        if (ap) {
+          apHtml = '<div style="margin-top:8px;"><b>Your appeal</b> ' + appealPill(ap.status) + '<p class="small">' + esc(ap.message) + '</p>' +
+            (ap.response ? '<div class="small muted">Instructor\'s answer:</div><p class="small">' + esc(ap.response) + '</p>' : '') + '</div>';
+        } else if (s.status === 'ended' && (s.violations > 0 || (s.flags || []).length || s.decision === 'warning' || s.decision === 'violation')) {
+          apHtml = '<details style="margin-top:8px;"><summary class="small">Appeal this record</summary><label for="ap' + i + '">Explain what happened</label>' +
+            '<textarea id="ap' + i + '"></textarea><div style="margin-top:8px;"><button data-appeal="' + i + '">Send appeal</button></div><div id="apm' + i + '"></div></details>';
+        } else { apHtml = ''; }
+        return '<div class="card" style="background:#120f22;"><div class="row"><b style="flex:1;">' + esc(s.exam) + ' · attempt ' + s.attempt_no + '</b>' + decisionPill(s.decision) + '</div>' +
+          '<div class="muted small">' + esc(when(s.started_at)) + ' · ' + statusText(s) + ' · counted flags ' + s.violations + '</div>' +
+          (s.decision_note ? '<p class="small"><b>Instructor\'s note:</b> ' + esc(s.decision_note) + '</p>' : '') +
+          (flags ? '<div style="margin-top:8px;">' + flags + '</div>' : '<div class="small muted" style="margin-top:6px;">Nothing notable was recorded.</div>') + apHtml + '</div>';
+      }).join('');
+      Array.prototype.forEach.call(document.querySelectorAll('[data-appeal]'), function (b) {
+        b.addEventListener('click', function () {
+          var i = +b.getAttribute('data-appeal');
+          rpc('px_submit_appeal', { p_session: list[i].session_id, p_message: $('ap' + i).value })
+            .then(function () { loadMine(fromInstructor); }, function (e) { msg('apm' + i, e.message, true); });
+        });
+      });
+    }, function (e) { $('mineList').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; });
+  }
+
+  // -------------------------------------------------------------- start --
+  function route() {
+    if (!A.mode) { show('login'); return; }
+    $('outBtn').hidden = false;
+    $('who').textContent = A.mode === 'key' ? 'API key · tenant ' + (A.tenant || '').slice(0, 8) : (A.email || 'signed in');
+    if (qs.view === 'student' && A.mode === 'user') { loadMine(false); } else { loadExams(); }
+  }
+  if (!URL_ || !KEY) { show('login'); msg('loginMsg', 'This page is not configured: set PX_REVIEW = { url, anonKey }.', true); return; }
+  if (qs.test_token) { A.mode = 'user'; A.token = qs.test_token; A.exp = Date.now() + 3600e3; A.email = 'test'; }   // local tests only (no real server accepts it)
+  else {
+    var saved = null; try { saved = JSON.parse(sessionStorage.getItem('pxReviewAuth') || 'null'); } catch (e) { saved = null; }
+    useSession(saved) || useSession(sharedSession());
+  }
+  if (qs.view === 'student') { $('title').textContent = 'My proctoring records'; $('keyBox').hidden = true; }
+  route();
+})();
+</script>
+</body>
+</html>
