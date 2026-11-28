@@ -28,6 +28,7 @@
 //    grade { attempt_id, submitted_value }
 //         -> { is_correct, points_earned, status }
 //            (free_response => status:'pending_instructor_review', graded later)
+//       A question is answered once: grading it again returns the stored result.
 //
 //  The generator + diagram engines are the SAME source files the browser uses
 //  (im-generators.js, im-diagrams.js), embedded below at deploy time so the
@@ -214,6 +215,30 @@ async function canGradeCourse(db: any, courseId: string, callerId: string): Prom
 // deno-lint-ignore no-explicit-any
 function isUnanswered(r: any): boolean {
   return r.graded_at === null && (r.submitted_value === null || r.submitted_value === undefined);
+}
+
+// A question is answered once. A later submission writes nothing and gets the
+// stored result back, so an answer cannot be replaced or tried out.
+const RESULT_COLS = "id, graded_at, submitted_value, is_correct, points_earned";
+// deno-lint-ignore no-explicit-any
+function storedResult(r: any) {
+  if (!r.graded_at) return { is_correct: null, points_earned: 0, status: "pending_instructor_review" };
+  return { is_correct: r.is_correct, points_earned: Number(r.points_earned) || 0, status: "graded" };
+}
+
+// Writes only if the question is still unanswered (two submissions can race).
+async function saveOnce(
+  // deno-lint-ignore no-explicit-any
+  db: any, id: string, changes: Record<string, unknown>, result: Record<string, unknown>,
+): Promise<Response> {
+  const { data, error } = await db.from("im_exam_attempt").update(changes)
+    .eq("id", id).is("graded_at", null).is("submitted_value", null).select("id");
+  if (error) return json({ error: "Could not save the answer: " + error.message }, 500);
+  if (data && data.length) return json(result);
+  const { data: now, error: re } = await db.from("im_exam_attempt")
+    .select(RESULT_COLS).eq("id", id).maybeSingle();
+  if (re || !now || isUnanswered(now)) return json({ error: "Could not save the answer." }, 500);
+  return json(storedResult(now));
 }
 
 async function examAttemptSlot(
@@ -425,7 +450,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: attRows, error: ae } = await db
         .from("im_exam_attempt")
-        .select("id, student_id, item_id, generator_id, seed, graded_at")
+        .select("id, student_id, item_id, generator_id, seed, graded_at, submitted_value, is_correct, points_earned")
         .in("id", ids);
       if (ae) return json({ error: "Attempt lookup failed: " + ae.message }, 400);
       // deno-lint-ignore no-explicit-any
@@ -452,10 +477,15 @@ Deno.serve(async (req: Request) => {
       const results: any[] = [];
       // deno-lint-ignore no-explicit-any
       const writes: any[] = [];
+      // an attempt listed twice in one request: only the first entry counts
+      // deno-lint-ignore no-explicit-any
+      const first: Record<string, any> = {};
       for (const r of reqs) {
         const att = attById[r.attempt_id];
         if (!r.attempt_id || !att) { results.push({ attempt_id: r.attempt_id, error: "Attempt not found" }); continue; }
         if (att.student_id !== studentId) { results.push({ attempt_id: r.attempt_id, error: "Not your attempt" }); continue; }
+        if (first[att.id]) { results.push(first[att.id]); continue; }
+        if (!isUnanswered(att)) { results.push({ attempt_id: r.attempt_id, ...storedResult(att) }); continue; }
 
         let kind = "";
         // deno-lint-ignore no-explicit-any
@@ -482,7 +512,8 @@ Deno.serve(async (req: Request) => {
 
         if (kind === "short") {
           writes.push({ id: att.id, student_id: studentId, submitted_value: r.submitted, is_correct: null, points_earned: null, graded: false });
-          results.push({ attempt_id: r.attempt_id, is_correct: null, points_earned: 0, status: "pending_instructor_review" });
+          first[att.id] = { attempt_id: r.attempt_id, is_correct: null, points_earned: 0, status: "pending_instructor_review" };
+          results.push(first[att.id]);
           continue;
         }
         let correct = false;
@@ -496,13 +527,30 @@ Deno.serve(async (req: Request) => {
         }
         const earned = correct ? points : 0;
         writes.push({ id: att.id, student_id: studentId, submitted_value: r.submitted, is_correct: correct, points_earned: earned, graded: true });
-        results.push({ attempt_id: r.attempt_id, is_correct: correct, points_earned: earned, status: "graded" });
+        first[att.id] = { attempt_id: r.attempt_id, is_correct: correct, points_earned: earned, status: "graded" };
+        results.push(first[att.id]);
       }
 
       if (writes.length) {
-        const { error: we } = await db.rpc("im_apply_exam_grades", { p_rows: writes });
+        const { data: saved, error: we } = await db.rpc("im_apply_exam_grades", { p_rows: writes });
         // Nothing was saved: tell the client so it regrades item by item.
         if (we) return json({ error: "Could not save grades: " + we.message }, 500);
+        if (Number(saved) < writes.length) {
+          // Another request answered some of these first: report what is stored.
+          const wids = writes.map(function (w) { return w.id; });
+          const { data: now, error: re } = await db.from("im_exam_attempt").select(RESULT_COLS).in("id", wids);
+          if (re || !now) return json({ error: "Could not confirm saved grades." }, 500);
+          // deno-lint-ignore no-explicit-any
+          const stored: Record<string, any> = {};
+          for (const a of now) stored[a.id] = a;
+          for (let i = 0; i < results.length; i++) {
+            const id = results[i].attempt_id;
+            if (wids.indexOf(id) < 0) continue;
+            results[i] = (stored[id] && !isUnanswered(stored[id]))
+              ? { attempt_id: id, ...storedResult(stored[id]) }
+              : { attempt_id: id, error: "Could not save the answer." };
+          }
+        }
       }
       return json({ results: results });
     }
@@ -585,10 +633,11 @@ Deno.serve(async (req: Request) => {
       // load the attempt (must belong to caller)
       const { data: att, error: ae } = await db
         .from("im_exam_attempt")
-        .select("id, student_id, item_id, generator_id, seed, graded_at")
+        .select("id, student_id, item_id, generator_id, seed, graded_at, submitted_value, is_correct, points_earned")
         .eq("id", attemptId).maybeSingle();
       if (ae || !att) return json({ error: "Attempt not found" }, 404);
       if (att.student_id !== studentId) return json({ error: "Not your attempt" }, 403);
+      if (!isUnanswered(att)) return json(storedResult(att));
 
       // resolve the correct answer + kind by regenerating (or from the static row)
       let kind = "";
@@ -620,10 +669,9 @@ Deno.serve(async (req: Request) => {
 
       // written answers are not auto-graded
       if (kind === "short") {
-        await db.from("im_exam_attempt")
-          .update({ submitted_value: submitted, is_correct: null, points_earned: null })
-          .eq("id", attemptId);
-        return json({ is_correct: null, points_earned: 0, status: "pending_instructor_review" });
+        return await saveOnce(db, attemptId,
+          { submitted_value: submitted, is_correct: null, points_earned: null },
+          { is_correct: null, points_earned: 0, status: "pending_instructor_review" });
       }
 
       // auto-grade mc / numeric / decision
@@ -641,14 +689,9 @@ Deno.serve(async (req: Request) => {
       }
       const earned = correct ? points : 0;
 
-      await db.from("im_exam_attempt")
-        .update({
-          submitted_value: submitted, is_correct: correct,
-          points_earned: earned, graded_at: new Date().toISOString(),
-        })
-        .eq("id", attemptId);
-
-      return json({ is_correct: correct, points_earned: earned, status: "graded" });
+      return await saveOnce(db, attemptId,
+        { submitted_value: submitted, is_correct: correct, points_earned: earned, graded_at: new Date().toISOString() },
+        { is_correct: correct, points_earned: earned, status: "graded" });
     }
 
     // ====================================================================
